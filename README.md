@@ -70,7 +70,16 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 - **Rauschminderung**: Luminanzrauschen mit Non-Local Means, Farbrauschen mit
   einem farbgeführten Filter, der Farbkanten erhält – auch zwischen Farben
   gleicher Helligkeit. Die verkleinerte Vorschau zeigt Rauschen schwächer als
-  das gespeicherte Bild.
+  das gespeicherte Bild – zum Beurteilen gibt es die 100-%-Ansicht.
+- **Geometrie**: um 90° drehen, spiegeln, begradigen, Perspektive senkrecht
+  und waagrecht, Zuschneiden mit Rahmen und festen Seitenverhältnissen. Leere
+  Ecken nach dem Begradigen werden automatisch weggeschnitten.
+- **Objektiv**: Verzeichnung, Vignette und Farbsäume (chromatische Aberration)
+  ausgleichen. Alle Geometrie- und Objektivkorrekturen werden in einem einzigen
+  bikubischen Schritt abgetastet.
+- **100-%-Ansicht**: Zoom auf 100, 200 und 400 % per Mausrad, Verschieben durch
+  Ziehen, Doppelklick wechselt zwischen eingepasst und 100 %. Gezeigt wird ein
+  Ausschnitt des Bildes in voller Auflösung – genau das, was gespeichert wird.
 - **Nicht-destruktiv**: Jede Änderung wird aus dem unveränderten Original neu
   gerechnet. Doppelklick setzt einen Regler zurück, „Vorher“ zeigt das Original,
   solange der Knopf gedrückt ist.
@@ -100,12 +109,14 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 |---|---|
 | `Strg`+`O` | Bild öffnen (oder Datei auf die Fläche ziehen) |
 | `Strg`+`S` | Speichern unter … – das Original wird nie stillschweigend überschrieben |
+| `Strg`+`0` / `Strg`+`1` | eingepasst / 100 % |
+| Mausrad, Ziehen, Doppelklick | zoomen, verschieben, zwischen eingepasst und 100 % wechseln |
+| `Eingabe` / `Esc` | Zuschnitt übernehmen / abbrechen |
 
 ## Geplant
 
-- **Weitere klassische Filter**: Geometrie (Drehen, Zuschneiden, Perspektive,
-  Objektivkorrektur), Vorschau in 100 % zum Beurteilen von Schärfe und
-  Rauschen.
+- **Objektivprofile**: Verzeichnung, Vignette und Farbsäume automatisch aus
+  einer Objektivdatenbank (lensfun).
 - **X-Trans auf der GPU**: Demosaicing auch für Fujis Sensoren auf der
   Grafikkarte.
 - **KI-Funktionen**: Hochskalieren, Entrauschen, Entschärfen, Freistellen,

@@ -32,7 +32,7 @@ import numpy as np
 from cupyx.scipy import ndimage
 
 from . import filter as f
-from . import kurven
+from . import geometrie, kurven
 from .cuda import cupy as cp
 
 
@@ -509,7 +509,8 @@ def anwenden_ausgabe(rgb_linear, werte: f.Einstellungen, massstab: float = 1.0,
     # sind, gleich die Tonwerte im selben Durchlauf. Sonst gehoeren diese dazwischen.
     zwischen = cp.empty_like(bild)
     erst_dunst = werte.dunst != 0
-    vorstufe = erst_dunst or werte.rauschen_aktiv()
+    geo = geometrie.aus(werte)
+    vorstufe = erst_dunst or werte.rauschen_aktiv() or not geo.ist_neutral()
     _licht(bild, cp.float32(gr), cp.float32(gg), cp.float32(gb),
            cp.int32(0 if vorstufe else ton), *tonwerte, zwischen, size=pixel)
     if werte.rauschen_aktiv():
@@ -524,6 +525,11 @@ def anwenden_ausgabe(rgb_linear, werte: f.Einstellungen, massstab: float = 1.0,
         _dunst(zwischen, durchlass, *_skalierung(durchlass, hoehe, breite), lr, lg, lb,
                cp.float32(staerke), cp.float32(f.DUNST_MIN_DURCHLASS), entdunstet, size=pixel)
         zwischen = entdunstet
+    if not geo.ist_neutral():
+        # Ab hier hat das Bild die Groesse des Zuschnitts
+        zwischen = geometrie.anwenden(zwischen, geo)
+        hoehe, breite = zwischen.shape[:2]
+        pixel = hoehe * breite
     if vorstufe and ton:
         _licht(zwischen, cp.float32(1), cp.float32(1), cp.float32(1), cp.int32(1),
                *tonwerte, zwischen, size=pixel)

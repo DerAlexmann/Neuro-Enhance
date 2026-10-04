@@ -15,6 +15,17 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- 100-%-Ansicht: Zoom auf 100, 200 und 400 % per Mausrad oder `Strg`+`1`,
+  Verschieben durch Ziehen, Doppelklick wechselt zur Einpassung. Gerechnet
+  wird das ganze Bild in voller Auflösung, gezeigt der sichtbare Ausschnitt –
+  pixelgleich mit dem gespeicherten Bild. Verschieben braucht rund 2 ms je
+  Ausschnitt, weil das Ergebnis auf der GPU liegen bleibt.
+- Geometrie: 90° drehen, spiegeln, begradigen, Perspektive senkrecht und
+  waagrecht, Zuschneiden mit Rahmen, Drittellinien und Seitenverhältnissen.
+  Eine automatische Vergrößerung verhindert leere Ecken.
+- Objektiv: Verzeichnung, Vignette, Farbsäume Rot/Cyan und Blau/Gelb.
+- Alle Geometrie- und Objektivkorrekturen sind eine einzige Rückwärts-
+  abbildung mit bikubischer Abtastung (Catmull-Rom), auf der GPU ein Kernel.
 - Farbbereiche (HSL): Farbton, Sättigung und Luminanz für acht Bereiche, in
   OkLCh mit Kosinus-Übergängen; Grautöne bleiben unberührt. Bedienung über
   eine Karte mit Umschaltern für die drei Eigenschaften.

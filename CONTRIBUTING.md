@@ -22,10 +22,11 @@ Meldung – siehe [SECURITY.md](SECURITY.md).
 | `neuro_enhance/gpu_pruefung.py` | Grafikkarte über NVML erkennen und bewerten |
 | `neuro_enhance/hauptfenster.py` | Hauptfenster mit Kopfzeile, Reitern und Statuszeile |
 | `neuro_enhance/bearbeiten_seite.py` | Reiter „Bearbeiten“: Werkzeugleiste, Regler, Öffnen und Speichern |
-| `neuro_enhance/leinwand.py` | Anzeige des Bildes, Ziehen und Ablegen |
+| `neuro_enhance/leinwand.py` | Anzeige, Zoom und Verschieben, Zuschnittrahmen, Ziehen und Ablegen |
 | `neuro_enhance/bearbeitung.py` | Sitzung: Original und Vorschau im Grafikspeicher |
 | `neuro_enhance/filter.py` | Filterformeln mit NumPy/CuPy – die Referenz |
 | `neuro_enhance/filter_gpu.py` | dieselben Formeln als zusammengefasste CUDA-Kernel |
+| `neuro_enhance/geometrie.py` | Zuschnitt, Drehen, Begradigen, Perspektive, Objektiv |
 | `neuro_enhance/lut.py` | `.cube`-LUTs lesen, tetraedrisch anwenden |
 | `neuro_enhance/kurven.py` | Gradationskurven: Punkte bearbeiten, Tabellen bilden |
 | `neuro_enhance/kurveneditor.py` | Kurvenfeld mit Histogramm |

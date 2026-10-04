@@ -65,7 +65,16 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   strength slider.
 - **Noise reduction**: luminance noise with non-local means, colour noise with a
   colour-guided filter that keeps colour edges – even between colours of equal
-  brightness. The scaled-down preview shows less noise than the saved image.
+  brightness. The scaled-down preview shows less noise than the saved image – use the
+  100 % view to judge it.
+- **Geometry**: rotate by 90°, flip, straighten, vertical and horizontal perspective, crop
+  with a frame and fixed aspect ratios. Empty corners after straightening are cropped
+  away automatically.
+- **Lens**: correct distortion, vignetting and colour fringes (chromatic aberration). All
+  geometry and lens corrections are resampled in a single bicubic step.
+- **100 % view**: zoom to 100, 200 and 400 % with the mouse wheel, pan by dragging,
+  double-click toggles between fit and 100 %. It shows a part of the image at full
+  resolution – exactly what will be saved.
 - **Non-destructive**: every change is recomputed from the untouched original.
   Double-click resets a slider, "Before" shows the original while the button is held.
 - **Fast**: the preview is computed at screen resolution in a few milliseconds; the
@@ -91,11 +100,14 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 |---|---|
 | `Ctrl`+`O` | open an image (or drag a file onto the canvas) |
 | `Ctrl`+`S` | save as … – the original is never overwritten silently |
+| `Ctrl`+`0` / `Ctrl`+`1` | fit / 100 % |
+| mouse wheel, drag, double-click | zoom, pan, toggle between fit and 100 % |
+| `Enter` / `Esc` | apply / cancel crop |
 
 ## Planned
 
-- **More classic filters**: geometry (rotate, crop, perspective, lens correction), a
-  100 % preview for judging sharpness and noise.
+- **Lens profiles**: distortion, vignetting and colour fringes corrected automatically
+  from a lens database (lensfun).
 - **X-Trans on the GPU**: demosaicing for Fujifilm sensors on the graphics card as
   well.
 - **AI features**: upscaling, denoising, deblurring, background removal, click-to-select

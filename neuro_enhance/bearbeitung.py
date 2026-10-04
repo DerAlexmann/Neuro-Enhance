@@ -24,7 +24,7 @@ import time
 
 import numpy as np
 
-from . import bilddatei, filter
+from . import bilddatei, filter, geometrie
 from .cuda import cupy as cp
 from .filter import Einstellungen
 
@@ -46,6 +46,7 @@ class Sitzung:
         self.werte = Einstellungen()
         self.gespeicherte_werte = Einstellungen()
         self._speicher: dict = {}            # Zwischenergebnisse der Filter, je Bildgroesse
+        self._vollbild = None                 # (Einstellungen, fertiges Bild auf der GPU)
 
         self.original = daten.linear(cp)
         # Zwischenpuffer des Demosaicing an den Grafikspeicher zurueckgeben
@@ -57,15 +58,46 @@ class Sitzung:
     def geaendert(self) -> bool:
         return self.werte != self.gespeicherte_werte
 
-    def vorschau(self, unbearbeitet: bool = False) -> tuple[np.ndarray, float, np.ndarray]:
+    def vorschau(self, unbearbeitet: bool = False,
+                 werte: Einstellungen | None = None) -> tuple[np.ndarray, float, np.ndarray]:
         """Vorschau als sRGB-uint8, Rechenzeit in ms und Helligkeitshistogramm (256 Stufen)."""
         beginn = time.perf_counter()
-        werte = Einstellungen() if unbearbeitet else self.werte
+        if werte is None:
+            werte = Einstellungen() if unbearbeitet else self.werte
         bild = filter.anwenden_ausgabe(self.vorschau_original, werte, self.vorschau_massstab,
                                        self._speicher)
         histogramm = cp.asnumpy(histogramm_von(bild))
         ergebnis = cp.asnumpy(bild)                     # wartet auf die GPU
         return ergebnis, (time.perf_counter() - beginn) * 1000, histogramm
+
+    def ausgabe_form(self, werte: Einstellungen | None = None) -> tuple[int, int]:
+        """Hoehe und Breite des fertigen Bildes in voller Aufloesung."""
+        werte = self.werte if werte is None else werte
+        return geometrie.ausgabe_form(self.original.shape, geometrie.aus(werte))
+
+    def ausschnitt(self, x0: int, y0: int, breite: int, hoehe: int,
+                   werte: Einstellungen | None = None) -> tuple[np.ndarray, float, np.ndarray]:
+        """Ausschnitt des fertigen Bildes in voller Aufloesung - fuer die 100-%-Ansicht.
+
+        Gerechnet wird das ganze Bild, damit der Ausschnitt genau dem
+        gespeicherten Bild entspricht - auch bei Filtern, die auf das ganze
+        Bild schauen (Dunst, Klarheit). Das Ergebnis bleibt auf der GPU liegen,
+        solange sich die Einstellungen nicht aendern; beim Verschieben wird
+        nur noch ausgeschnitten und heruntergeladen.
+        """
+        beginn = time.perf_counter()
+        werte = self.werte if werte is None else werte
+        if self._vollbild is None or self._vollbild[0] != werte:
+            bild = filter.anwenden_ausgabe(self.original, werte, 1.0, self._speicher)
+            self._vollbild = (dataclasses.replace(werte), bild)
+        teil = self._vollbild[1][y0:y0 + hoehe, x0:x0 + breite]
+        histogramm = cp.asnumpy(histogramm_von(teil))
+        ergebnis = cp.asnumpy(teil)
+        return ergebnis, (time.perf_counter() - beginn) * 1000, histogramm
+
+    def vollbild_vergessen(self):
+        """Das zwischengespeicherte Vollbild freigeben (etwa beim Wechsel zur Einpassung)."""
+        self._vollbild = None
 
     def exportieren(self, pfad: str, bits: int = 8) -> float:
         """Rechnet das Bild in voller Groesse und speichert es; Rueckgabe in ms."""
@@ -82,5 +114,6 @@ class Sitzung:
         """Grafikspeicher sofort freigeben, nicht erst beim Aufraeumen von Python."""
         self.original = None
         self.vorschau_original = None
+        self._vollbild = None
         self._speicher.clear()
         cp.get_default_memory_pool().free_all_blocks()

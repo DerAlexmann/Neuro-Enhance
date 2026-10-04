@@ -10,7 +10,8 @@ Gerechnet wird in linearem Licht mit float32 (Bildwerte 0..1, sRGB-Primaer-
 farben). Erst fuer Anzeige und Export wird zurueck nach sRGB gewandelt.
 
 Die Reihenfolge der Schritte ist fest, wie in der Bildentwicklung ueblich:
-Weissabgleich -> Belichtung -> Entrauschen -> Dunst entfernen -> Tonwerte
+Weissabgleich -> Belichtung -> Entrauschen -> Dunst entfernen -> Geometrie
+(geometrie.py: Zuschnitt, Begradigen, Perspektive, Objektiv) -> Tonwerte
 (Kontrast, Lichter, Tiefen) -> Klarheit -> Gradationskurven -> HSL je
 Farbbereich -> Farbe (Dynamik, Saettigung) -> LUT -> Schaerfen.
 
@@ -78,8 +79,18 @@ REGLER = (
     Regler("rauschen_farbe", "rauschen", 0, 100),
     Regler("schaerfe", "details", 0, 150),
     Regler("schaerfe_radius", "details", 0.5, 3.0, vorgabe=1.0, schritt=0.1, nachkomma=1),
+    Regler("begradigen", "geometrie", -45.0, 45.0, schritt=0.1, nachkomma=1),
+    Regler("perspektive_v", "geometrie", -100, 100),
+    Regler("perspektive_h", "geometrie", -100, 100),
+    Regler("verzeichnung", "objektiv", -100, 100),
+    Regler("vignette", "objektiv", -100, 100),
+    Regler("ca_rot", "objektiv", -100, 100),
+    Regler("ca_blau", "objektiv", -100, 100),
     Regler("lut_staerke", "lut", 0, 100, vorgabe=100),
 )
+
+# Geometriefelder ohne Schieberegler, mit ihren Vorgaben
+GEOMETRIE_FELDER = {"drehung90": 0, "spiegeln": False, "zuschnitt": (0.0, 0.0, 1.0, 1.0)}
 
 # HSL je Farbbereich: acht Bereiche mit ihrer Mitte als Farbwinkel in OkLCh
 FARBBEREICHE = ("rot", "orange", "gelb", "gruen", "aqua", "blau", "lila", "magenta")
@@ -118,6 +129,17 @@ class Einstellungen:
     rauschen_luminanz: float = 0.0
     rauschen_farbe: float = 0.0
     lut_staerke: float = 100.0
+    # Geometrie (geometrie.py)
+    drehung90: int = 0
+    spiegeln: bool = False
+    zuschnitt: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
+    begradigen: float = 0.0
+    perspektive_v: float = 0.0
+    perspektive_h: float = 0.0
+    verzeichnung: float = 0.0
+    vignette: float = 0.0
+    ca_rot: float = 0.0
+    ca_blau: float = 0.0
 
     def ist_neutral(self) -> bool:
         for feld in fields(self):
@@ -130,6 +152,9 @@ class Einstellungen:
                     return False
             elif feld.name == "lut":
                 if wert:
+                    return False
+            elif feld.name in GEOMETRIE_FELDER:
+                if wert != GEOMETRIE_FELDER[feld.name]:
                     return False
             elif feld.name not in ("schaerfe_radius", "lut_staerke") \
                     and wert != REGLER_NACH_NAME[feld.name].vorgabe:
@@ -796,6 +821,8 @@ def anwenden(rgb_linear, werte: Einstellungen, massstab: float = 1.0):
     bild = belichtung(bild, werte.belichtung)
     bild = entrauschen(bild, werte)
     bild = dunst(bild, werte.dunst)
+    from . import geometrie
+    bild = geometrie.anwenden(bild, geometrie.aus(werte))
     bild = tonwerte(bild, werte.kontrast, werte.lichter, werte.tiefen)
     bild = klarheit(bild, werte.klarheit)
     bild = gradation(bild, werte)

@@ -118,6 +118,14 @@ def stylesheet() -> str:
     QMessageBox QLabel {{ color: {t["TEXT"]}; background: transparent; }}
     QScrollArea, QScrollArea > QWidget > QWidget {{ background: {t["BG"]}; border: none; }}
 
+    QComboBox {{
+        background: {t["FIELD_BG"]}; color: {t["TEXT"]};
+        border: 1px solid {t["BORDER"]}; border-radius: 4px; padding: 2px 8px;
+    }}
+    QComboBox QAbstractItemView {{
+        background: {t["CARD"]}; color: {t["TEXT"]};
+        selection-background-color: {t["ACCENT"]}; selection-color: {t["ON_ACCENT"]};
+    }}
     QFrame#kopf {{ background: {t["HEADER"]}; }}
     QFrame#kopf QLabel {{ color: {t["HEADER_TEXT"]}; background: transparent; }}
     QLabel#titel {{ color: {t["HEADER_TITLE"]}; font-size: 13pt; font-weight: bold; }}

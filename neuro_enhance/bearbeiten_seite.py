@@ -8,6 +8,7 @@ Created with assistance of Claude AI
 
 from __future__ import annotations
 
+import dataclasses
 import os
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer
@@ -15,6 +16,7 @@ from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
+    QComboBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -31,8 +33,9 @@ from PySide6.QtWidgets import (
 from . import bilddatei, einstellungen, filter, lut
 from .bearbeitung import Sitzung
 from .cuda import cupy as cp
+from .geometrie import VOLLER_ZUSCHNITT
 from .kurveneditor import KurvenEditor
-from .leinwand import Leinwand
+from .leinwand import Leinwand, rahmen_mit_verhaeltnis
 from .uebersetzung import _
 
 REGLERLEISTE_BREITE = 320
@@ -46,6 +49,8 @@ def gruppen_titel(gruppe: str) -> str:
         "farbe": _("Farbe"),
         "rauschen": _("Rauschminderung"),
         "details": _("Details"),
+        "geometrie": _("Geometrie"),
+        "objektiv": _("Objektiv"),
         "lut": _("LUT"),
     }[gruppe]
 
@@ -78,6 +83,13 @@ def regler_titel(name: str) -> str:
         "rauschen_luminanz": _("Luminanz"),
         "rauschen_farbe": _("Farbe"),
         "lut_staerke": _("Stärke"),
+        "begradigen": _("Begradigen"),
+        "perspektive_v": _("Perspektive senkrecht"),
+        "perspektive_h": _("Perspektive waagrecht"),
+        "verzeichnung": _("Verzeichnung"),
+        "vignette": _("Vignette"),
+        "ca_rot": _("Farbsaum Rot/Cyan"),
+        "ca_blau": _("Farbsaum Blau/Gelb"),
     }[name] if not name.startswith("hsl_") else farbbereich_titel(int(name[4:]))
 
 
@@ -116,6 +128,25 @@ def art_anzeige(daten: bilddatei.Bilddaten) -> str:
     return _("16 Bit") if daten.bits == 16 else _("8 Bit")
 
 
+def seitenverhaeltnisse() -> list[tuple[str, float | None]]:
+    """Auswahl fuer den Zuschnitt: Beschriftung und Breite/Hoehe; None heisst frei."""
+    return [(_("Frei"), None), (_("Original"), -1.0), ("1:1", 1.0), ("3:2", 3 / 2),
+            ("2:3", 2 / 3), ("4:3", 4 / 3), ("3:4", 3 / 4), ("16:9", 16 / 9), ("9:16", 9 / 16)]
+
+
+def zuschnitt_drehen(rahmen, richtung: int):
+    """Zuschnitt mitdrehen: +1 im Uhrzeigersinn, -1 dagegen (normierte Rahmenkoordinaten)."""
+    x0, y0, x1, y1 = rahmen
+    if richtung > 0:
+        return (1 - y1, x0, 1 - y0, x1)
+    return (y0, 1 - x1, y1, 1 - x0)
+
+
+def zuschnitt_spiegeln(rahmen):
+    x0, y0, x1, y1 = rahmen
+    return (1 - x1, y0, 1 - x0, y1)
+
+
 def wert_anzeige(regler: filter.Regler, wert: float) -> str:
     text = f"{wert:.{regler.nachkomma}f}"
     if regler.minimum < 0 and wert > 0:
@@ -127,6 +158,8 @@ def wert_anzeige(regler: filter.Regler, wert: float) -> str:
         text += " px"
     elif regler.name == "lut_staerke":
         text += " %"
+    elif regler.name == "begradigen":
+        text += "°"
     return text
 
 
@@ -199,6 +232,7 @@ class BearbeitenSeite(QWidget):
         self.sitzung: Sitzung | None = None
         self._vorher = False
         self._zeichnen_angefordert = False
+        self._zuschnitt_vorher = None         # Zuschnitt beim Betreten des Zuschnittmodus
 
         aufbau = QHBoxLayout(self)
         aufbau.setContentsMargins(0, 12, 0, 0)
@@ -212,12 +246,17 @@ class BearbeitenSeite(QWidget):
         fenster.beschriften(self.leinwand.hinweis.setText,
                             _("Bild hierher ziehen oder „Öffnen …“ wählen."))
         self.leinwand.datei_abgelegt.connect(self.oeffnen)
+        self.leinwand.ansicht_geaendert.connect(self._ansicht_geaendert)
         links.addWidget(self.leinwand, 1)
         aufbau.addLayout(links, 1)
         aufbau.addWidget(self._reglerleiste())
 
         QShortcut(QKeySequence.StandardKey.Open, self, self.oeffnen_dialog)
         QShortcut(QKeySequence.StandardKey.Save, self, self.speichern_dialog)
+        QShortcut(QKeySequence("Ctrl+0"), self, lambda: self.leinwand.zoom_setzen(None))
+        QShortcut(QKeySequence("Ctrl+1"), self, lambda: self.leinwand.zoom_setzen(1.0))
+        QShortcut(QKeySequence(Qt.Key.Key_Return), self, lambda: self.zuschneiden(False))
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.zuschnitt_abbrechen)
         self._knoepfe_freischalten()
 
     # ------------------------------------------------------------------
@@ -240,6 +279,19 @@ class BearbeitenSeite(QWidget):
         self.speichern_knopf = self._knopf(_("Speichern unter …"), self.speichern_dialog)
         leiste.addWidget(self.speichern_knopf)
         leiste.addStretch(1)
+        self.einpassen_knopf = self._knopf(_("Einpassen"),
+                                           lambda: self.leinwand.zoom_setzen(None))
+        self.zoom100_knopf = self._knopf("100 %", lambda: self.leinwand.zoom_setzen(1.0))
+        self.fenster.beschriften(self.einpassen_knopf.setToolTip,
+                                 _("Ganzes Bild zeigen (Strg+0)"))
+        self.fenster.beschriften(self.zoom100_knopf.setToolTip, _(
+            "Ein Bildpixel je Bildschirmpixel (Strg+1). Mausrad zoomt, Ziehen verschiebt, "
+            "Doppelklick wechselt."))
+        self.zoom_anzeige = QLabel(objectName="nebentext")
+        leiste.addWidget(self.einpassen_knopf)
+        leiste.addWidget(self.zoom100_knopf)
+        leiste.addWidget(self.zoom_anzeige)
+        leiste.addSpacing(12)
         self.vorher_knopf = self._knopf(_("Vorher"), None)
         self.fenster.beschriften(self.vorher_knopf.setToolTip,
                                  _("Gedrückt halten, um das unbearbeitete Bild zu sehen."))
@@ -269,6 +321,8 @@ class BearbeitenSeite(QWidget):
                 karte, innen = self._karte(gruppen_titel(regler.gruppe))
                 if regler.gruppe == "lut":
                     self._lut_bedienung(innen)
+                if regler.gruppe == "geometrie":
+                    self._geometrie_bedienung(innen)
                 gitter = QGridLayout()
                 gitter.setVerticalSpacing(2)
                 gitter.setColumnStretch(0, 1)
@@ -302,6 +356,125 @@ class BearbeitenSeite(QWidget):
         self.fenster.beschriften(titel.setText, titeltext)
         innen.addWidget(titel)
         return karte, innen
+
+    def _geometrie_bedienung(self, innen: QVBoxLayout):
+        """Drehen, Spiegeln und Zuschneiden - ueber den Reglern der Geometriekarte."""
+        leiste = QHBoxLayout()
+        leiste.setSpacing(4)
+        self.links_knopf = self._knopf(_("↺ Links"), lambda: self.drehen(-1), "kanal")
+        self.rechts_knopf = self._knopf(_("↻ Rechts"), lambda: self.drehen(1), "kanal")
+        self.spiegeln_knopf = self._knopf(_("⇋ Spiegeln"), self.spiegeln, "kanal")
+        for knopf in (self.links_knopf, self.rechts_knopf, self.spiegeln_knopf):
+            leiste.addWidget(knopf)
+        leiste.addStretch(1)
+        innen.addLayout(leiste)
+
+        leiste = QHBoxLayout()
+        leiste.setSpacing(4)
+        self.zuschneiden_knopf = self._knopf(_("Zuschneiden"), None, "kanal")
+        self.zuschneiden_knopf.setCheckable(True)
+        self.zuschneiden_knopf.toggled.connect(self.zuschneiden)
+        self.fenster.beschriften(self.zuschneiden_knopf.setToolTip, _(
+            "Rahmen auf dem Bild ziehen; Eingabetaste übernimmt, Esc bricht ab."))
+        self.verhaeltnis_wahl = QComboBox()
+        for text, wert in seitenverhaeltnisse():
+            self.verhaeltnis_wahl.addItem(text, wert)
+        self.verhaeltnis_wahl.currentIndexChanged.connect(self._verhaeltnis_gewaehlt)
+        self.zuschnitt_weg_knopf = self._knopf(_("Voll"), self.zuschnitt_zuruecksetzen, "kanal")
+        self.fenster.beschriften(self.zuschnitt_weg_knopf.setToolTip,
+                                 _("Zuschnitt zurücksetzen"))
+        leiste.addWidget(self.zuschneiden_knopf)
+        leiste.addWidget(self.verhaeltnis_wahl, 1)
+        leiste.addWidget(self.zuschnitt_weg_knopf)
+        innen.addLayout(leiste)
+
+    # ------------------------------------------------------------------
+    # Geometrie: Drehen, Spiegeln, Zuschneiden
+    # ------------------------------------------------------------------
+
+    def drehen(self, richtung: int):
+        if self.sitzung is None:
+            return
+        werte = self.sitzung.werte
+        # Gespiegelt kehrt sich die Drehrichtung der Quelle um - die sichtbare
+        # Drehung soll aber immer der Pfeilrichtung folgen.
+        werte.drehung90 = (werte.drehung90 + (-richtung if werte.spiegeln else richtung)) % 4
+        werte.zuschnitt = zuschnitt_drehen(werte.zuschnitt, richtung)
+        self._geometrie_geaendert()
+
+    def spiegeln(self):
+        if self.sitzung is None:
+            return
+        werte = self.sitzung.werte
+        werte.spiegeln = not werte.spiegeln
+        werte.zuschnitt = zuschnitt_spiegeln(werte.zuschnitt)
+        self._geometrie_geaendert()
+
+    def _geometrie_geaendert(self):
+        if self.leinwand.zuschnitt is not None:
+            self.leinwand.zuschnitt = self.sitzung.werte.zuschnitt
+        self.zeichnen_anfordern()
+
+    def zuschneiden(self, an: bool):
+        """Zuschnittmodus ein- oder ausschalten; beim Ausschalten wird der Rahmen uebernommen."""
+        if self.sitzung is None or an == (self.leinwand.zuschnitt is not None):
+            return
+        if an:
+            self._zuschnitt_vorher = self.sitzung.werte.zuschnitt
+            self.leinwand.zoom_setzen(None)
+            self.leinwand.zuschnitt = self.sitzung.werte.zuschnitt
+            self.leinwand.seitenverhaeltnis = self._verhaeltnis()
+        else:
+            self.sitzung.werte.zuschnitt = tuple(self.leinwand.zuschnitt)
+            self.leinwand.zuschnitt = None
+        self.zuschneiden_knopf.blockSignals(True)
+        self.zuschneiden_knopf.setChecked(an)
+        self.zuschneiden_knopf.blockSignals(False)
+        self.zeichnen_anfordern()
+
+    def zuschnitt_abbrechen(self):
+        if self.leinwand.zuschnitt is None:
+            return
+        self.leinwand.zuschnitt = self._zuschnitt_vorher
+        self.zuschneiden(False)
+
+    def zuschnitt_zuruecksetzen(self):
+        if self.sitzung is None:
+            return
+        if self.leinwand.zuschnitt is not None:
+            self.leinwand.zuschnitt = VOLLER_ZUSCHNITT
+            self.leinwand.update()
+        else:
+            self.sitzung.werte.zuschnitt = VOLLER_ZUSCHNITT
+            self.zeichnen_anfordern()
+
+    def _verhaeltnis(self) -> float | None:
+        wert = self.verhaeltnis_wahl.currentData()
+        if wert is None or self.sitzung is None:
+            return wert
+        if wert < 0:                              # "Original": Verhaeltnis des ganzen Rahmens
+            hoehe, breite = self.sitzung.ausgabe_form(
+                dataclasses.replace(self.sitzung.werte, zuschnitt=VOLLER_ZUSCHNITT))
+            return breite / hoehe
+        return wert
+
+    def _verhaeltnis_gewaehlt(self, *_args):
+        if self.sitzung is None:
+            return
+        verhaeltnis = self._verhaeltnis()
+        if self.leinwand.zuschnitt is not None:
+            self.leinwand.seitenverhaeltnis_setzen(verhaeltnis)
+        elif verhaeltnis is not None:
+            rahmen_form = self.sitzung.ausgabe_form(
+                dataclasses.replace(self.sitzung.werte, zuschnitt=VOLLER_ZUSCHNITT))
+            self.sitzung.werte.zuschnitt = rahmen_mit_verhaeltnis(
+                self.sitzung.werte.zuschnitt, verhaeltnis, rahmen_form)
+            self.zeichnen_anfordern()
+
+    def _ansicht_geaendert(self):
+        if self.leinwand.zoom is None and self.sitzung is not None:
+            self.sitzung.vollbild_vergessen()     # Grafikspeicher des Vollbildes freigeben
+        self.zeichnen_anfordern()
 
     def _hsl_karte(self) -> QFrame:
         karte, innen = self._karte(_("Farbbereiche"))
@@ -423,6 +596,10 @@ class BearbeitenSeite(QWidget):
             knopf.setEnabled(offen)
         self.kurven.setEnabled(offen)
         self.lut_knopf.setEnabled(offen)
+        for widget in (self.links_knopf, self.rechts_knopf, self.spiegeln_knopf,
+                       self.zuschneiden_knopf, self.verhaeltnis_wahl, self.zuschnitt_weg_knopf,
+                       self.einpassen_knopf, self.zoom100_knopf):
+            widget.setEnabled(offen)
         self._lut_anzeigen()
 
     # ------------------------------------------------------------------
@@ -453,16 +630,32 @@ class BearbeitenSeite(QWidget):
             self.kurven.histogramm_zeigen(None)
             self.fenster.rechenzeit_zeigen(None)
             return
-        bild, ms, histogramm = self.sitzung.vorschau(unbearbeitet=self._vorher)
-        self.leinwand.zeigen(bild)
+        werte = filter.Einstellungen() if self._vorher else self.sitzung.werte
+        if self.leinwand.zuschnitt is not None:
+            # Im Zuschnittmodus das ganze Bild zeigen, der Rahmen liegt darueber
+            werte = dataclasses.replace(werte, zuschnitt=VOLLER_ZUSCHNITT)
+        self.leinwand.voll_form = self.sitzung.ausgabe_form(werte)
+        if self.leinwand.zoom is None:
+            bild, ms, histogramm = self.sitzung.vorschau(werte=werte)
+            self.leinwand.zeigen(bild)
+        else:
+            bereich = self.leinwand.sichtbarer_bereich()
+            if bereich is None:
+                return
+            x0, y0, breite, hoehe = bereich
+            bild, ms, histogramm = self.sitzung.ausschnitt(x0, y0, breite, hoehe, werte)
+            self.leinwand.zeigen_ausschnitt(bild, x0, y0)
         self.kurven.histogramm_zeigen(histogramm)
         self.fenster.rechenzeit_zeigen(ms)
+        zoom = self.leinwand.zoom
+        self.zoom_anzeige.setText("" if zoom is None else f"{zoom * 100:.0f} %")
 
     def _vorher_zeigen(self, an: bool):
         self._vorher = an
         self.zeichnen_anfordern()
 
     def alles_zuruecksetzen(self):
+        self.zuschnitt_abbrechen()
         if self.sitzung is not None:
             self.sitzung.werte = filter.Einstellungen()
         self._alles_anzeigen()
@@ -542,6 +735,9 @@ class BearbeitenSeite(QWidget):
             QApplication.restoreOverrideCursor()
 
         self._letzten_ordner_merken(pfad)
+        self.leinwand.zuschnitt = None
+        self.zuschneiden_knopf.setChecked(False)
+        self.leinwand.zoom = None
         self._alles_anzeigen()
         self._knoepfe_freischalten()
         self.fenster.melden(_("{name} geöffnet – {breite} × {hoehe} Pixel, {art}")

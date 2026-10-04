@@ -43,7 +43,8 @@ def test_neutrale_einstellungen_aendern_nichts(bild):
 
 def test_regler_und_einstellungen_passen_zusammen():
     namen = {feld.name for feld in dataclasses.fields(f.Einstellungen)}
-    assert namen == set(f.REGLER_NACH_NAME) | set(f.KURVEN) | set(f.HSL) | {"lut"}
+    assert namen == (set(f.REGLER_NACH_NAME) | set(f.KURVEN) | set(f.HSL) | {"lut"}
+                     | set(f.GEOMETRIE_FELDER))
     for feld in dataclasses.fields(f.Einstellungen):
         if feld.name in f.KURVEN:
             assert feld.default == kurven.IDENTITAET
@@ -51,6 +52,8 @@ def test_regler_und_einstellungen_passen_zusammen():
             assert feld.default == f.HSL_NEUTRAL
         elif feld.name == "lut":
             assert feld.default == ""
+        elif feld.name in f.GEOMETRIE_FELDER:
+            assert feld.default == f.GEOMETRIE_FELDER[feld.name]
         else:
             assert feld.default == f.REGLER_NACH_NAME[feld.name].vorgabe
 
