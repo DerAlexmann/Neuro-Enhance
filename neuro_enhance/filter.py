@@ -10,9 +10,9 @@ Gerechnet wird in linearem Licht mit float32 (Bildwerte 0..1, sRGB-Primaer-
 farben). Erst fuer Anzeige und Export wird zurueck nach sRGB gewandelt.
 
 Die Reihenfolge der Schritte ist fest, wie in der Bildentwicklung ueblich:
-Weissabgleich -> Belichtung -> Dunst entfernen -> Tonwerte (Kontrast,
-Lichter, Tiefen) -> Klarheit -> Gradationskurven -> Farbe (Dynamik,
-Saettigung) -> Schaerfen.
+Weissabgleich -> Belichtung -> Entrauschen -> Dunst entfernen -> Tonwerte
+(Kontrast, Lichter, Tiefen) -> Klarheit -> Gradationskurven -> HSL je
+Farbbereich -> Farbe (Dynamik, Saettigung) -> LUT -> Schaerfen.
 
 Dunst entfernen und Klarheit arbeiten mit grossen Nachbarschaften. Sie
 rechnen deshalb auf einer verkleinerten Kopie und vergroessern das Ergebnis
@@ -74,9 +74,18 @@ REGLER = (
     Regler("dunst", "praesenz", -100, 100),
     Regler("dynamik", "farbe", -100, 100),
     Regler("saettigung", "farbe", -100, 100),
+    Regler("rauschen_luminanz", "rauschen", 0, 100),
+    Regler("rauschen_farbe", "rauschen", 0, 100),
     Regler("schaerfe", "details", 0, 150),
     Regler("schaerfe_radius", "details", 0.5, 3.0, vorgabe=1.0, schritt=0.1, nachkomma=1),
+    Regler("lut_staerke", "lut", 0, 100, vorgabe=100),
 )
+
+# HSL je Farbbereich: acht Bereiche mit ihrer Mitte als Farbwinkel in OkLCh
+FARBBEREICHE = ("rot", "orange", "gelb", "gruen", "aqua", "blau", "lila", "magenta")
+FARBBEREICH_MITTE = (29.0, 55.0, 105.0, 142.0, 195.0, 264.0, 300.0, 330.0)
+HSL = ("hsl_farbton", "hsl_saettigung", "hsl_luminanz")
+HSL_NEUTRAL = (0.0,) * len(FARBBEREICHE)
 REGLER_NACH_NAME = {r.name: r for r in REGLER}
 
 
@@ -100,6 +109,15 @@ class Einstellungen:
     kurve_rot: kurven.Punkte = field(default=kurven.IDENTITAET)
     kurve_gruen: kurven.Punkte = field(default=kurven.IDENTITAET)
     kurve_blau: kurven.Punkte = field(default=kurven.IDENTITAET)
+    # HSL: je ein Wert -100..100 fuer die acht Farbbereiche
+    hsl_farbton: tuple[float, ...] = HSL_NEUTRAL
+    hsl_saettigung: tuple[float, ...] = HSL_NEUTRAL
+    hsl_luminanz: tuple[float, ...] = HSL_NEUTRAL
+    # Pfad einer .cube-Datei; leer heisst keine LUT
+    lut: str = ""
+    rauschen_luminanz: float = 0.0
+    rauschen_farbe: float = 0.0
+    lut_staerke: float = 100.0
 
     def ist_neutral(self) -> bool:
         for feld in fields(self):
@@ -107,9 +125,25 @@ class Einstellungen:
             if feld.name in KURVEN:
                 if not kurven.ist_identitaet(wert):
                     return False
-            elif feld.name != "schaerfe_radius" and wert != REGLER_NACH_NAME[feld.name].vorgabe:
+            elif feld.name in HSL:
+                if any(wert):
+                    return False
+            elif feld.name == "lut":
+                if wert:
+                    return False
+            elif feld.name not in ("schaerfe_radius", "lut_staerke") \
+                    and wert != REGLER_NACH_NAME[feld.name].vorgabe:
                 return False
         return True
+
+    def hsl_aktiv(self) -> bool:
+        return any(any(getattr(self, name)) for name in HSL)
+
+    def lut_aktiv(self) -> bool:
+        return bool(self.lut) and self.lut_staerke > 0
+
+    def rauschen_aktiv(self) -> bool:
+        return self.rauschen_luminanz > 0 or self.rauschen_farbe > 0
 
 
 KURVEN = ("kurve_hell", "kurve_rot", "kurve_gruen", "kurve_blau")
@@ -333,7 +367,7 @@ def vergroessern(bild, hoehe: int, breite: int):
     x1 = xp.minimum(x0 + 1, b0 - 1)
     fy = (y - y0)[:, None]
     fx = (x - x0)[None, :]
-    if bild.ndim == 3:
+    for _ in range(bild.ndim - 2):
         fy, fx = fy[..., None], fx[..., None]
     zeile0, zeile1 = bild[y0], bild[y1]
     oben = zeile0[:, x0] * (1 - fx) + zeile0[:, x1] * fx
@@ -345,6 +379,18 @@ def box_mittel(bild, radius: int):
     """Mittelwert ueber ein (2r+1)-Quadrat per Summentabelle; am Rand ueber das Vorhandene."""
     xp = xp_von(bild)
     hoehe, breite = bild.shape[:2]
+    if xp is not np:
+        # Gleiche Rechnung in zwei Kastenfiltern: ausserhalb zaehlen Nullen, und die
+        # Teilung durch den gefilterten Einser-Rahmen ergibt das Mittel ueber das
+        # Vorhandene - wie die Summentabellen unten.
+        from cupyx.scipy import ndimage
+        groesse = (2 * radius + 1, 2 * radius + 1) + (1,) * (bild.ndim - 2)
+        summe = ndimage.uniform_filter(bild.astype(xp.float32), groesse, mode="constant")
+        anzahl = ndimage.uniform_filter(xp.ones((hoehe, breite), dtype=xp.float32),
+                                        groesse[:2], mode="constant")
+        if bild.ndim > 2:
+            anzahl = anzahl.reshape(anzahl.shape + (1,) * (bild.ndim - 2))
+        return (summe / anzahl).astype(xp.float32)
 
     def laengs(a, achse, laenge):
         summe = xp.cumsum(a, axis=achse, dtype=xp.float64)
@@ -529,6 +575,213 @@ def gradation(rgb, werte: Einstellungen):
 
 
 # --------------------------------------------------------------------------
+# HSL je Farbbereich - in OkLab / OkLCh
+# --------------------------------------------------------------------------
+
+# Lineares sRGB -> LMS -> OkLab (Bjoern Ottosson, 2020)
+OKLAB_M1 = np.array([[0.4122214708, 0.5363325363, 0.0514459929],
+                     [0.2119034982, 0.6806995451, 0.1073969566],
+                     [0.0883024619, 0.2817188376, 0.6299787005]])
+OKLAB_M2 = np.array([[0.2104542553, 0.7936177850, -0.0040720468],
+                     [1.9779984951, -2.4285922050, 0.4505937099],
+                     [0.0259040371, 0.7827717662, -0.8086757660]])
+OKLAB_M1_INV = np.linalg.inv(OKLAB_M1)
+OKLAB_M2_INV = np.linalg.inv(OKLAB_M2)
+
+HSL_FARBTON_GRAD = 30.0      # Farbton +-100 verschiebt um bis zu 30 Grad
+HSL_LUMINANZ = 0.3           # Luminanz +-100 aendert die OkLab-Helligkeit um bis zu 30 %
+HSL_CHROMA_VOLL = 0.08       # ab dieser Buntheit wirkt die Luminanz voll; Grau bleibt Grau
+
+
+def _matrix(rgb, m):
+    xp = xp_von(rgb)
+    return rgb @ xp.asarray(m.T, dtype=xp.float32)
+
+
+def nach_oklab(rgb):
+    xp = xp_von(rgb)
+    return _matrix(xp.cbrt(_matrix(rgb, OKLAB_M1)), OKLAB_M2)
+
+
+def von_oklab(lab):
+    return _matrix(_matrix(lab, OKLAB_M2_INV) ** 3, OKLAB_M1_INV)
+
+
+def bereichsgewichte(farbwinkel):
+    """Gewicht jedes Farbbereichs je Pixel (..., 8); die Summe ist immer 1.
+
+    Zwischen zwei benachbarten Bereichsmitten wird mit einer Kosinuskurve
+    uebergeblendet - so gibt es keine Stufen, wenn ein Regler bewegt wird.
+    """
+    xp = xp_von(farbwinkel)
+    mitten = list(FARBBEREICH_MITTE)
+    gewichte = []
+    for i, mitte in enumerate(mitten):
+        vorher = mitten[i - 1] - (360.0 if i == 0 else 0.0)
+        nachher = mitten[(i + 1) % len(mitten)] + (360.0 if i == len(mitten) - 1 else 0.0)
+        # Abstand auf dem Farbkreis, vorzeichenbehaftet in (-180, 180]
+        abstand = (farbwinkel - mitte + 180.0) % 360.0 - 180.0
+        steigend = 0.5 * (1 + xp.cos(np.pi * xp.clip(-abstand / (mitte - vorher), 0, 1)))
+        fallend = 0.5 * (1 + xp.cos(np.pi * xp.clip(abstand / (nachher - mitte), 0, 1)))
+        gewichte.append(xp.where(abstand < 0, steigend, fallend))
+    return xp.stack(gewichte, axis=-1).astype(xp.float32)
+
+
+def hsl(rgb, werte: Einstellungen):
+    """Farbton, Saettigung und Luminanz je Farbbereich verschieben."""
+    if not werte.hsl_aktiv():
+        return rgb
+    xp = xp_von(rgb)
+    lab = nach_oklab(rgb)
+    hell, a, b = lab[..., 0], lab[..., 1], lab[..., 2]
+    chroma = xp.sqrt(a * a + b * b)
+    winkel = xp.degrees(xp.arctan2(b, a)) % 360.0
+    gewicht = bereichsgewichte(winkel)
+
+    def summe(werte_tupel, faktor):
+        return (gewicht * xp.asarray(werte_tupel, dtype=xp.float32)).sum(axis=-1) \
+            * xp.float32(faktor / 100)
+
+    winkel_neu = xp.radians(winkel + summe(werte.hsl_farbton, HSL_FARBTON_GRAD))
+    chroma_neu = chroma * xp.maximum(1 + summe(werte.hsl_saettigung, 1.0), 0)
+    buntheit = xp.clip(chroma / HSL_CHROMA_VOLL, 0, 1)
+    hell_neu = hell * (1 + summe(werte.hsl_luminanz, HSL_LUMINANZ) * buntheit)
+    lab_neu = xp.stack([hell_neu, chroma_neu * xp.cos(winkel_neu),
+                        chroma_neu * xp.sin(winkel_neu)], axis=-1)
+    return von_oklab(lab_neu).astype(xp.float32)
+
+
+# --------------------------------------------------------------------------
+# LUT
+# --------------------------------------------------------------------------
+
+def lut_anwenden(rgb, werte: Einstellungen):
+    """LUT auf die sRGB-kodierten Werte, mit der Staerke zum Original gemischt."""
+    if not werte.lut_aktiv():
+        return rgb
+    from . import lut
+    xp = xp_von(rgb)
+    tabelle = lut.laden(werte.lut)
+    v = linear_zu_srgb(xp.clip(rgb, 0, 1))
+    neu = lut.anwenden(v, tabelle)
+    staerke = xp.float32(werte.lut_staerke / 100)
+    return srgb_zu_linear(xp.clip(v + staerke * (neu - v), 0, 1))
+
+
+# --------------------------------------------------------------------------
+# Entrauschen
+# --------------------------------------------------------------------------
+
+NLM_SUCHE = 3                # Suchfenster 7 x 7
+NLM_FLECK = 1                # Vergleichsflecken 3 x 3
+NLM_H = 0.06                 # Filterstaerke bei Regler 100, in sRGB-kodierter Helligkeit
+FARBRAUSCHEN_RADIUS = 0.004  # relativ zur laengsten Kante
+
+
+def _gespiegelt(bild, rand):
+    return xp_von(bild).pad(bild, rand, mode="reflect")
+
+
+def nlm(v, staerke):
+    """Non-Local Means auf einem 2D-Bild: Mittel ueber aehnliche Flecken der Umgebung."""
+    xp = xp_von(v)
+    h2 = xp.float32((staerke / 100 * NLM_H) ** 2)
+    rand = NLM_SUCHE + NLM_FLECK
+    hoehe, breite = v.shape
+    gepolstert = _gespiegelt(v, rand)
+    flaeche = (2 * NLM_FLECK + 1) ** 2
+
+    def ausschnitt(dy, dx):
+        return gepolstert[rand + dy:rand + dy + hoehe, rand + dx:rand + dx + breite]
+
+    summe = xp.zeros_like(v)
+    gewichte = xp.zeros_like(v)
+    for dy in range(-NLM_SUCHE, NLM_SUCHE + 1):
+        for dx in range(-NLM_SUCHE, NLM_SUCHE + 1):
+            abstand = xp.zeros_like(v)
+            for fy in range(-NLM_FLECK, NLM_FLECK + 1):
+                for fx in range(-NLM_FLECK, NLM_FLECK + 1):
+                    unterschied = ausschnitt(fy, fx) - ausschnitt(dy + fy, dx + fx)
+                    abstand = abstand + unterschied * unterschied
+            gewicht = xp.exp(-(abstand / flaeche) / h2)
+            summe = summe + gewicht * ausschnitt(dy, dx)
+            gewichte = gewichte + gewicht
+    return (summe / gewichte).astype(xp.float32)
+
+
+def _inverse_3x3(m):
+    """Inverse vieler symmetrischer 3x3-Matrizen (..., 3, 3) ueber die Adjunkte."""
+    xp = xp_von(m)
+    a, b, c = m[..., 0, 0], m[..., 0, 1], m[..., 0, 2]
+    e, f_, i = m[..., 1, 1], m[..., 1, 2], m[..., 2, 2]
+    k00, k01, k02 = e * i - f_ * f_, c * f_ - b * i, b * f_ - c * e
+    k11, k12, k22 = a * i - c * c, b * c - a * f_, a * e - b * b
+    det = a * k00 + b * k01 + c * k02
+    adj = xp.stack([xp.stack([k00, k01, k02], -1), xp.stack([k01, k11, k12], -1),
+                    xp.stack([k02, k12, k22], -1)], -2)
+    return adj / det[..., None, None]
+
+
+def farbrauschen_koeffizienten(fuehrung, chroma, staerke, form):
+    """Farbgefuehrter Filter (He, Sun, Tang) als Fast Guided Filter auf einer Verkleinerung.
+
+    fuehrung (H, W, 3) ist das sRGB-kodierte Bild selbst, chroma (H, W, 3) der
+    Abstand jedes Kanals zur Helligkeit. Weil die Fuehrung farbig ist, bleiben
+    Kanten zwischen Farben gleicher Helligkeit erhalten - eine Fuehrung nur
+    ueber die Helligkeit wuerde dort die Farbe verschmieren. eps trennt Rauschen
+    (kleine Streuung) von echten Farbkanten (grosse Streuung).
+
+    Rueckgabe: a (h, w, 3, 3) und b (h, w, 3) auf der Verkleinerung; das
+    Ergebnis ist chroma_k = sum_j a[k, j] * fuehrung_j + b[k].
+    """
+    xp = xp_von(chroma)
+    radius = max(2.0, FARBRAUSCHEN_RADIUS * max(form[:2]))
+    faktor = max(1, int(radius // 4))
+    fuehrung_k = verkleinern_box(fuehrung, faktor)
+    chroma_k = verkleinern_box(chroma, faktor)
+    r = max(1, round(radius / faktor))
+    eps = xp.float32(1e-4 + (staerke / 100) ** 2 * 0.004)
+
+    mittel_f = box_mittel(fuehrung_k, r)                                   # (h, w, 3)
+    mittel_c = box_mittel(chroma_k, r)                                     # (h, w, 3)
+    produkte = fuehrung_k[..., :, None] * fuehrung_k[..., None, :]         # (h, w, 3, 3)
+    streuung = (box_mittel(produkte.reshape(*produkte.shape[:2], 9), r)
+                .reshape(produkte.shape) - mittel_f[..., :, None] * mittel_f[..., None, :])
+    streuung = streuung + eps * xp.eye(3, dtype=xp.float32)
+    kreuz = chroma_k[..., :, None] * fuehrung_k[..., None, :]              # [k, j]
+    kovarianz = (box_mittel(kreuz.reshape(*kreuz.shape[:2], 9), r).reshape(kreuz.shape)
+                 - mittel_c[..., :, None] * mittel_f[..., None, :])
+    a = kovarianz @ _inverse_3x3(streuung)                                 # (h, w, 3, 3)
+    b = mittel_c - (a @ mittel_f[..., None])[..., 0]
+    a = box_mittel(a.reshape(*a.shape[:2], 9), r).reshape(a.shape)
+    return a.astype(xp.float32), box_mittel(b, r).astype(xp.float32)
+
+
+def entrauschen(rgb, werte: Einstellungen):
+    """Luminanzrauschen mit Non-Local Means, Farbrauschen mit Fast Guided Filter."""
+    if not werte.rauschen_aktiv():
+        return rgb
+    xp = xp_von(rgb)
+    y = luminanz(rgb)
+    v = linear_zu_srgb(y)
+    if werte.rauschen_luminanz > 0:
+        v_neu = nlm(v, werte.rauschen_luminanz)
+        rgb = rgb * (srgb_zu_linear(xp.clip(v_neu, 0, None)) / xp.maximum(y, EPS))[..., None]
+        v = v_neu
+    if werte.rauschen_farbe > 0:
+        kodiert = linear_zu_srgb(rgb)
+        chroma = kodiert - v[..., None]
+        a, b = farbrauschen_koeffizienten(kodiert, chroma, werte.rauschen_farbe, rgb.shape)
+        hoehe, breite = v.shape
+        geglaettet = ((vergroessern(a, hoehe, breite) @ kodiert[..., None])[..., 0]
+                      + vergroessern(b, hoehe, breite))
+        staerke = xp.float32(min(1.0, werte.rauschen_farbe / 50))
+        chroma = chroma + staerke * (geglaettet - chroma)
+        rgb = srgb_zu_linear(xp.maximum(v[..., None] + chroma, 0))
+    return rgb.astype(xp.float32)
+
+
+# --------------------------------------------------------------------------
 # Die ganze Kette
 # --------------------------------------------------------------------------
 
@@ -541,11 +794,14 @@ def anwenden(rgb_linear, werte: Einstellungen, massstab: float = 1.0):
     """
     bild = weissabgleich(rgb_linear, werte.temperatur, werte.toenung)
     bild = belichtung(bild, werte.belichtung)
+    bild = entrauschen(bild, werte)
     bild = dunst(bild, werte.dunst)
     bild = tonwerte(bild, werte.kontrast, werte.lichter, werte.tiefen)
     bild = klarheit(bild, werte.klarheit)
     bild = gradation(bild, werte)
+    bild = hsl(bild, werte)
     bild = farbe(bild, werte.dynamik, werte.saettigung)
+    bild = lut_anwenden(bild, werte)
     return schaerfen(bild, werte.schaerfe, werte.schaerfe_radius * massstab)
 
 

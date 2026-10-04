@@ -26,6 +26,7 @@ Meldung – siehe [SECURITY.md](SECURITY.md).
 | `neuro_enhance/bearbeitung.py` | Sitzung: Original und Vorschau im Grafikspeicher |
 | `neuro_enhance/filter.py` | Filterformeln mit NumPy/CuPy – die Referenz |
 | `neuro_enhance/filter_gpu.py` | dieselben Formeln als zusammengefasste CUDA-Kernel |
+| `neuro_enhance/lut.py` | `.cube`-LUTs lesen, tetraedrisch anwenden |
 | `neuro_enhance/kurven.py` | Gradationskurven: Punkte bearbeiten, Tabellen bilden |
 | `neuro_enhance/kurveneditor.py` | Kurvenfeld mit Histogramm |
 | `neuro_enhance/bilddatei.py` | Laden und Speichern: 8 Bit, 16 Bit, RAW, EXIF |

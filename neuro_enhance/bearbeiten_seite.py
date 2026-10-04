@@ -14,6 +14,7 @@ from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
+    QButtonGroup,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -27,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import bilddatei, einstellungen, filter, kurven
+from . import bilddatei, einstellungen, filter, lut
 from .bearbeitung import Sitzung
 from .cuda import cupy as cp
 from .kurveneditor import KurvenEditor
@@ -43,8 +44,21 @@ def gruppen_titel(gruppe: str) -> str:
         "licht": _("Licht"),
         "praesenz": _("Präsenz"),
         "farbe": _("Farbe"),
+        "rauschen": _("Rauschminderung"),
         "details": _("Details"),
+        "lut": _("LUT"),
     }[gruppe]
+
+
+def farbbereich_titel(nummer: int) -> str:
+    return (_("Rot"), _("Orange"), _("Gelb"), _("Grün"), _("Aqua"), _("Blau"), _("Lila"),
+            _("Magenta"))[nummer]
+
+
+# Regler der Farbbereichskarte - je nach gewaehlter Eigenschaft zeigen sie
+# Farbton, Saettigung oder Luminanz desselben Bereichs
+HSL_REGLER = tuple(filter.Regler(f"hsl_{i}", "hsl", -100, 100)
+                   for i in range(len(filter.FARBBEREICHE)))
 
 
 def regler_titel(name: str) -> str:
@@ -61,7 +75,10 @@ def regler_titel(name: str) -> str:
         "saettigung": _("Sättigung"),
         "schaerfe": _("Schärfen"),
         "schaerfe_radius": _("Radius"),
-    }[name]
+        "rauschen_luminanz": _("Luminanz"),
+        "rauschen_farbe": _("Farbe"),
+        "lut_staerke": _("Stärke"),
+    }[name] if not name.startswith("hsl_") else farbbereich_titel(int(name[4:]))
 
 
 def speicherformate() -> list[tuple[str, str, int]]:
@@ -108,6 +125,8 @@ def wert_anzeige(regler: filter.Regler, wert: float) -> str:
         text += " EV"
     elif regler.name == "schaerfe_radius":
         text += " px"
+    elif regler.name == "lut_staerke":
+        text += " %"
     return text
 
 
@@ -243,30 +262,137 @@ class BearbeitenSeite(QWidget):
 
         self.zeilen: dict[str, ReglerZeile] = {}
         gruppen: dict[str, QGridLayout] = {}
+        karten: dict[str, QFrame] = {}
         zaehler: dict[str, int] = {}
         for regler in filter.REGLER:
             if regler.gruppe not in gruppen:
-                karte = QFrame(objectName="karte")
-                innen = QVBoxLayout(karte)
-                innen.setContentsMargins(16, 12, 16, 14)
-                titel = QLabel(objectName="kartentitel")
-                self.fenster.beschriften(titel.setText, gruppen_titel(regler.gruppe))
-                innen.addWidget(titel)
+                karte, innen = self._karte(gruppen_titel(regler.gruppe))
+                if regler.gruppe == "lut":
+                    self._lut_bedienung(innen)
                 gitter = QGridLayout()
                 gitter.setVerticalSpacing(2)
                 gitter.setColumnStretch(0, 1)
                 innen.addLayout(gitter)
+                if regler.gruppe == "rauschen":
+                    hinweis = QLabel(objectName="nebentext")
+                    hinweis.setWordWrap(True)
+                    self.fenster.beschriften(hinweis.setText, _(
+                        "Die Vorschau ist verkleinert und zeigt Rauschen schwächer als das "
+                        "gespeicherte Bild."))
+                    innen.addWidget(hinweis)
                 spalte.addWidget(karte)
+                karten[regler.gruppe] = karte
                 gruppen[regler.gruppe] = gitter
                 zaehler[regler.gruppe] = 0
             self.zeilen[regler.name] = ReglerZeile(self, regler, gruppen[regler.gruppe],
                                                    zaehler[regler.gruppe])
             zaehler[regler.gruppe] += 2
-        # Die Gradationskurve gehoert hinter die Tonwerte, vor Praesenz und Farbe
-        spalte.insertWidget(2, self._kurvenkarte())
+        # Gradationskurve hinter die Tonwerte, Farbbereiche hinter Dynamik und Saettigung
+        spalte.insertWidget(spalte.indexOf(karten["licht"]) + 1, self._kurvenkarte())
+        spalte.insertWidget(spalte.indexOf(karten["farbe"]) + 1, self._hsl_karte())
         spalte.addStretch(1)
         flaeche.setWidget(inhalt)
         return flaeche
+
+    def _karte(self, titeltext) -> tuple[QFrame, QVBoxLayout]:
+        karte = QFrame(objectName="karte")
+        innen = QVBoxLayout(karte)
+        innen.setContentsMargins(16, 12, 16, 14)
+        titel = QLabel(objectName="kartentitel")
+        self.fenster.beschriften(titel.setText, titeltext)
+        innen.addWidget(titel)
+        return karte, innen
+
+    def _hsl_karte(self) -> QFrame:
+        karte, innen = self._karte(_("Farbbereiche"))
+        leiste = QHBoxLayout()
+        leiste.setSpacing(4)
+        self.hsl_modus = filter.HSL[0]
+        self._hsl_knoepfe: dict[str, QPushButton] = {}
+        gruppe = QButtonGroup(karte)
+        for name, text in zip(filter.HSL, (_("Farbton"), _("Sättigung"), _("Luminanz")),
+                              strict=True):
+            knopf = QPushButton(objectName="kanal")
+            knopf.setCheckable(True)
+            self.fenster.beschriften(knopf.setText, text)
+            knopf.clicked.connect(lambda _an, n=name: self._hsl_modus_waehlen(n))
+            gruppe.addButton(knopf)
+            self._hsl_knoepfe[name] = knopf
+            leiste.addWidget(knopf)
+        self._hsl_knoepfe[self.hsl_modus].setChecked(True)
+        leiste.addStretch(1)
+        innen.addLayout(leiste)
+        gitter = QGridLayout()
+        gitter.setVerticalSpacing(2)
+        gitter.setColumnStretch(0, 1)
+        innen.addLayout(gitter)
+        self.hsl_zeilen = [ReglerZeile(self, regler, gitter, 2 * i)
+                           for i, regler in enumerate(HSL_REGLER)]
+        return karte
+
+    def _hsl_modus_waehlen(self, modus: str):
+        self.hsl_modus = modus
+        self._hsl_anzeigen()
+
+    def _hsl_anzeigen(self):
+        werte = (getattr(self.sitzung.werte, self.hsl_modus) if self.sitzung is not None
+                 else filter.HSL_NEUTRAL)
+        for zeile, wert in zip(self.hsl_zeilen, werte, strict=True):
+            zeile.setzen(wert)
+
+    def _lut_bedienung(self, innen: QVBoxLayout):
+        self.lut_name = QLabel(objectName="nebentext")
+        self.lut_name.setWordWrap(True)
+        innen.addWidget(self.lut_name)
+        leiste = QHBoxLayout()
+        leiste.setSpacing(6)
+        self.lut_knopf = self._knopf(_("LUT laden …"), self.lut_dialog)
+        self.lut_entfernen_knopf = self._knopf(_("Entfernen"), self.lut_entfernen)
+        leiste.addWidget(self.lut_knopf)
+        leiste.addWidget(self.lut_entfernen_knopf)
+        leiste.addStretch(1)
+        innen.addLayout(leiste)
+        self._lut_anzeigen()
+
+    def _lut_anzeigen(self):
+        pfad = self.sitzung.werte.lut if self.sitzung is not None else ""
+        if pfad:
+            try:
+                titel = lut.laden(pfad).titel
+            except lut.LutFehler:
+                titel = os.path.basename(pfad)
+            self.fenster.beschriften(self.lut_name.setText, _("Geladen: {name}").format(name=titel))
+        else:
+            self.fenster.beschriften(self.lut_name.setText, _("Keine LUT geladen."))
+        self.lut_entfernen_knopf.setEnabled(bool(pfad))
+
+    def lut_dialog(self):
+        if self.sitzung is None:
+            return
+        ordner = einstellungen.load_config().get("lut_ordner", "")
+        pfad, _filter = QFileDialog.getOpenFileName(
+            self, _("LUT laden"), ordner if os.path.isdir(ordner) else self._letzter_ordner(),
+            "Cube-LUT (*.cube)")
+        if not pfad:
+            return
+        try:
+            lut.laden(pfad)
+        except lut.LutFehler as fehler:
+            self._fehler(_("Die LUT lässt sich nicht lesen."), str(fehler))
+            return
+        daten = einstellungen.load_config()
+        daten["lut_ordner"] = os.path.dirname(pfad)
+        einstellungen.save_config(daten)
+        self.sitzung.werte.lut = pfad
+        self._lut_anzeigen()
+        self.zeichnen_anfordern()
+
+    def lut_entfernen(self):
+        if self.sitzung is None:
+            return
+        self.sitzung.werte.lut = ""
+        self._lut_anzeigen()
+        self.zeichnen_anfordern()
 
     def _kurvenkarte(self) -> QFrame:
         karte = QFrame(objectName="karte")
@@ -287,16 +413,17 @@ class BearbeitenSeite(QWidget):
         innen.addWidget(self.kurven)
         return karte
 
-    def _kurven_neutral(self):
-        self.kurven.alle_setzen(dict.fromkeys(filter.KURVEN, kurven.IDENTITAET))
-
     def _knoepfe_freischalten(self):
         offen = self.sitzung is not None
         for widget in (self.speichern_knopf, self.vorher_knopf, self.zuruecksetzen_knopf):
             widget.setEnabled(offen)
-        for zeile in self.zeilen.values():
+        for zeile in [*self.zeilen.values(), *self.hsl_zeilen]:
             zeile.schieber.setEnabled(offen)
+        for knopf in self._hsl_knoepfe.values():
+            knopf.setEnabled(offen)
         self.kurven.setEnabled(offen)
+        self.lut_knopf.setEnabled(offen)
+        self._lut_anzeigen()
 
     # ------------------------------------------------------------------
     # Regler und Vorschau
@@ -305,6 +432,11 @@ class BearbeitenSeite(QWidget):
     def wert_geaendert(self, name: str, wert):
         if self.sitzung is None:
             return
+        if name.startswith("hsl_") and name[4:].isdigit():
+            # Ein Farbbereichsregler: gilt fuer die gerade gewaehlte Eigenschaft
+            werte = list(getattr(self.sitzung.werte, self.hsl_modus))
+            werte[int(name[4:])] = wert
+            name, wert = self.hsl_modus, tuple(werte)
         setattr(self.sitzung.werte, name, wert)
         self.zeichnen_anfordern()
 
@@ -331,12 +463,19 @@ class BearbeitenSeite(QWidget):
         self.zeichnen_anfordern()
 
     def alles_zuruecksetzen(self):
-        for zeile in self.zeilen.values():
-            zeile.setzen(zeile.regler.vorgabe)
-        self._kurven_neutral()
         if self.sitzung is not None:
             self.sitzung.werte = filter.Einstellungen()
+        self._alles_anzeigen()
         self.zeichnen_anfordern()
+
+    def _alles_anzeigen(self):
+        """Alle Bedienelemente auf die Werte der Sitzung (oder die Vorgaben) setzen."""
+        werte = self.sitzung.werte if self.sitzung is not None else filter.Einstellungen()
+        for name, zeile in self.zeilen.items():
+            zeile.setzen(getattr(werte, name))
+        self.kurven.alle_setzen({name: getattr(werte, name) for name in filter.KURVEN})
+        self._hsl_anzeigen()
+        self._lut_anzeigen()
 
     # ------------------------------------------------------------------
     # Oeffnen und Speichern
@@ -403,9 +542,7 @@ class BearbeitenSeite(QWidget):
             QApplication.restoreOverrideCursor()
 
         self._letzten_ordner_merken(pfad)
-        for zeile in self.zeilen.values():
-            zeile.setzen(zeile.regler.vorgabe)
-        self._kurven_neutral()
+        self._alles_anzeigen()
         self._knoepfe_freischalten()
         self.fenster.melden(_("{name} geöffnet – {breite} × {hoehe} Pixel, {art}")
                             .format(name=daten.name, breite=daten.breite, hoehe=daten.hoehe,

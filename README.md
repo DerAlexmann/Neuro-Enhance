@@ -61,6 +61,16 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 - **Klarheit**: mehr oder weniger lokaler Kontrast in den Mitteltönen.
 - **Dunst entfernen** nach dem Dark-Channel-Prior-Verfahren – auch umgekehrt, um
   Dunst hinzuzufügen.
+- **Farbbereiche (HSL)**: Farbton, Sättigung und Luminanz getrennt für Rot,
+  Orange, Gelb, Grün, Aqua, Blau, Lila und Magenta. Gerechnet wird im
+  wahrnehmungsgleichmäßigen Farbraum OkLCh, mit weichen Übergängen zwischen den
+  Bereichen; Grautöne bleiben unberührt.
+- **LUTs**: Looks als `.cube`-Datei (3D und 1D) laden, tetraedrisch
+  interpoliert, mit Stärkeregler.
+- **Rauschminderung**: Luminanzrauschen mit Non-Local Means, Farbrauschen mit
+  einem farbgeführten Filter, der Farbkanten erhält – auch zwischen Farben
+  gleicher Helligkeit. Die verkleinerte Vorschau zeigt Rauschen schwächer als
+  das gespeicherte Bild.
 - **Nicht-destruktiv**: Jede Änderung wird aus dem unveränderten Original neu
   gerechnet. Doppelklick setzt einen Regler zurück, „Vorher“ zeigt das Original,
   solange der Knopf gedrückt ist.
@@ -93,8 +103,9 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 
 ## Geplant
 
-- **Weitere klassische Filter**: LUTs, HSL je Farbbereich, Entrauschen,
-  Geometrie.
+- **Weitere klassische Filter**: Geometrie (Drehen, Zuschneiden, Perspektive,
+  Objektivkorrektur), Vorschau in 100 % zum Beurteilen von Schärfe und
+  Rauschen.
 - **X-Trans auf der GPU**: Demosaicing auch für Fujis Sensoren auf der
   Grafikkarte.
 - **KI-Funktionen**: Hochskalieren, Entrauschen, Entschärfen, Freistellen,

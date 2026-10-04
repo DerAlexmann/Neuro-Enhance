@@ -58,6 +58,14 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   the luminance curve leaves the colours untouched.
 - **Clarity**: more or less local contrast in the midtones.
 - **Dehaze** using the dark channel prior – also in reverse, to add haze.
+- **Colour ranges (HSL)**: hue, saturation and luminance separately for red, orange,
+  yellow, green, aqua, blue, purple and magenta. Computed in the perceptually uniform
+  OkLCh colour space with soft transitions between the ranges; greys stay untouched.
+- **LUTs**: load looks as `.cube` files (3D and 1D), tetrahedral interpolation, with a
+  strength slider.
+- **Noise reduction**: luminance noise with non-local means, colour noise with a
+  colour-guided filter that keeps colour edges – even between colours of equal
+  brightness. The scaled-down preview shows less noise than the saved image.
 - **Non-destructive**: every change is recomputed from the untouched original.
   Double-click resets a slider, "Before" shows the original while the button is held.
 - **Fast**: the preview is computed at screen resolution in a few milliseconds; the
@@ -86,7 +94,8 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 
 ## Planned
 
-- **More classic filters**: LUTs, HSL per colour range, denoising, geometry.
+- **More classic filters**: geometry (rotate, crop, perspective, lens correction), a
+  100 % preview for judging sharpness and noise.
 - **X-Trans on the GPU**: demosaicing for Fujifilm sensors on the graphics card as
   well.
 - **AI features**: upscaling, denoising, deblurring, background removal, click-to-select

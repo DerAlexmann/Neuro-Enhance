@@ -7,6 +7,18 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- Farbbereiche (HSL): Farbton, Sättigung und Luminanz für acht Bereiche, in
+  OkLCh mit Kosinus-Übergängen; Grautöne bleiben unberührt. Bedienung über
+  eine Karte mit Umschaltern für die drei Eigenschaften.
+- LUTs im `.cube`-Format (3D und 1D, DOMAIN_MIN/MAX), tetraedrisch
+  interpoliert, mit Stärkeregler; auf der GPU im selben Durchlauf wie Kurven
+  und Farbe.
+- Rauschminderung: Luminanz mit Non-Local Means (7 × 7 Suchfenster,
+  3 × 3 Flecken), Farbe mit einem farbgeführten Fast Guided Filter. Das
+  Ergebnis wird für die Vorschau zwischengespeichert; beim Ziehen an den
+  Rauschreglern braucht eine Vorschau mit 10 Megapixeln 10 bis 40 ms.
+- Mittelwertfilter auf der GPU über Kastenfilter statt Summentabellen:
+  Dunst entfernen ist dadurch rund dreimal so schnell.
 - RAW-Entwicklung auf der GPU für Bayer-Sensoren: LibRaw liest nur noch das
   Mosaik; Schwarzwert, Weißabgleich, Demosaicing und Farbmatrix rechnet die
   Grafikkarte. Als Verfahren dient RCD (Ratio Corrected Demosaicing) in vier
