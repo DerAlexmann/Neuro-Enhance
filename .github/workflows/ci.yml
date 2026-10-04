@@ -36,8 +36,9 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       # Die Läufer haben keine Grafikkarte. Geprüft werden die Bewertung der
-      # Karten, die Startmeldungen und die Sprachtabelle - dafür braucht es
-      # weder Qt noch CUDA. Ohne Treiber meldet NVML "nicht gefunden", und
-      # genau das muss die Startprüfung ohne Absturz verkraften.
-      - run: pip install pytest nvidia-ml-py
+      # Karten, die Startmeldungen, die Sprachtabelle, Laden und Speichern
+      # und die Filterformeln mit NumPy - dafür braucht es weder Qt noch CUDA.
+      # Die Vergleiche zwischen CUDA-Kernel und NumPy laufen nur lokal mit
+      # Grafikkarte und überspringen sich hier von selbst.
+      - run: pip install pytest nvidia-ml-py numpy Pillow
       - run: python -m pytest tests -q

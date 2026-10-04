@@ -26,10 +26,36 @@ nvidia-ml-py (NVIDIA Management Library bindings)
   Licence: BSD 3-Clause
   https://pypi.org/project/nvidia-ml-py/
 
+CuPy
+  Copyright Preferred Networks, Inc. and Preferred Infrastructure, Inc.
+  Licence: MIT
+  https://cupy.dev/
+
+NumPy
+  Copyright NumPy Developers
+  Licence: BSD 3-Clause
+  https://numpy.org/
+
+Pillow
+  Copyright Jeffrey A. Clark and contributors; Copyright Secret Labs AB and
+  Fredrik Lundh
+  Licence: MIT-CMU (HPND)
+  https://python-pillow.github.io/
+
+NVIDIA CUDA libraries (cuda-toolkit, nvidia-cuda-nvrtc-cu12,
+nvidia-cuda-runtime-cu12 and related packages)
+  Copyright NVIDIA Corporation
+  Licence: NVIDIA Software License Agreement / CUDA Toolkit EULA
+  https://docs.nvidia.com/cuda/eula/
+  Installed by pip from NVIDIA's own packages on the Python Package Index.
+  This repository does not contain or redistribute them.
+
+pillow-heif (optional, only for opening HEIC/HEIF files)
+  Licence: BSD 3-Clause; bundles libheif (LGPL-3.0) and further codecs.
+  https://github.com/bigcat88/pillow_heif
+
 Planned for later versions (listed here once they are used):
-  CuPy (MIT), NumPy (BSD 3-Clause), ONNX Runtime (MIT),
-  NVIDIA CUDA runtime and NVIDIA TensorRT (NVIDIA licence agreements;
-  installed from NVIDIA's own packages, not redistributed by this project).
+  ONNX Runtime (MIT), NVIDIA TensorRT (NVIDIA licence agreement).
 
 ===========================================================================
 AI models

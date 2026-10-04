@@ -92,11 +92,50 @@ TRANSLATIONS = {
 
         # Reiter Bearbeiten
         "Noch kein Bild geöffnet.": "No image opened yet.",
-        "Das Grundgerüst steht – die Bearbeitungsfunktionen folgen.":
-            "The groundwork is in place – the editing features will follow.",
+        "Bild hierher ziehen oder „Öffnen …“ wählen.":
+            "Drag an image here or choose “Open …”.",
+        "Öffnen …": "Open …",
+        "Speichern unter …": "Save as …",
+        "Vorher": "Before",
+        "Gedrückt halten, um das unbearbeitete Bild zu sehen.":
+            "Hold down to see the unedited image.",
+        "Alles zurücksetzen": "Reset all",
+        "Doppelklick setzt den Regler zurück.": "Double-click resets the slider.",
+
+        # Reglergruppen und Regler
+        "Weißabgleich": "White balance",
+        "Licht": "Light",
+        "Farbe": "Colour",
+        "Details": "Detail",
+        "Temperatur": "Temperature",
+        "Tönung": "Tint",
+        "Belichtung": "Exposure",
+        "Kontrast": "Contrast",
+        "Lichter": "Highlights",
+        "Tiefen": "Shadows",
+        "Dynamik": "Vibrance",
+        "Sättigung": "Saturation",
+        "Schärfen": "Sharpening",
+        "Radius": "Radius",
+
+        # Öffnen und Speichern
+        "Bild öffnen": "Open image",
+        "Bilder": "Images",
+        "Bild speichern": "Save image",
+        "Dieses Dateiformat wird nicht unterstützt.": "This file format is not supported.",
+        "Die Datei lässt sich nicht öffnen.": "The file cannot be opened.",
+        "Das Bild lässt sich nicht speichern.": "The image cannot be saved.",
+        "Für dieses Bild reicht der Grafikspeicher nicht.":
+            "There is not enough video memory for this image.",
+        "Ungespeicherte Änderungen": "Unsaved changes",
+        "Die Änderungen an {name} sind nicht gespeichert. Trotzdem fortfahren?":
+            "The changes to {name} have not been saved. Continue anyway?",
+        "{name} geöffnet – {breite} × {hoehe} Pixel":
+            "{name} opened – {breite} × {hoehe} pixels",
+        "Gespeichert: {name} ({ms} ms)": "Saved: {name} ({ms} ms)",
+
+        # Reiter Info & Copyright, Statuszeile
         "Grafikkarte": "Graphics card",
-        "{karte} mit {vram} Grafikspeicher – Funktionsstufe {stufe}":
-            "{karte} with {vram} of video memory – feature tier {stufe}",
         "Nur klassische Filter – für KI-Funktionen sind mindestens "
         "4 GB Grafikspeicher nötig.":
             "Classic filters only – AI features need at least 4 GB of video memory.",
@@ -128,6 +167,7 @@ TRANSLATIONS = {
         "Rechengenauigkeit": "Precision",
         "Python": "Python",
         "PySide6 / Qt": "PySide6 / Qt",
+        "CuPy / CUDA": "CuPy / CUDA",
         "Einstellungen": "Settings",
         "Marken & Hinweise": "Trademarks & notices",
         "NVIDIA, RTX, GeForce, CUDA und TensorRT sind Marken oder eingetragene Marken "

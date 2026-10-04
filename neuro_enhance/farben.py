@@ -164,6 +164,19 @@ def stylesheet() -> str:
     QPushButton#hauptschalter {{ background: {t["ACCENT"]}; color: {t["ON_ACCENT"]}; }}
     QPushButton#hauptschalter:hover {{ background: {t["ACCENT_DARK"]}; }}
 
+    QSlider::groove:horizontal {{
+        background: {t["TROUGH"]}; height: 4px; border-radius: 2px;
+    }}
+    QSlider::sub-page:horizontal, QSlider::add-page:horizontal {{
+        background: {t["TROUGH"]}; border-radius: 2px;
+    }}
+    QSlider::handle:horizontal {{
+        background: {t["ACCENT"]}; width: 14px; height: 14px; margin: -5px 0;
+        border-radius: 7px;
+    }}
+    QSlider::handle:horizontal:hover {{ background: {t["ACCENT_DARK"]}; }}
+    QSlider::handle:horizontal:disabled {{ background: {t["BTN_DISABLED"]}; }}
+
     QStatusBar {{ background: {t["STATUS_BG"]}; color: {t["MUTED"]}; }}
     QStatusBar::item {{ border: none; }}
     QStatusBar QLabel {{ color: {t["MUTED"]}; background: transparent; padding: 2px 10px; }}

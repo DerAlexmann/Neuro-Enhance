@@ -1,4 +1,14 @@
-# Laufzeit. Die GPU-Bibliotheken (CuPy, ONNX Runtime, TensorRT) kommen mit
-# den ersten Bearbeitungsfunktionen dazu.
+# Laufzeit
 PySide6>=6.8
 nvidia-ml-py>=12.570
+Pillow>=10
+numpy>=1.26
+
+# GPU: CuPy samt CUDA-Bibliotheken als pip-Pakete von NVIDIA - ein eigenes
+# CUDA-Toolkit muss nicht installiert sein. Festgelegt auf CUDA 12.8, passend
+# zum Mindesttreiber 570.65 und zu Blackwell (RTX 50).
+cupy-cuda12x[ctk]>=14
+cuda-toolkit==12.8.*
+
+# Optional: HEIC/HEIF-Fotos öffnen
+# pillow-heif

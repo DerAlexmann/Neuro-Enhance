@@ -13,9 +13,8 @@ NVIDIA Corporation.*
 
 *[English version: README.en.md](README.en.md)*
 
-> **Frühe Entwicklungsphase.** Version 0.1.0 ist das Grundgerüst: Startprüfung der
-> Grafikkarte, Erkennung der Funktionsstufe und die Oberfläche. Die Bearbeitungs- und
-> KI-Funktionen folgen in den nächsten Versionen.
+> **Frühe Entwicklungsphase.** Die klassischen Grundregler laufen bereits auf der GPU;
+> die KI-Funktionen folgen in den nächsten Versionen.
 
 ## Systemvoraussetzungen
 
@@ -51,13 +50,36 @@ Stufe beim Start; Funktionen einer höheren Stufe erscheinen ausgegraut mit Hinw
 Rechengenauigkeit: alle RTX-Karten rechnen in FP16; ab RTX 4000 (Ada) zusätzlich FP8, ab
 RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyright".
 
-## Geplante Funktionen
+## Was es schon kann
 
-- **Klassische Filter auf der GPU**: Belichtung, Kurven, Farbe, LUTs, Schärfen,
-  Entrauschen, Dunst entfernen, Geometrie, RAW-Entwicklung.
+- **Grundregler auf der GPU**: Weißabgleich (Temperatur, Tönung), Belichtung,
+  Kontrast, Lichter, Tiefen, Dynamik, Sättigung und Schärfen mit einstellbarem
+  Radius.
+- **Nicht-destruktiv**: Jede Änderung wird aus dem unveränderten Original neu
+  gerechnet. Doppelklick setzt einen Regler zurück, „Vorher“ zeigt das Original,
+  solange der Knopf gedrückt ist.
+- **Schnell**: Die Vorschau entsteht in Bildschirmauflösung in wenigen
+  Millisekunden; die Rechenzeit steht in der Statuszeile. Gespeichert wird in
+  voller Auflösung.
+- **Farbrichtig**: Gerechnet wird in linearem Licht mit 32-Bit-Gleitkomma.
+  Eingebettete Farbprofile (etwa Adobe RGB) werden beim Öffnen nach sRGB
+  umgerechnet, die EXIF-Ausrichtung angewendet; EXIF-Daten und ein Alphakanal
+  bleiben beim Speichern erhalten.
+- **Formate**: Öffnen von JPEG, PNG, TIFF, WebP, BMP (HEIC mit dem optionalen
+  Paket `pillow-heif`), Speichern als JPEG, PNG, TIFF und WebP – vorerst mit
+  8 Bit je Kanal.
+
+| Taste | Wirkung |
+|---|---|
+| `Strg`+`O` | Bild öffnen (oder Datei auf die Fläche ziehen) |
+| `Strg`+`S` | Speichern unter … – das Original wird nie stillschweigend überschrieben |
+
+## Geplant
+
+- **Weitere klassische Filter**: Kurven, LUTs, Klarheit, Dunst entfernen,
+  Entrauschen, Geometrie, 16 Bit und RAW-Entwicklung.
 - **KI-Funktionen**: Hochskalieren, Entrauschen, Entschärfen, Freistellen,
   Objektauswahl per Klick, Objekte entfernen, Tiefenkarte für künstliche Unschärfe.
-- **Nicht-destruktiv**: Alle Schritte bleiben einzeln regelbar und abschaltbar.
 
 ## Starten
 
@@ -67,6 +89,11 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 pip install -r requirements.txt
 python Neuro-Enhance.pyw
 ```
+
+Die Pakete bringen CuPy und die nötigen CUDA-Bibliotheken von NVIDIA mit
+(zusammen gut 1 GB); ein eigenes CUDA-Toolkit muss nicht installiert sein. Beim
+allerersten Bild übersetzt die Grafikkarte ihre Filterprogramme einmalig, das
+dauert ein bis zwei Sekunden.
 
 Eine fertige EXE folgt mit dem ersten Release.
 

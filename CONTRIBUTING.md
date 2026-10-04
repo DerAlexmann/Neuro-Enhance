@@ -21,10 +21,17 @@ Meldung – siehe [SECURITY.md](SECURITY.md).
 | `neuro_enhance/start.py` | Programmstart, Startprüfung, Startmeldungen |
 | `neuro_enhance/gpu_pruefung.py` | Grafikkarte über NVML erkennen und bewerten |
 | `neuro_enhance/hauptfenster.py` | Hauptfenster mit Kopfzeile, Reitern und Statuszeile |
+| `neuro_enhance/bearbeiten_seite.py` | Reiter „Bearbeiten“: Werkzeugleiste, Regler, Öffnen und Speichern |
+| `neuro_enhance/leinwand.py` | Anzeige des Bildes, Ziehen und Ablegen |
+| `neuro_enhance/bearbeitung.py` | Sitzung: Original und Vorschau im Grafikspeicher |
+| `neuro_enhance/filter.py` | Filterformeln mit NumPy/CuPy – die Referenz |
+| `neuro_enhance/filter_gpu.py` | dieselben Formeln als zusammengefasste CUDA-Kernel |
+| `neuro_enhance/bilddatei.py` | Laden und Speichern, Farbprofile, EXIF |
+| `neuro_enhance/cuda.py` | lädt CuPy an einer Stelle |
 | `neuro_enhance/farben.py` | Farbschemata, Schriften, Qt-Stylesheet |
 | `neuro_enhance/uebersetzung.py` | Sprachumschaltung und Sprachtabelle |
 | `neuro_enhance/einstellungen.py` | Einstellungsdatei neben dem Programm |
-| `tests/` | Tests für Kartenbewertung, Startmeldungen und Sprachtabelle |
+| `tests/` | Tests für Kartenbewertung, Startmeldungen, Sprachtabelle, Filter und Dateien |
 | `icon_erzeugen.py` | Programmsymbol erzeugen |
 
 ## Entwickeln
@@ -35,7 +42,9 @@ python -m pytest tests -q
 python -m ruff check .
 ```
 
-Die Tests brauchen weder eine Grafikkarte noch Qt. Die Startmeldungen lassen
+Die Tests brauchen weder eine Grafikkarte noch Qt; die Filter rechnen dort mit
+NumPy. Mit Grafikkarte vergleichen zusätzliche Tests die CUDA-Kernel Pixel für
+Pixel mit dieser Referenz. Die Startmeldungen lassen
 sich ohne passende Hardware ansehen:
 
 ```bash
@@ -59,6 +68,15 @@ Ebenso `kein_treiber`, `keine_nvidia`, `treiber_alt` und `wenig_vram`.
 - **Keine CUDA-Bibliothek vor der Startprüfung laden.** CuPy, ONNX Runtime und
   TensorRT werden erst importiert, wenn `gpu_pruefung` eine passende Karte
   gefunden hat.
+
+## Einen Filter ergänzen
+
+1. Die Formel als Funktion in `filter.py` schreiben – mit `xp_von()`, damit sie
+   mit NumPy und CuPy läuft – und in `anwenden()` einhängen.
+2. Den Regler in `REGLER` und `Einstellungen` eintragen, den Titel in
+   `bearbeiten_seite.regler_titel()`, die Übersetzung in `uebersetzung.py`.
+3. Dieselbe Formel in den passenden Kernel in `filter_gpu.py` übernehmen.
+   `test_cuda_kernel_rechnen_wie_die_referenz` zeigt, ob beide übereinstimmen.
 
 ## KI-Modelle
 

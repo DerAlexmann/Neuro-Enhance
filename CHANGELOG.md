@@ -7,6 +7,19 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- Erste klassische Filter auf der GPU: Weißabgleich (Temperatur, Tönung),
+  Belichtung, Kontrast, Lichter, Tiefen, Dynamik, Sättigung und Schärfen mit
+  Radius. Gerechnet wird nicht-destruktiv in linearem Licht; die Kette läuft
+  als drei zusammengefasste CUDA-Kernel (Vorschau mit 10 Megapixeln in rund
+  12 ms auf einer RTX 4060, Export von 24 Megapixeln in unter 0,2 s).
+- Bilder öffnen (JPEG, PNG, TIFF, WebP, BMP, optional HEIC) per Dialog,
+  `Strg`+`O` oder Ziehen und Ablegen; speichern als JPEG, PNG, TIFF oder WebP.
+  EXIF-Ausrichtung wird angewendet, eingebettete Farbprofile werden nach sRGB
+  umgerechnet, EXIF-Daten und Alphakanal bleiben erhalten.
+- „Vorher“-Knopf, Zurücksetzen per Doppelklick und „Alles zurücksetzen“;
+  Nachfrage vor dem Verwerfen ungespeicherter Änderungen.
+- Rechenzeit der GPU in der Statuszeile, CuPy- und NVRTC-Version im Reiter
+  „Info & Copyright“.
 - Grundgerüst der Anwendung mit PySide6: Kopfzeile mit Sprachwahl (Deutsch,
   Englisch) und dunklem Farbschema, Reiter „Bearbeiten" und „Info & Copyright",
   Statuszeile mit Grafikkarte und Funktionsstufe.

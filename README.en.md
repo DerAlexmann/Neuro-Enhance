@@ -11,8 +11,7 @@ Supports hardware acceleration via NVIDIA CUDA / RTX series GPUs.
 
 *[Deutsche Fassung: README.md](README.md)*
 
-> **Early development.** Version 0.1.0 is the groundwork: the graphics card check at
-> start-up, detection of the feature tier and the user interface. The editing and AI
+> **Early development.** The classic basic adjustments already run on the GPU; the AI
 > features will follow in the next versions.
 
 ## System requirements
@@ -49,13 +48,32 @@ start-up; features of a higher tier are shown greyed out with a note.
 Precision: all RTX cards compute in FP16; from the RTX 4000 (Ada) also in FP8, from the
 RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright" tab.
 
-## Planned features
+## What it does already
 
-- **Classic filters on the GPU**: exposure, curves, colour, LUTs, sharpening, denoising,
-  dehaze, geometry, RAW development.
+- **Basic adjustments on the GPU**: white balance (temperature, tint), exposure,
+  contrast, highlights, shadows, vibrance, saturation and sharpening with adjustable
+  radius.
+- **Non-destructive**: every change is recomputed from the untouched original.
+  Double-click resets a slider, "Before" shows the original while the button is held.
+- **Fast**: the preview is computed at screen resolution in a few milliseconds; the
+  computing time is shown in the status bar. Saving uses the full resolution.
+- **Colour-accurate**: processing happens in linear light with 32-bit floating point.
+  Embedded colour profiles (such as Adobe RGB) are converted to sRGB on opening and the
+  EXIF orientation is applied; EXIF data and an alpha channel are kept when saving.
+- **Formats**: opens JPEG, PNG, TIFF, WebP, BMP (HEIC with the optional `pillow-heif`
+  package), saves JPEG, PNG, TIFF and WebP – for now with 8 bits per channel.
+
+| Key | Action |
+|---|---|
+| `Ctrl`+`O` | open an image (or drag a file onto the canvas) |
+| `Ctrl`+`S` | save as … – the original is never overwritten silently |
+
+## Planned
+
+- **More classic filters**: curves, LUTs, clarity, dehaze, denoising, geometry, 16 bits
+  and RAW development.
 - **AI features**: upscaling, denoising, deblurring, background removal, click-to-select
   objects, object removal, depth maps for synthetic depth of field.
-- **Non-destructive**: every step stays adjustable and can be switched off.
 
 ## Running it
 
@@ -65,6 +83,10 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 pip install -r requirements.txt
 python Neuro-Enhance.pyw
 ```
+
+The packages bring CuPy and the required CUDA libraries from NVIDIA (just over 1 GB in
+total); a separate CUDA Toolkit installation is not needed. For the very first image the
+graphics card compiles its filter programs once, which takes one or two seconds.
 
 A ready-made executable will follow with the first release.
 

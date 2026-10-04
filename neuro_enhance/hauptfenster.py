@@ -77,6 +77,17 @@ def genauigkeit_anzeige(befund: Befund) -> str:
     return " · ".join(formate)
 
 
+def cuda_anzeige() -> str:
+    from .cuda import cupy
+    if cupy is None:
+        return "–"
+    # Die Kernel uebersetzt NVRTC aus dem installierten cuda-toolkit; dessen
+    # Fassung bestimmt, welchen Treiber es braucht - nicht die, gegen die
+    # CuPy selbst gebaut wurde.
+    haupt, neben = cupy.cuda.nvrtc.getVersion()
+    return f"{cupy.__version__} / NVRTC {haupt}.{neben}"
+
+
 def vram_anzeige(befund: Befund) -> str:
     if not befund.karte:
         return "–"
@@ -206,35 +217,11 @@ class Hauptfenster(QMainWindow):
         return flaeche, aufbau
 
     def _reiter_bearbeiten(self):
-        seite, aufbau = self._reiterseite()
-
-        leinwand = QFrame(objectName="leinwand")
-        leinwand.setMinimumHeight(320)
-        innen = QVBoxLayout(leinwand)
-        innen.addStretch(1)
-        leer = self._label(_("Noch kein Bild geöffnet."), "leer")
-        leer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        innen.addWidget(leer)
-        hinweis = self._label(_("Das Grundgerüst steht – die Bearbeitungsfunktionen folgen."),
-                              "nebentext")
-        hinweis.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        innen.addWidget(hinweis)
-        innen.addStretch(1)
-        aufbau.addWidget(leinwand, 1)
-
-        karte, innen = self._karte(_("Grafikkarte"))
-        name = self.befund.karte.name if self.befund.karte else "–"
-        innen.addWidget(self._label(_("{karte} mit {vram} Grafikspeicher – Funktionsstufe {stufe}")
-                                    .format(karte=name, vram=vram_anzeige(self.befund),
-                                            stufe=self.befund.stufe)))
-        beschreibung = self._label(name="nebentext", umbruch=True)
-        self.beschriften(beschreibung.setText, stufe_beschreibung(self.befund.stufe))
-        if self.befund.stufe == STUFE_OHNE_KI:
-            beschreibung.setObjectName("warnung")
-        innen.addWidget(beschreibung)
-        aufbau.addWidget(karte)
-
-        self.reiter.addTab(seite, "")
+        # Erst hier geladen: das Modul bringt CuPy mit, und das darf erst nach
+        # der Startpruefung geschehen.
+        from .bearbeiten_seite import BearbeitenSeite
+        self.bearbeiten = BearbeitenSeite(self)
+        self.reiter.addTab(self.bearbeiten, "")
 
     def _reiter_info(self):
         seite, aufbau = self._reiterseite()
@@ -263,6 +250,7 @@ class Hauptfenster(QMainWindow):
             (_("Rechengenauigkeit"), genauigkeit_anzeige(self.befund)),
             (_("Python"), platform.python_version()),
             (_("PySide6 / Qt"), f"{PYSIDE_VERSION} / {qVersion()}"),
+            (_("CuPy / CUDA"), cuda_anzeige()),
             (_("Einstellungen"), einstellungen.config_path()),
         ]
         for nummer, (bezeichnung, wert) in enumerate(zeilen):
@@ -309,12 +297,34 @@ class Hauptfenster(QMainWindow):
         zeile.setSizeGripEnabled(False)
         self.statusmeldung = self._label(_("Bereit."))
         zeile.addWidget(self.statusmeldung, 1)
+        self.rechenzeit = self._label(name="wert")
+        # Feste Breite, damit die Statuszeile beim Ziehen nicht zappelt
+        self.rechenzeit.setMinimumWidth(
+            self.rechenzeit.fontMetrics().horizontalAdvance("GPU 9999.9 ms") + 24)
+        zeile.addPermanentWidget(self.rechenzeit)
         k = self.befund.karte
         if k:
             text = f"{k.name} · {vram_anzeige(self.befund)} · {genauigkeit_anzeige(self.befund)}"
             zeile.addPermanentWidget(self._label(text, "wert"))
-            zeile.addPermanentWidget(self._label(_("Stufe {stufe}")
-                                                 .format(stufe=self.befund.stufe)))
+            stufe = self._label(_("Stufe {stufe}").format(stufe=self.befund.stufe))
+            self.beschriften(stufe.setToolTip, stufe_beschreibung(self.befund.stufe))
+            zeile.addPermanentWidget(stufe)
+
+    def melden(self, text, fehler=False):
+        """Meldung in der Statuszeile; uebersetzte Texte machen den Sprachwechsel mit."""
+        self.statusmeldung.setObjectName("warnung" if fehler else "")
+        self.statusmeldung.style().unpolish(self.statusmeldung)
+        self.statusmeldung.style().polish(self.statusmeldung)
+        # Nur die zuletzt gesetzte Meldung soll sich beim Sprachwechsel erneuern.
+        self._beschriftungen = [(s, t) for s, t in self._beschriftungen
+                                if s != self.statusmeldung.setText]
+        if hasattr(text, "schluessel"):
+            self.beschriften(self.statusmeldung.setText, text)
+        else:
+            self.statusmeldung.setText(text)
+
+    def rechenzeit_zeigen(self, ms):
+        self.rechenzeit.setText("" if ms is None else f"GPU {ms:.1f} ms")
 
     # ------------------------------------------------------------------
     # Einstellungen
@@ -339,5 +349,9 @@ class Hauptfenster(QMainWindow):
         einstellungen.save_config(daten)
 
     def closeEvent(self, ereignis):                 # noqa: N802 - Qt-Name
+        if not self.bearbeiten.aenderungen_verwerfen_ok():
+            ereignis.ignore()
+            return
         self._einstellungen_sichern(mit_fenster=True)
+        self.bearbeiten.schliessen()
         super().closeEvent(ereignis)

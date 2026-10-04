@@ -27,7 +27,14 @@ classifiers = [
 dependencies = [
     "PySide6>=6.8",
     "nvidia-ml-py>=12.570",
+    "Pillow>=10",
+    "numpy>=1.26",
+    "cupy-cuda12x[ctk]>=14",
+    "cuda-toolkit==12.8.*",
 ]
+
+[project.optional-dependencies]
+heif = ["pillow-heif"]
 
 [project.urls]
 Homepage = "https://github.com/DerAlexmann/Neuro-Enhance"
