@@ -221,3 +221,25 @@ def test_rcd_kernel_wie_referenz(muster, drehung):
     gpu = cp.asnumpy(d.entwickeln(cp.asarray(mosaik.daten), mosaik, "rcd"))
     assert gpu.shape == referenz.shape
     assert np.abs(gpu - referenz).max() < 1e-3
+
+
+# ----------------------------------------------------------------------
+# Farbmatrix aus der Kameratabelle (Nikon, Canon ...)
+# ----------------------------------------------------------------------
+
+def test_farbmatrix_aus_xyz_fuer_srgb_kamera_ist_einheitsmatrix():
+    """Sieht die Kamera genau sRGB, ist die Farbmatrix die Einheitsmatrix."""
+    matrix = d.farbmatrix_aus_xyz(np.linalg.inv(d.SRGB_NACH_XYZ))
+    assert np.allclose(matrix, np.eye(3), atol=1e-6)
+
+
+def test_farbmatrix_aus_xyz_erhaelt_weiss_und_kehrt_die_kamera_um():
+    kamera = np.array([[0.8, 0.15, 0.05], [0.1, 0.8, 0.1], [0.05, 0.25, 0.7]])
+    matrix = d.farbmatrix_aus_xyz(kamera @ np.linalg.inv(d.SRGB_NACH_XYZ))
+    assert np.allclose(matrix @ np.ones(3), np.ones(3), atol=1e-9)    # Weiss bleibt Weiss
+    normiert = kamera / kamera.sum(axis=1, keepdims=True)
+    assert np.allclose(matrix @ normiert, np.eye(3), atol=1e-9)
+
+
+def test_farbmatrix_aus_leerer_tabelle():
+    assert d.farbmatrix_aus_xyz(np.zeros((3, 3))) is None

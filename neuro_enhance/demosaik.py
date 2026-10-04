@@ -52,6 +52,31 @@ class RawMosaik:
         return (breite, hoehe) if self.drehung in (5, 6) else (hoehe, breite)
 
 
+# Lineares sRGB -> XYZ (D65), mit den Zahlen aus dcraw/LibRaw
+SRGB_NACH_XYZ = np.array([[0.412453, 0.357580, 0.180423],
+                          [0.212671, 0.715160, 0.072169],
+                          [0.019334, 0.119193, 0.950227]])
+
+
+def farbmatrix_aus_xyz(kamera_aus_xyz: np.ndarray) -> np.ndarray | None:
+    """Farbmatrix Kamera-RGB -> lineares sRGB aus der Matrix XYZ -> Kamera.
+
+    Wie cam_xyz_coeff() in dcraw/LibRaw: Kamera aus sRGB bilden, jede Zeile so
+    normieren, dass Weiss (1, 1, 1) wieder Weiss ergibt - den Rest erledigt der
+    Weissabgleich - und umkehren.
+    """
+    if not np.isfinite(kamera_aus_xyz).all() or np.allclose(kamera_aus_xyz, 0):
+        return None
+    kamera_aus_srgb = kamera_aus_xyz @ SRGB_NACH_XYZ
+    zeilen = kamera_aus_srgb.sum(axis=1, keepdims=True)
+    if np.any(np.abs(zeilen) < 1e-9):
+        return None
+    try:
+        return np.linalg.inv(kamera_aus_srgb / zeilen)
+    except np.linalg.LinAlgError:
+        return None
+
+
 def aus_rawpy(roh) -> RawMosaik | None:
     """Mosaik und Farbdaten aus einer geoeffneten rawpy-Datei - oder None."""
     import rawpy
@@ -78,7 +103,12 @@ def aus_rawpy(roh) -> RawMosaik | None:
         weissabgleich = np.ones(3)
     matrix = np.asarray(roh.color_matrix, dtype=np.float64)[:, :3]
     if not np.isfinite(matrix).all() or np.allclose(matrix, 0):
-        return None
+        # Fuer die meisten Kameras (Nikon, Canon ...) fuellt LibRaw color_matrix
+        # erst intern beim Entwickeln; rawpy zeigt dann Nullen. Die Rohmatrix
+        # XYZ -> Kamera aus der Kameratabelle ist aber da.
+        matrix = farbmatrix_aus_xyz(np.asarray(roh.rgb_xyz_matrix, dtype=np.float64)[:3])
+        if matrix is None:
+            return None
     return RawMosaik(
         # Eine echte Kopie: raw_image_visible zeigt in den Speicher von LibRaw,
         # der mit dem Schliessen der Datei freigegeben wird.

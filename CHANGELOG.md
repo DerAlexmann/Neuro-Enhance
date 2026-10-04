@@ -5,6 +5,14 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ## [Unveröffentlicht]
 
+### Behoben
+
+- RAWs der meisten Kameras (getestet mit Nikon NEF und Canon CR2) liefen nicht
+  über die GPU, sondern fielen auf LibRaw zurück: rawpy gibt die Farbmatrix
+  bei ihnen nur als Nullen heraus. Sie wird jetzt wie in LibRaw aus der
+  Kameratabelle (XYZ → Kamera) berechnet. Die Farben stimmen mit LibRaw
+  überein; eine 24-MP-RAW ist in rund 0,5 s offen statt in 1,3 s.
+
 ### Hinzugefügt
 
 - Farbbereiche (HSL): Farbton, Sättigung und Luminanz für acht Bereiche, in
