@@ -48,6 +48,8 @@ class Sitzung:
         self._speicher: dict = {}            # Zwischenergebnisse der Filter, je Bildgroesse
 
         self.original = daten.linear(cp)
+        # Zwischenpuffer des Demosaicing an den Grafikspeicher zurueckgeben
+        cp.get_default_memory_pool().free_all_blocks()
         self.vorschau_original, self.vorschau_massstab = filter.verkleinern_auf(
             self.original, vorschau_kante)
 

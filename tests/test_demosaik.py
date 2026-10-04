@@ -162,7 +162,7 @@ def test_x_trans_und_fremde_sensoren_bleiben_bei_libraw():
 @pytest.mark.parametrize("muster", [[[0, 1], [1, 2]], [[2, 1], [1, 0]], [[1, 0], [2, 1]],
                                     [[1, 2], [0, 1]]])
 @pytest.mark.parametrize("drehung", [0, 3, 5, 6])
-def test_cuda_kernel_wie_referenz(muster, drehung):
+def test_malvar_kernel_wie_referenz(muster, drehung):
     cp = gpu_vorhanden()
     zufall = np.random.default_rng(8)
     mosaik = d.RawMosaik(
@@ -171,7 +171,53 @@ def test_cuda_kernel_wie_referenz(muster, drehung):
         weiss=16383.0, weissabgleich=np.array([2.1, 1.0, 1.4]),
         matrix=np.array([[1.3, -0.2, -0.1], [-0.15, 1.3, -0.15], [0.0, -0.4, 1.4]]),
         drehung=drehung)
-    referenz = d.entwickeln(mosaik.daten, mosaik)
-    gpu = cp.asnumpy(d.entwickeln(cp.asarray(mosaik.daten), mosaik))
+    referenz = d.entwickeln(mosaik.daten, mosaik, "malvar")
+    gpu = cp.asnumpy(d.entwickeln(cp.asarray(mosaik.daten), mosaik, "malvar"))
     assert gpu.shape == referenz.shape
     assert np.abs(gpu - referenz).max() < 1e-4
+
+
+# ----------------------------------------------------------------------
+# RCD
+# ----------------------------------------------------------------------
+
+def grau_mosaik(grau):
+    roh = (512 + grau * (16383 - 512)).round().astype(np.uint16)
+    return d.RawMosaik(daten=roh, muster=np.array([[0, 1], [1, 2]]),
+                       schwarz=np.full((2, 2), 512.0), weiss=16383.0,
+                       weissabgleich=np.ones(3), matrix=np.eye(3), drehung=0)
+
+
+def test_rcd_hinterlaesst_weniger_farbsaeume_als_malvar():
+    """Zonenplatte in Grau: jede Farbe im Ergebnis ist ein Fehler des Demosaicing."""
+    y, x = np.mgrid[0:128, 0:128].astype(np.float64)
+    grau = 0.5 + 0.4 * np.cos(((x - 64) ** 2 + (y - 64) ** 2) / 130)
+    mosaik = grau_mosaik(grau)
+    fehler = {}
+    for verfahren in d.VERFAHREN:
+        rgb = d.entwickeln(mosaik.daten, mosaik, verfahren)[8:-8, 8:-8]
+        fehler[verfahren] = np.abs(rgb - rgb.mean(axis=2, keepdims=True)).mean()
+    assert fehler["rcd"] < 0.75 * fehler["malvar"]
+
+
+def test_rcd_flaechen_bleiben_exakt():
+    grau = np.full((40, 50), 0.3)
+    rgb = d.entwickeln(grau_mosaik(grau).daten, grau_mosaik(grau), "rcd")
+    assert np.allclose(rgb, 0.3, atol=1e-4)
+
+
+@pytest.mark.parametrize("muster", [[[0, 1], [1, 2]], [[1, 2], [0, 1]]])
+@pytest.mark.parametrize("drehung", [0, 6])
+def test_rcd_kernel_wie_referenz(muster, drehung):
+    cp = gpu_vorhanden()
+    zufall = np.random.default_rng(9)
+    mosaik = d.RawMosaik(
+        daten=zufall.integers(300, 16383, (41, 58)).astype(np.uint16),
+        muster=np.array(muster), schwarz=np.array([[512.0, 500.0], [505.0, 510.0]]),
+        weiss=16383.0, weissabgleich=np.array([2.1, 1.0, 1.4]),
+        matrix=np.array([[1.3, -0.2, -0.1], [-0.15, 1.3, -0.15], [0.0, -0.4, 1.4]]),
+        drehung=drehung)
+    referenz = d.entwickeln(mosaik.daten, mosaik, "rcd")
+    gpu = cp.asnumpy(d.entwickeln(cp.asarray(mosaik.daten), mosaik, "rcd"))
+    assert gpu.shape == referenz.shape
+    assert np.abs(gpu - referenz).max() < 1e-3

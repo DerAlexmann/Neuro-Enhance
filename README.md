@@ -77,8 +77,9 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   und weitere) werden linear und ohne automatische Aufhellung entwickelt – der
   volle Umfang des Sensors bleibt erhalten, die Helligkeit regelt die
   Belichtung. Bei Sensoren mit Bayer-Mosaik, also bei fast allen Kameras,
-  läuft das Demosaicing auf der GPU (Malvar-He-Cutler): eine 24-Megapixel-RAW
-  ist in rund 0,15 s offen statt in knapp einer Sekunde. Fujis X-Trans und
+  läuft das Demosaicing auf der GPU – mit RCD (Ratio Corrected Demosaicing),
+  das an feinen Mustern besonders wenige Farbsäume hinterlässt. Eine
+  24-Megapixel-RAW ist in rund 0,2 s offen statt in knapp einer Sekunde. Fujis X-Trans und
   andere Sensoren entwickelt weiterhin LibRaw.
 - **Formate**: Öffnen von JPEG, PNG, TIFF, WebP, BMP und RAW (HEIC mit dem
   optionalen Paket `pillow-heif`), Speichern als JPEG und WebP mit 8 Bit, PNG
@@ -94,8 +95,8 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 
 - **Weitere klassische Filter**: LUTs, HSL je Farbbereich, Entrauschen,
   Geometrie.
-- **Feineres Demosaicing**: ein aufwendigeres Verfahren (etwa RCD) für noch
-  weniger Farbsäume an feinen Strukturen, und X-Trans auf der GPU.
+- **X-Trans auf der GPU**: Demosaicing auch für Fujis Sensoren auf der
+  Grafikkarte.
 - **KI-Funktionen**: Hochskalieren, Entrauschen, Entschärfen, Freistellen,
   Objektauswahl per Klick, Objekte entfernen, Tiefenkarte für künstliche Unschärfe.
 

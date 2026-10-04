@@ -6,9 +6,10 @@ Weisspunkt, Weissabgleich der Kamera und die Farbmatrix. Alles Weitere
 rechnet die GPU in einem Durchlauf je Pixel:
 
   1. Schwarzwert abziehen, auf 0..1 bringen, Weissabgleich, bei 1 abschneiden
-  2. Demosaicing nach Malvar, He und Cutler (2004): die fehlenden Farben
-     werden aus den Nachbarn interpoliert und mit der Steigung des eigenen
-     Kanals korrigiert - deutlich weniger Farbsaeume als einfaches Mitteln
+  2. Demosaicing - als Standard RCD (rcd.py), das an feinen Mustern die
+     wenigsten Farbsaeume hinterlaesst; wahlweise das schnellere Verfahren von
+     Malvar, He und Cutler (2004), das die fehlenden Farben aus den Nachbarn
+     interpoliert und mit der Steigung des eigenen Kanals korrigiert
   3. Kamera-RGB -> lineares sRGB mit der Farbmatrix aus LibRaw
 
 Die Konventionen folgen LibRaw: Ein ohne automatische Aufhellung entwickeltes
@@ -30,6 +31,9 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import filter as f
+from . import rcd
+
+VERFAHREN = ("rcd", "malvar")
 
 
 @dataclass
@@ -165,9 +169,13 @@ def drehen(bild, drehung: int):
     return bild
 
 
-def entwickeln_referenz(daten, mosaik: RawMosaik):
+def entwickeln_referenz(daten, mosaik: RawMosaik, verfahren: str = "rcd"):
     xp = f.xp_von(daten)
-    rgb = malvar(vorbereiten(daten, mosaik), mosaik.muster)
+    vorbereitet = vorbereiten(daten, mosaik)
+    if verfahren == "rcd":
+        rgb = rcd.rcd(vorbereitet, mosaik.muster)
+    else:
+        rgb = malvar(vorbereitet, mosaik.muster)
     linear = rgb @ xp.asarray(mosaik.matrix.T, dtype=xp.float32)
     return drehen(linear.astype(xp.float32), mosaik.drehung)
 
@@ -230,11 +238,14 @@ def _kernel():
     return _KERNEL
 
 
-def entwickeln(daten, mosaik: RawMosaik):
+def entwickeln(daten, mosaik: RawMosaik, verfahren: str = "rcd"):
     """Mosaik (NumPy oder CuPy, uint16) -> lineares sRGB float32 (H, W, 3), gedreht."""
     xp = f.xp_von(daten)
     if xp is np:
-        return entwickeln_referenz(daten, mosaik)
+        return entwickeln_referenz(daten, mosaik, verfahren)
+    if verfahren == "rcd":
+        linear = rcd.rcd_gpu(vorbereiten(daten, mosaik), mosaik.muster, mosaik.matrix)
+        return drehen(linear, mosaik.drehung)
     hoehe, breite = daten.shape
     faktor = np.array([[mosaik.weissabgleich[mosaik.muster[y, x]]
                         / (mosaik.weiss - mosaik.schwarz[y, x]) for x in range(2)]
