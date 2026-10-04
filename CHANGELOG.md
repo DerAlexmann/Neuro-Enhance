@@ -7,6 +7,12 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- RAW-Entwicklung auf der GPU für Bayer-Sensoren: LibRaw liest nur noch das
+  Mosaik, Schwarzwert, Weißabgleich, Demosaicing nach Malvar-He-Cutler und
+  Farbmatrix rechnet ein CUDA-Kernel in einem Durchlauf. Eine 24-MP-RAW ist
+  in rund 0,15 s offen statt in 0,85 s; die Farben stimmen mit LibRaw
+  überein. X-Trans, Foveon und bereits entwickelte DNG entwickelt weiterhin
+  LibRaw.
 - 16 Bit: TIFF und PNG mit 16 Bit je Kanal öffnen und speichern (tifffile,
   imagecodecs). Der Speichern-Dialog bietet PNG und TIFF mit 8 oder 16 Bit an
   und schlägt für Bilder mit mehr als 8 Bit ein 16-Bit-TIFF vor. 16-Bit-PNG

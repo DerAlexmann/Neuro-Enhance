@@ -29,6 +29,7 @@ Meldung – siehe [SECURITY.md](SECURITY.md).
 | `neuro_enhance/kurven.py` | Gradationskurven: Punkte bearbeiten, Tabellen bilden |
 | `neuro_enhance/kurveneditor.py` | Kurvenfeld mit Histogramm |
 | `neuro_enhance/bilddatei.py` | Laden und Speichern: 8 Bit, 16 Bit, RAW, EXIF |
+| `neuro_enhance/demosaik.py` | RAW-Entwicklung auf der GPU (Bayer-Mosaik) |
 | `neuro_enhance/icc.py` | ICC-Matrixprofile lesen und nach linearem sRGB umrechnen |
 | `neuro_enhance/cuda.py` | lädt CuPy an einer Stelle |
 | `neuro_enhance/farben.py` | Farbschemata, Schriften, Qt-Stylesheet |

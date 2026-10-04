@@ -2,7 +2,8 @@
 Bilder laden und speichern - 8 Bit, 16 Bit und RAW
 
 Woher die Pixel kommen:
-  RAW            LibRaw (rawpy) entwickelt linear in 16 Bit, sRGB-Primaerfarben
+  RAW (Bayer)    LibRaw liest das Mosaik, entwickelt wird auf der GPU (demosaik.py)
+  RAW (sonst)    LibRaw entwickelt linear in 16 Bit, sRGB-Primaerfarben
   TIFF           tifffile - 8 und 16 Bit, auch komprimiert
   PNG mit 16 Bit imagecodecs
   alles andere   Pillow, 8 Bit
@@ -32,7 +33,7 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageCms, ImageOps
 
-from . import icc
+from . import demosaik, icc
 
 try:                                          # HEIC/HEIF, falls installiert
     from pillow_heif import register_heif_opener
@@ -70,24 +71,37 @@ class BildFehler(Exception):
 
 @dataclass
 class Bilddaten:
-    pixel: np.ndarray                # (H, W, 3) uint8 oder uint16, kodiert wie in der Datei
+    pixel: np.ndarray | None         # (H, W, 3) uint8 oder uint16, kodiert wie in der Datei
     profil: icc.Matrixprofil | None  # Farbraum der Pixel; None heisst sRGB
     alpha: np.ndarray | None         # (H, W) in derselben Bittiefe wie pixel
     exif: bytes                      # Ausrichtung bereits auf 1 gesetzt
     pfad: str
     raw: bool = False
+    mosaik: demosaik.RawMosaik | None = None   # statt pixel: Bayer-RAW fuer die GPU
+
+    @property
+    def form(self) -> tuple[int, int]:
+        return self.mosaik.form if self.mosaik is not None else self.pixel.shape[:2]
 
     @property
     def breite(self) -> int:
-        return self.pixel.shape[1]
+        return self.form[1]
 
     @property
     def hoehe(self) -> int:
-        return self.pixel.shape[0]
+        return self.form[0]
 
     @property
     def bits(self) -> int:
+        if self.mosaik is not None:
+            return 16
         return 16 if self.pixel.dtype == np.uint16 else 8
+
+    def linear(self, xp=np):
+        """Das Bild in linearem sRGB als float32 - mit NumPy oder CuPy (xp)."""
+        if self.mosaik is not None:
+            return demosaik.entwickeln(xp.asarray(self.mosaik.daten), self.mosaik)
+        return icc.linearisieren(xp.asarray(self.pixel), self.profil)
 
     @property
     def name(self) -> str:
@@ -173,10 +187,13 @@ def _profil_oder_fehler(daten: bytes | None) -> icc.Matrixprofil | None:
 # Laden
 # --------------------------------------------------------------------------
 
-def _raw_laden(pfad: str) -> Bilddaten:
+def _raw_laden(pfad: str, gpu: bool = True) -> Bilddaten:
     import rawpy
     try:
         with rawpy.imread(pfad) as roh:
+            mosaik = demosaik.aus_rawpy(roh) if gpu else None
+            if mosaik is not None:
+                return Bilddaten(None, icc.LINEAR_SRGB, None, b"", pfad, raw=True, mosaik=mosaik)
             # Linear (Gamma 1), 16 Bit, sRGB-Primaerfarben, Weissabgleich der
             # Kamera - und ohne die automatische Aufhellung von LibRaw. Die
             # liesse 1 % der Pixel ausbrennen; so bleibt der volle Umfang des
@@ -279,10 +296,11 @@ def _pillow_laden(pfad: str) -> Bilddaten:
                      _exif_ohne_ausrichtung(exif), pfad)
 
 
-def laden(pfad: str) -> Bilddaten:
+def laden(pfad: str, raw_auf_gpu: bool = True) -> Bilddaten:
+    """Laedt ein Bild. raw_auf_gpu=False laesst auch Bayer-RAWs von LibRaw entwickeln."""
     endung = os.path.splitext(pfad)[1].lower()
     if endung in RAW:
-        return _raw_laden(pfad)
+        return _raw_laden(pfad, raw_auf_gpu)
     if endung in (".tif", ".tiff"):
         daten = _tiff_laden(pfad)
         if daten is not None:

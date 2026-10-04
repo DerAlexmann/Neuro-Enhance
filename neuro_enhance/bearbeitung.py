@@ -24,7 +24,7 @@ import time
 
 import numpy as np
 
-from . import bilddatei, filter, icc
+from . import bilddatei, filter
 from .cuda import cupy as cp
 from .filter import Einstellungen
 
@@ -47,7 +47,7 @@ class Sitzung:
         self.gespeicherte_werte = Einstellungen()
         self._speicher: dict = {}            # Zwischenergebnisse der Filter, je Bildgroesse
 
-        self.original = icc.linearisieren(cp.asarray(daten.pixel), daten.profil)
+        self.original = daten.linear(cp)
         self.vorschau_original, self.vorschau_massstab = filter.verkleinern_auf(
             self.original, vorschau_kante)
 

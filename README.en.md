@@ -69,8 +69,11 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   saving.
 - **16 bits and RAW**: opens and saves TIFF and PNG with 16 bits per channel. RAW files
   from practically every camera (CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG and more) are
-  developed by LibRaw in linear light without automatic brightening – the full range of
-  the sensor is kept, and exposure controls the brightness.
+  developed in linear light without automatic brightening – the full range of the sensor
+  is kept, and exposure controls the brightness. For Bayer sensors, i.e. almost every
+  camera, demosaicing runs on the GPU (Malvar-He-Cutler): a 24-megapixel RAW opens in
+  about 0.15 s instead of almost a second. Fujifilm X-Trans and other sensors are still
+  developed by LibRaw.
 - **Formats**: opens JPEG, PNG, TIFF, WebP, BMP and RAW (HEIC with the optional
   `pillow-heif` package); saves JPEG and WebP with 8 bits, PNG and TIFF with 8 or 16 bits.
   For images with more than 8 bits the save dialog suggests a 16-bit TIFF.
@@ -83,8 +86,8 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 ## Planned
 
 - **More classic filters**: LUTs, HSL per colour range, denoising, geometry.
-- **RAW on the GPU**: own demosaicing on the graphics card; for now LibRaw develops on
-  the CPU.
+- **Finer demosaicing**: a more elaborate method (such as RCD) for even fewer colour
+  fringes in fine structures, and X-Trans on the GPU.
 - **AI features**: upscaling, denoising, deblurring, background removal, click-to-select
   objects, object removal, depth maps for synthetic depth of field.
 

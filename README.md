@@ -74,9 +74,12 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   EXIF-Daten und ein Alphakanal bleiben beim Speichern erhalten.
 - **16 Bit und RAW**: TIFF und PNG mit 16 Bit je Kanal öffnen und speichern.
   RAW-Dateien praktisch aller Kameras (CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG
-  und weitere) entwickelt LibRaw linear und ohne automatische Aufhellung – der
+  und weitere) werden linear und ohne automatische Aufhellung entwickelt – der
   volle Umfang des Sensors bleibt erhalten, die Helligkeit regelt die
-  Belichtung.
+  Belichtung. Bei Sensoren mit Bayer-Mosaik, also bei fast allen Kameras,
+  läuft das Demosaicing auf der GPU (Malvar-He-Cutler): eine 24-Megapixel-RAW
+  ist in rund 0,15 s offen statt in knapp einer Sekunde. Fujis X-Trans und
+  andere Sensoren entwickelt weiterhin LibRaw.
 - **Formate**: Öffnen von JPEG, PNG, TIFF, WebP, BMP und RAW (HEIC mit dem
   optionalen Paket `pillow-heif`), Speichern als JPEG und WebP mit 8 Bit, PNG
   und TIFF wahlweise mit 8 oder 16 Bit. Bilder mit mehr als 8 Bit schlägt der
@@ -91,8 +94,8 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 
 - **Weitere klassische Filter**: LUTs, HSL je Farbbereich, Entrauschen,
   Geometrie.
-- **RAW auf der GPU**: eigenes Demosaicing auf der Grafikkarte; bisher
-  entwickelt LibRaw auf dem Prozessor.
+- **Feineres Demosaicing**: ein aufwendigeres Verfahren (etwa RCD) für noch
+  weniger Farbsäume an feinen Strukturen, und X-Trans auf der GPU.
 - **KI-Funktionen**: Hochskalieren, Entrauschen, Entschärfen, Freistellen,
   Objektauswahl per Klick, Objekte entfernen, Tiefenkarte für künstliche Unschärfe.
 

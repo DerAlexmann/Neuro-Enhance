@@ -218,7 +218,7 @@ def test_raw_wird_farbrichtig_entwickelt(tmp_path):
     bayer_dng(pfad)
     geladen = b.laden(pfad)
     assert geladen.raw and geladen.bits == 16 and geladen.profil is icc.LINEAR_SRGB
-    linear = icc.linearisieren(geladen.pixel, geladen.profil)
+    linear = geladen.linear()
     for (zeilen, spalten), farbe in SZENE.items():
         mitte = linear[zeilen, spalten][8:-8, 8:-8]   # Rand des Mosaiks auslassen
         assert np.allclose(mitte.mean(axis=(0, 1)), farbe, atol=0.01)
