@@ -171,12 +171,14 @@ def test_matrixprofil_wird_mitgegeben(tmp_path):
 # RAW
 # ----------------------------------------------------------------------
 
-SZENE = {                                       # Flaeche -> Farbe in linearem sRGB
-    (slice(0, 32), slice(0, 48)): (0.40, 0.10, 0.05),
-    (slice(0, 32), slice(48, 96)): (0.05, 0.30, 0.08),
-    (slice(32, 64), slice(0, 48)): (0.06, 0.08, 0.45),
-    (slice(32, 64), slice(48, 96)): (0.18, 0.18, 0.18),
-}
+# (Flaeche, Farbe in linearem sRGB) - eine Liste, weil slice erst ab
+# Python 3.12 als Schluessel eines Woerterbuchs taugt
+SZENE = [
+    ((slice(0, 32), slice(0, 48)), (0.40, 0.10, 0.05)),
+    ((slice(0, 32), slice(48, 96)), (0.05, 0.30, 0.08)),
+    ((slice(32, 64), slice(0, 48)), (0.06, 0.08, 0.45)),
+    ((slice(32, 64), slice(48, 96)), (0.18, 0.18, 0.18)),
+]
 
 
 def bayer_dng(pfad: str):
@@ -184,7 +186,7 @@ def bayer_dng(pfad: str):
     tifffile = pytest.importorskip("tifffile")
     hoehe, breite = 64, 96
     szene = np.zeros((hoehe, breite, 3))
-    for flaeche, farbe in SZENE.items():
+    for flaeche, farbe in SZENE:
         szene[flaeche] = farbe
     kanal = np.zeros((hoehe, breite), int)
     kanal[0::2, 1::2] = 1
@@ -219,7 +221,7 @@ def test_raw_wird_farbrichtig_entwickelt(tmp_path):
     geladen = b.laden(pfad)
     assert geladen.raw and geladen.bits == 16 and geladen.profil is icc.LINEAR_SRGB
     linear = geladen.linear()
-    for (zeilen, spalten), farbe in SZENE.items():
+    for (zeilen, spalten), farbe in SZENE:
         mitte = linear[zeilen, spalten][8:-8, 8:-8]   # Rand des Mosaiks auslassen
         assert np.allclose(mitte.mean(axis=(0, 1)), farbe, atol=0.01)
 

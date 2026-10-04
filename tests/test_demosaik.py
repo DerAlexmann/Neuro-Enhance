@@ -18,12 +18,14 @@ SRGB_NACH_XYZ = np.array([[0.4124564, 0.3575761, 0.1804375],
 # Kamera mit eigenen Grundfarben und einem Farbstich der Lichtquelle
 KAMERA = np.array([[0.8, 0.15, 0.05], [0.1, 0.8, 0.1], [0.05, 0.25, 0.7]])
 STICH = np.array([1.6, 1.0, 0.7])
-FLAECHEN = {                                    # (Zeilen, Spalten) -> lineares sRGB
-    (slice(0, 32), slice(0, 48)): (0.40, 0.10, 0.05),
-    (slice(0, 32), slice(48, 96)): (0.05, 0.30, 0.08),
-    (slice(32, 64), slice(0, 48)): (0.06, 0.08, 0.45),
-    (slice(32, 64), slice(48, 96)): (0.18, 0.18, 0.18),
-}
+# ((Zeilen, Spalten), lineares sRGB) - eine Liste, weil slice erst ab
+# Python 3.12 als Schluessel eines Woerterbuchs taugt
+FLAECHEN = [
+    ((slice(0, 32), slice(0, 48)), (0.40, 0.10, 0.05)),
+    ((slice(0, 32), slice(48, 96)), (0.05, 0.30, 0.08)),
+    ((slice(32, 64), slice(0, 48)), (0.06, 0.08, 0.45)),
+    ((slice(32, 64), slice(48, 96)), (0.18, 0.18, 0.18)),
+]
 # DNG-Ausrichtung -> Drehung in NumPy (k fuer np.rot90)
 AUSRICHTUNG = {1: 0, 3: 2, 6: 3, 8: 1}
 
@@ -42,7 +44,7 @@ def schiefe_dng(pfad: str, ausrichtung: int = 1, muster=(0, 1, 1, 2)):
     tifffile = pytest.importorskip("tifffile")
     hoehe, breite = 64, 96
     szene = np.zeros((hoehe, breite, 3))
-    for flaeche, farbe in FLAECHEN.items():
+    for flaeche, farbe in FLAECHEN:
         szene[flaeche] = farbe
     kamera = (szene @ KAMERA.T) * STICH / STICH.max()
     kanal = np.array(muster).reshape(2, 2)[np.arange(hoehe)[:, None] % 2,
@@ -72,7 +74,7 @@ def schiefe_dng(pfad: str, ausrichtung: int = 1, muster=(0, 1, 1, 2)):
 def flaechen_pruefen(linear, ausrichtung, toleranz=0.01):
     """Mittelwert jeder Farbflaeche (ohne Kanten) gegen die Szene."""
     zurueck = np.rot90(linear, -AUSRICHTUNG[ausrichtung])   # zurueck in Aufnahmelage
-    for (zeilen, spalten), farbe in FLAECHEN.items():
+    for (zeilen, spalten), farbe in FLAECHEN:
         mitte = zurueck[zeilen, spalten][6:-6, 6:-6]
         assert np.allclose(mitte.mean(axis=(0, 1)), farbe, atol=toleranz), farbe
 
