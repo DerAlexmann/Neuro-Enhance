@@ -1,0 +1,4 @@
+# Laufzeit. Die GPU-Bibliotheken (CuPy, ONNX Runtime, TensorRT) kommen mit
+# den ersten Bearbeitungsfunktionen dazu.
+PySide6>=6.8
+nvidia-ml-py>=12.570

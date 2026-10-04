@@ -1,0 +1,24 @@
+# Bauen
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.venv/
+venv/
+
+# Laufzeit: Einstellungen neben dem Programm, später Modelle und TensorRT-Engines
+neuro-enhance.json
+modelle/
+engines/
+
+# Lokale Notizen, nicht für das Repository
+_VEROEFFENTLICHEN.md
+
+# Windows
+Thumbs.db
+desktop.ini

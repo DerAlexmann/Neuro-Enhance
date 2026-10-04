@@ -1,0 +1,14 @@
+# Zeilenenden im Repository einheitlich, im Arbeitsverzeichnis nach Betriebssystem
+* text=auto
+
+*.py   text diff=python
+*.pyw  text diff=python
+*.md   text
+*.toml text
+*.cmd  text eol=crlf
+
+*.png binary
+*.ico binary
+*.exe binary
+*.onnx binary
+*.engine binary

@@ -1,0 +1,57 @@
+Neuro-Enhance
+Copyright 2026 Alexander Unverhau
+Created with assistance of Claude AI
+
+Licensed under the MIT License (see LICENSE).
+
+===========================================================================
+Third-party components
+===========================================================================
+
+Neuro-Enhance uses the following components. They are not part of this
+repository; pip installs them from the Python Package Index. A released
+executable bundles them together with their licence texts.
+
+PySide6 / Qt for Python
+  Copyright The Qt Company Ltd. and other contributors
+  Licence: GNU Lesser General Public License v3.0 (LGPL-3.0)
+  https://www.qt.io/qt-for-python
+  Neuro-Enhance uses PySide6 and Qt unmodified and links them dynamically.
+  You may replace the Qt and PySide6 libraries with your own build. The
+  source code of Qt is available from https://download.qt.io/ and
+  https://code.qt.io/.
+
+nvidia-ml-py (NVIDIA Management Library bindings)
+  Copyright NVIDIA Corporation
+  Licence: BSD 3-Clause
+  https://pypi.org/project/nvidia-ml-py/
+
+Planned for later versions (listed here once they are used):
+  CuPy (MIT), NumPy (BSD 3-Clause), ONNX Runtime (MIT),
+  NVIDIA CUDA runtime and NVIDIA TensorRT (NVIDIA licence agreements;
+  installed from NVIDIA's own packages, not redistributed by this project).
+
+===========================================================================
+AI models
+===========================================================================
+
+AI models are not part of this repository. Each model is subject to its own
+licence, which Neuro-Enhance shows together with its source before
+downloading. Only models whose licence permits use and redistribution in an
+open-source project are offered by default.
+
+===========================================================================
+Trademarks
+===========================================================================
+
+NVIDIA, RTX, GeForce, CUDA and TensorRT are trademarks or registered
+trademarks of NVIDIA Corporation in the U.S. and other countries.
+Qt is a trademark of The Qt Company Ltd.
+Python is a trademark of the Python Software Foundation.
+Windows is a trademark of Microsoft Corporation.
+All other trademarks are the property of their respective owners.
+
+Neuro-Enhance is an independent project and is not affiliated with,
+endorsed or sponsored by NVIDIA Corporation or any other trademark owner
+named above. Trademarks are used only to describe hardware and software
+compatibility.
