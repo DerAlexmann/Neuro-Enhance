@@ -141,8 +141,12 @@ TRANSLATIONS = {
         "Ungespeicherte Änderungen": "Unsaved changes",
         "Die Änderungen an {name} sind nicht gespeichert. Trotzdem fortfahren?":
             "The changes to {name} have not been saved. Continue anyway?",
-        "{name} geöffnet – {breite} × {hoehe} Pixel":
-            "{name} opened – {breite} × {hoehe} pixels",
+        "{name} geöffnet – {breite} × {hoehe} Pixel, {art}":
+            "{name} opened – {breite} × {hoehe} pixels, {art}",
+        "8 Bit": "8-bit",
+        "16 Bit": "16-bit",
+        "Alle Bilder": "All images",
+        "RAW wird entwickelt …": "Developing RAW …",
         "Gespeichert: {name} ({ms} ms)": "Saved: {name} ({ms} ms)",
 
         # Reiter Info & Copyright, Statuszeile

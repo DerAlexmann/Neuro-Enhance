@@ -2,7 +2,9 @@
 Bearbeitungssitzung: ein geoeffnetes Bild auf der Grafikkarte
 
 Das Original liegt zweimal im Grafikspeicher - in voller Groesse fuer den
-Export und verkleinert fuer die Vorschau, beide schon in linearem Licht.
+Export und verkleinert fuer die Vorschau, beide schon in linearem Licht und
+in sRGB-Primaerfarben, gleich ob die Datei 8 Bit, 16 Bit oder RAW war und in
+welchem Farbraum sie stand.
 Jede Aenderung an einem Regler rechnet die Vorschau aus dem unveraenderten
 Original neu; nichts wird ueberschrieben, jeder Regler bleibt jederzeit
 umkehrbar.
@@ -22,7 +24,7 @@ import time
 
 import numpy as np
 
-from . import bilddatei, filter
+from . import bilddatei, filter, icc
 from .cuda import cupy as cp
 from .filter import Einstellungen
 
@@ -45,9 +47,9 @@ class Sitzung:
         self.gespeicherte_werte = Einstellungen()
         self._speicher: dict = {}            # Zwischenergebnisse der Filter, je Bildgroesse
 
-        self.original = filter.von_8bit(cp.asarray(daten.rgb))
-        klein, self.vorschau_massstab = bilddatei.verkleinern(daten.rgb, vorschau_kante)
-        self.vorschau_original = filter.von_8bit(cp.asarray(klein))
+        self.original = icc.linearisieren(cp.asarray(daten.pixel), daten.profil)
+        self.vorschau_original, self.vorschau_massstab = filter.verkleinern_auf(
+            self.original, vorschau_kante)
 
     @property
     def geaendert(self) -> bool:
@@ -57,16 +59,16 @@ class Sitzung:
         """Vorschau als sRGB-uint8, Rechenzeit in ms und Helligkeitshistogramm (256 Stufen)."""
         beginn = time.perf_counter()
         werte = Einstellungen() if unbearbeitet else self.werte
-        bild = filter.anwenden_8bit(self.vorschau_original, werte, self.vorschau_massstab,
-                                    self._speicher)
+        bild = filter.anwenden_ausgabe(self.vorschau_original, werte, self.vorschau_massstab,
+                                       self._speicher)
         histogramm = cp.asnumpy(histogramm_von(bild))
         ergebnis = cp.asnumpy(bild)                     # wartet auf die GPU
         return ergebnis, (time.perf_counter() - beginn) * 1000, histogramm
 
-    def exportieren(self, pfad: str) -> float:
+    def exportieren(self, pfad: str, bits: int = 8) -> float:
         """Rechnet das Bild in voller Groesse und speichert es; Rueckgabe in ms."""
         beginn = time.perf_counter()
-        rgb = cp.asnumpy(filter.anwenden_8bit(self.original, self.werte, 1.0))
+        rgb = cp.asnumpy(filter.anwenden_ausgabe(self.original, self.werte, 1.0, bits=bits))
         # Zwischenergebnisse der vollen Groesse sofort zurueckgeben - der
         # Speicherpool von CuPy hielte sie sonst fuer das naechste Mal fest.
         cp.get_default_memory_pool().free_all_blocks()

@@ -192,10 +192,7 @@ _kurven_farbe = cp.ElementwiseKernel(
     """,
     "neuro_enhance_kurven_farbe", preamble=_GEMEINSAM)
 
-_ausgabe = cp.ElementwiseKernel(
-    "raw float32 quelle, raw float32 v, raw float32 weich, float32 staerke",
-    "raw uint8 ziel",
-    r"""
+_AUSGABE = r"""
     float r = quelle[3 * i], g = quelle[3 * i + 1], b = quelle[3 * i + 2];
     if (staerke > 0.0f) {
         float y = luma(r, g, b);
@@ -203,11 +200,21 @@ _ausgabe = cp.ElementwiseKernel(
         float q = dekodieren(fmaxf(v_neu, 0.0f)) / fmaxf(y, EPS);
         r *= q; g *= q; b *= q;
     }
-    ziel[3 * i] = (unsigned char)(kodieren(fminf(fmaxf(r, 0.0f), 1.0f)) * 255.0f + 0.5f);
-    ziel[3 * i + 1] = (unsigned char)(kodieren(fminf(fmaxf(g, 0.0f), 1.0f)) * 255.0f + 0.5f);
-    ziel[3 * i + 2] = (unsigned char)(kodieren(fminf(fmaxf(b, 0.0f), 1.0f)) * 255.0f + 0.5f);
-    """,
-    "neuro_enhance_ausgabe", preamble=_GEMEINSAM)
+    ziel[3 * i] = (TYP)(kodieren(fminf(fmaxf(r, 0.0f), 1.0f)) * HOECHST + 0.5f);
+    ziel[3 * i + 1] = (TYP)(kodieren(fminf(fmaxf(g, 0.0f), 1.0f)) * HOECHST + 0.5f);
+    ziel[3 * i + 2] = (TYP)(kodieren(fminf(fmaxf(b, 0.0f), 1.0f)) * HOECHST + 0.5f);
+"""
+
+# Dieselbe Ausgabe fuer 8 und 16 Bit - nur Zieltyp und Hoechstwert unterscheiden sich
+_ausgabe = {
+    bits: cp.ElementwiseKernel(
+        "raw float32 quelle, raw float32 v, raw float32 weich, float32 staerke",
+        f"raw {typ} ziel",
+        _AUSGABE.replace("TYP", ctyp).replace("HOECHST", hoechst),
+        f"neuro_enhance_ausgabe{bits}", preamble=_GEMEINSAM)
+    for bits, typ, ctyp, hoechst in ((8, "uint8", "unsigned char", "255.0f"),
+                                     (16, "uint16", "unsigned short", "65535.0f"))
+}
 
 
 def _verstaerkungen(werte: f.Einstellungen) -> list[float]:
@@ -251,9 +258,9 @@ def _dunst_schaetzung(bild, werte: f.Einstellungen, speicher: dict | None):
     return ergebnis
 
 
-def anwenden_8bit(rgb_linear, werte: f.Einstellungen, massstab: float = 1.0,
-                  speicher: dict | None = None):
-    """Ganze Filterkette auf der Grafikkarte, Ergebnis als sRGB-uint8 (H, W, 3)."""
+def anwenden_ausgabe(rgb_linear, werte: f.Einstellungen, massstab: float = 1.0,
+                     speicher: dict | None = None, bits: int = 8):
+    """Ganze Filterkette auf der Grafikkarte, Ergebnis als sRGB mit 8 oder 16 Bit (H, W, 3)."""
     hoehe, breite = rgb_linear.shape[:2]
     pixel = hoehe * breite
     bild = cp.ascontiguousarray(rgb_linear, dtype=cp.float32)
@@ -312,6 +319,6 @@ def anwenden_8bit(rgb_linear, werte: f.Einstellungen, massstab: float = 1.0,
         staerke = 0.0
         v = weich = zwischen                  # werden bei Staerke 0 nicht gelesen
 
-    ziel = cp.empty((hoehe, breite, 3), dtype=cp.uint8)
-    _ausgabe(zwischen, v, weich, cp.float32(staerke), ziel, size=pixel)
+    ziel = cp.empty((hoehe, breite, 3), dtype=cp.uint16 if bits == 16 else cp.uint8)
+    _ausgabe[bits](zwischen, v, weich, cp.float32(staerke), ziel, size=pixel)
     return ziel

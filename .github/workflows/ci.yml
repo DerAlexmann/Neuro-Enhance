@@ -40,5 +40,5 @@ jobs:
       # und die Filterformeln mit NumPy - dafür braucht es weder Qt noch CUDA.
       # Die Vergleiche zwischen CUDA-Kernel und NumPy laufen nur lokal mit
       # Grafikkarte und überspringen sich hier von selbst.
-      - run: pip install pytest nvidia-ml-py numpy Pillow
+      - run: pip install pytest nvidia-ml-py numpy Pillow tifffile imagecodecs rawpy
       - run: python -m pytest tests -q

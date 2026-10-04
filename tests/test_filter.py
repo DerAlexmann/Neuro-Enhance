@@ -287,7 +287,45 @@ def test_cuda_kernel_rechnen_wie_die_referenz(bild, werte):
         cp.cuda.runtime.getDeviceCount()
     except cp.cuda.runtime.CUDARuntimeError:
         pytest.skip("keine Grafikkarte")
-    referenz = f.anwenden_8bit(bild, werte, 0.5)
-    gpu = cp.asnumpy(f.anwenden_8bit(cp.asarray(bild), werte, 0.5))
+    referenz = f.anwenden_ausgabe(bild, werte, 0.5)
+    gpu = cp.asnumpy(f.anwenden_ausgabe(cp.asarray(bild), werte, 0.5))
     abweichung = np.abs(referenz.astype(int) - gpu.astype(int))
     assert abweichung.max() <= 1              # Rundung von float32 auf der GPU
+
+
+# ----------------------------------------------------------------------
+# 16 Bit und Vorschau
+# ----------------------------------------------------------------------
+
+def test_16bit_ausgabe_feiner_als_8bit():
+    verlauf = np.linspace(0, 1, 4096, dtype=np.float32)[None, :, None].repeat(3, axis=2)
+    acht = f.anwenden_ausgabe(verlauf, f.Einstellungen(), bits=8)
+    sechzehn = f.anwenden_ausgabe(verlauf, f.Einstellungen(), bits=16)
+    assert acht.dtype == np.uint8 and sechzehn.dtype == np.uint16
+    assert len(np.unique(sechzehn[0, :, 0])) > 10 * len(np.unique(acht[0, :, 0]))
+    # beide sagen dasselbe, nur feiner
+    assert np.abs(sechzehn.astype(int) / 257 - acht.astype(int)).max() <= 1
+
+
+def test_verkleinern_auf():
+    bild = np.random.default_rng(7).random((1000, 1500, 3), dtype=np.float32)
+    klein, massstab = f.verkleinern_auf(bild, 400)
+    assert max(klein.shape[:2]) <= 400 and massstab == pytest.approx(1 / 4)
+    assert klein.dtype == np.float32
+    gleich, massstab = f.verkleinern_auf(bild, 2000)
+    assert gleich is bild and massstab == 1.0
+
+
+def test_cuda_16bit_wie_die_referenz(bild):
+    cp = pytest.importorskip("cupy")
+    try:
+        cp.cuda.runtime.getDeviceCount()
+    except cp.cuda.runtime.CUDARuntimeError:
+        pytest.skip("keine Grafikkarte")
+    werte = f.Einstellungen(kontrast=30, klarheit=40, dunst=30, schaerfe=60,
+                            kurve_hell=((0.0, 0.0), (0.4, 0.5), (1.0, 1.0)))
+    referenz = f.anwenden_ausgabe(bild, werte, 0.5, bits=16)
+    gpu = cp.asnumpy(f.anwenden_ausgabe(cp.asarray(bild), werte, 0.5, bits=16))
+    assert gpu.dtype == np.uint16
+    # 1/255 Abstand in 8 Bit entspricht 257 Stufen in 16 Bit
+    assert np.abs(referenz.astype(int) - gpu.astype(int)).max() <= 257

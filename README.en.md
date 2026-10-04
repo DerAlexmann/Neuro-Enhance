@@ -63,10 +63,17 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 - **Fast**: the preview is computed at screen resolution in a few milliseconds; the
   computing time is shown in the status bar. Saving uses the full resolution.
 - **Colour-accurate**: processing happens in linear light with 32-bit floating point.
-  Embedded colour profiles (such as Adobe RGB) are converted to sRGB on opening and the
-  EXIF orientation is applied; EXIF data and an alpha channel are kept when saving.
-- **Formats**: opens JPEG, PNG, TIFF, WebP, BMP (HEIC with the optional `pillow-heif`
-  package), saves JPEG, PNG, TIFF and WebP – for now with 8 bits per channel.
+  RGB colour profiles such as Adobe RGB, ProPhoto RGB or Display P3 are converted to sRGB
+  on the GPU without a detour through 8 bits; colours outside sRGB are kept until the
+  output. The EXIF orientation is applied; EXIF data and an alpha channel are kept when
+  saving.
+- **16 bits and RAW**: opens and saves TIFF and PNG with 16 bits per channel. RAW files
+  from practically every camera (CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG and more) are
+  developed by LibRaw in linear light without automatic brightening – the full range of
+  the sensor is kept, and exposure controls the brightness.
+- **Formats**: opens JPEG, PNG, TIFF, WebP, BMP and RAW (HEIC with the optional
+  `pillow-heif` package); saves JPEG and WebP with 8 bits, PNG and TIFF with 8 or 16 bits.
+  For images with more than 8 bits the save dialog suggests a 16-bit TIFF.
 
 | Key | Action |
 |---|---|
@@ -75,8 +82,9 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 
 ## Planned
 
-- **More classic filters**: LUTs, HSL per colour range, denoising, geometry, 16 bits
-  and RAW development.
+- **More classic filters**: LUTs, HSL per colour range, denoising, geometry.
+- **RAW on the GPU**: own demosaicing on the graphics card; for now LibRaw develops on
+  the CPU.
 - **AI features**: upscaling, denoising, deblurring, background removal, click-to-select
   objects, object removal, depth maps for synthetic depth of field.
 

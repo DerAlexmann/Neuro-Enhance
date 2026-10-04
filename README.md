@@ -68,12 +68,19 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   Millisekunden; die Rechenzeit steht in der Statuszeile. Gespeichert wird in
   voller Auflösung.
 - **Farbrichtig**: Gerechnet wird in linearem Licht mit 32-Bit-Gleitkomma.
-  Eingebettete Farbprofile (etwa Adobe RGB) werden beim Öffnen nach sRGB
-  umgerechnet, die EXIF-Ausrichtung angewendet; EXIF-Daten und ein Alphakanal
-  bleiben beim Speichern erhalten.
-- **Formate**: Öffnen von JPEG, PNG, TIFF, WebP, BMP (HEIC mit dem optionalen
-  Paket `pillow-heif`), Speichern als JPEG, PNG, TIFF und WebP – vorerst mit
-  8 Bit je Kanal.
+  RGB-Farbprofile wie Adobe RGB, ProPhoto RGB oder Display P3 werden auf der GPU
+  nach sRGB umgerechnet, ohne Umweg über 8 Bit; Farben außerhalb von sRGB
+  bleiben bis zur Ausgabe erhalten. Die EXIF-Ausrichtung wird angewendet,
+  EXIF-Daten und ein Alphakanal bleiben beim Speichern erhalten.
+- **16 Bit und RAW**: TIFF und PNG mit 16 Bit je Kanal öffnen und speichern.
+  RAW-Dateien praktisch aller Kameras (CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG
+  und weitere) entwickelt LibRaw linear und ohne automatische Aufhellung – der
+  volle Umfang des Sensors bleibt erhalten, die Helligkeit regelt die
+  Belichtung.
+- **Formate**: Öffnen von JPEG, PNG, TIFF, WebP, BMP und RAW (HEIC mit dem
+  optionalen Paket `pillow-heif`), Speichern als JPEG und WebP mit 8 Bit, PNG
+  und TIFF wahlweise mit 8 oder 16 Bit. Bilder mit mehr als 8 Bit schlägt der
+  Speichern-Dialog als 16-Bit-TIFF vor.
 
 | Taste | Wirkung |
 |---|---|
@@ -83,7 +90,9 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 ## Geplant
 
 - **Weitere klassische Filter**: LUTs, HSL je Farbbereich, Entrauschen,
-  Geometrie, 16 Bit und RAW-Entwicklung.
+  Geometrie.
+- **RAW auf der GPU**: eigenes Demosaicing auf der Grafikkarte; bisher
+  entwickelt LibRaw auf dem Prozessor.
 - **KI-Funktionen**: Hochskalieren, Entrauschen, Entschärfen, Freistellen,
   Objektauswahl per Klick, Objekte entfernen, Tiefenkarte für künstliche Unschärfe.
 

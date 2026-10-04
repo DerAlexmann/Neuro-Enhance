@@ -42,6 +42,27 @@ Pillow
   Licence: MIT-CMU (HPND)
   https://python-pillow.github.io/
 
+tifffile
+  Copyright Christoph Gohlke
+  Licence: BSD 3-Clause
+  https://github.com/cgohlke/tifffile
+
+imagecodecs
+  Copyright Christoph Gohlke
+  Licence: BSD 3-Clause; bundles third-party codec libraries (among them
+  zlib, libpng, libdeflate) under their own permissive licences, listed in
+  the package.
+  https://github.com/cgohlke/imagecodecs
+
+rawpy
+  Copyright Maik Riechert
+  Licence: MIT
+  https://github.com/letmaik/rawpy
+  rawpy bundles LibRaw, Copyright LibRaw LLC, licensed under the GNU Lesser
+  General Public License v2.1 or the Common Development and Distribution
+  License (CDDL) v1.0, at your choice. https://www.libraw.org/
+  Neuro-Enhance uses LibRaw unmodified through rawpy.
+
 NVIDIA CUDA libraries (cuda-toolkit, nvidia-cuda-nvrtc-cu12,
 nvidia-cuda-runtime-cu12 and related packages)
   Copyright NVIDIA Corporation

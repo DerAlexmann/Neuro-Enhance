@@ -143,6 +143,26 @@ def nach_8bit(rgb_linear):
     return (v * 255 + 0.5).astype(xp.uint8)
 
 
+def nach_16bit(rgb_linear):
+    """Lineares float-Bild -> sRGB uint16 fuer den Export mit 16 Bit."""
+    xp = xp_von(rgb_linear)
+    v = linear_zu_srgb(xp.clip(rgb_linear, 0, 1))
+    return (v * 65535 + 0.5).astype(xp.uint16)
+
+
+def verkleinern_auf(bild, laengste_kante: int):
+    """Vorschau: um einen ganzzahligen Faktor verkleinern, bis die laengste Kante passt.
+
+    Gemittelt wird in linearem Licht - so bleiben feine helle Strukturen so hell,
+    wie sie wirken. Rueckgabe: verkleinertes Bild und Massstab zum Original.
+    """
+    faktor = max(1, math.ceil(max(bild.shape[:2]) / laengste_kante))
+    if faktor == 1:
+        return bild, 1.0
+    klein = verkleinern_box(bild, faktor).astype(xp_von(bild).float32)
+    return klein, 1.0 / faktor
+
+
 def von_8bit(rgb_uint8):
     xp = xp_von(rgb_uint8)
     return srgb_zu_linear(rgb_uint8.astype(xp.float32) / 255)
@@ -529,9 +549,9 @@ def anwenden(rgb_linear, werte: Einstellungen, massstab: float = 1.0):
     return schaerfen(bild, werte.schaerfe, werte.schaerfe_radius * massstab)
 
 
-def anwenden_8bit(rgb_linear, werte: Einstellungen, massstab: float = 1.0,
-                  speicher: dict | None = None):
-    """Ganze Kette bis zum sRGB-uint8 fuer Anzeige und Export.
+def anwenden_ausgabe(rgb_linear, werte: Einstellungen, massstab: float = 1.0,
+                     speicher: dict | None = None, bits: int = 8):
+    """Ganze Kette bis zum sRGB-Ergebnis mit 8 oder 16 Bit - fuer Anzeige und Export.
 
     Liegt das Bild auf der Grafikkarte, rechnen die zusammengefassten Kernel
     aus filter_gpu.py - mit denselben Formeln wie oben, aber in wenigen statt
@@ -540,5 +560,6 @@ def anwenden_8bit(rgb_linear, werte: Einstellungen, massstab: float = 1.0,
     """
     if xp_von(rgb_linear) is not np:
         from . import filter_gpu
-        return filter_gpu.anwenden_8bit(rgb_linear, werte, massstab, speicher)
-    return nach_8bit(anwenden(rgb_linear, werte, massstab))
+        return filter_gpu.anwenden_ausgabe(rgb_linear, werte, massstab, speicher, bits)
+    ergebnis = anwenden(rgb_linear, werte, massstab)
+    return nach_16bit(ergebnis) if bits == 16 else nach_8bit(ergebnis)

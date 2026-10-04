@@ -7,6 +7,18 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- 16 Bit: TIFF und PNG mit 16 Bit je Kanal öffnen und speichern (tifffile,
+  imagecodecs). Der Speichern-Dialog bietet PNG und TIFF mit 8 oder 16 Bit an
+  und schlägt für Bilder mit mehr als 8 Bit ein 16-Bit-TIFF vor. 16-Bit-PNG
+  behält EXIF-Daten; 16-Bit-TIFF trägt das sRGB-Profil, aber noch keine
+  EXIF-Daten.
+- RAW: Entwicklung mit LibRaw (rawpy), linear in 16 Bit, mit dem
+  Weißabgleich der Kamera und ohne automatische Aufhellung.
+- Farbprofile: RGB-Matrixprofile (Adobe RGB, ProPhoto, Display P3 …) werden
+  selbst gelesen und auf der GPU in lineares sRGB umgerechnet – bei jeder
+  Bittiefe und ohne Farben außerhalb von sRGB vorzeitig abzuschneiden.
+  CMYK-, Graustufen- und Tabellenprofile rechnet weiterhin LittleCMS.
+- Die Vorschau wird auf der GPU in linearem Licht verkleinert.
 - Gradationskurve für Helligkeit sowie Rot, Grün und Blau, monoton kubisch
   interpoliert, mit Histogramm der Vorschau im Hintergrund. Die
   Helligkeitskurve wirkt farbtreu, die Kanalkurven verschieben gezielt die

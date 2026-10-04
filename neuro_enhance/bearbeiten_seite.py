@@ -64,6 +64,41 @@ def regler_titel(name: str) -> str:
     }[name]
 
 
+def speicherformate() -> list[tuple[str, str, int]]:
+    """Dateifilter fuer den Speichern-Dialog: (Beschriftung, Endung, Bits)."""
+    return [
+        ("JPEG (*.jpg *.jpeg)", ".jpg", 8),
+        (f"PNG {_('8 Bit')} (*.png)", ".png", 8),
+        (f"PNG {_('16 Bit')} (*.png)", ".png", 16),
+        (f"TIFF {_('8 Bit')} (*.tif *.tiff)", ".tif", 8),
+        (f"TIFF {_('16 Bit')} (*.tif *.tiff)", ".tif", 16),
+        ("WebP (*.webp)", ".webp", 8),
+    ]
+
+
+def ziel_bestimmen(pfad: str, gewaehlt: str) -> tuple[str, int]:
+    """Endung ergaenzen und Bittiefe aus dem gewaehlten Filter ablesen.
+
+    Hat der Anwender eine Endung getippt, die nicht zum Filter passt, gilt die
+    Endung; 16 Bit gibt es dann nur, wenn das Format sie kann.
+    """
+    formate = {beschriftung: (endung, bits) for beschriftung, endung, bits in speicherformate()}
+    endung_filter, bits = formate.get(gewaehlt, (".jpg", 8))
+    endung = os.path.splitext(pfad)[1].lower()
+    if endung not in bilddatei.SCHREIBBAR:
+        return pfad + endung_filter, bits
+    if endung_filter == endung or (endung, endung_filter) in ((".jpeg", ".jpg"),
+                                                             (".tiff", ".tif")):
+        return pfad, bits
+    return pfad, 16 if bits == 16 and bilddatei.SCHREIBBAR[endung][2] else 8
+
+
+def art_anzeige(daten: bilddatei.Bilddaten) -> str:
+    if daten.raw:
+        return "RAW"
+    return _("16 Bit") if daten.bits == 16 else _("8 Bit")
+
+
 def wert_anzeige(regler: filter.Regler, wert: float) -> str:
     text = f"{wert:.{regler.nachkomma}f}"
     if regler.minimum < 0 and wert > 0:
@@ -329,10 +364,15 @@ class BearbeitenSeite(QWidget):
         return antwort == QMessageBox.StandardButton.Discard
 
     def oeffnen_dialog(self):
-        endungen = " ".join(f"*{e}" for e in bilddatei.LESBAR)
+        def muster(endungen):
+            return " ".join(f"*{e}" for e in endungen)
+        filterliste = ";;".join([
+            f"{_('Alle Bilder')} ({muster(bilddatei.LESBAR)})",
+            f"{_('Bilder')} ({muster(bilddatei.BILDER)})",
+            f"RAW ({muster(bilddatei.RAW)})",
+        ])
         pfad, _filter = QFileDialog.getOpenFileName(
-            self, _("Bild öffnen"), self._letzter_ordner(),
-            f"{_('Bilder')} ({endungen})")
+            self, _("Bild öffnen"), self._letzter_ordner(), filterliste)
         if pfad:
             self.oeffnen(pfad)
 
@@ -342,6 +382,10 @@ class BearbeitenSeite(QWidget):
             return
         if not self.aenderungen_verwerfen_ok():
             return
+        if os.path.splitext(pfad)[1].lower() in bilddatei.RAW:
+            # LibRaw entwickelt auf dem Prozessor; das dauert einige Sekunden.
+            self.fenster.melden(_("RAW wird entwickelt …"))
+            QApplication.processEvents()
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             daten = bilddatei.laden(pfad)
@@ -363,28 +407,36 @@ class BearbeitenSeite(QWidget):
             zeile.setzen(zeile.regler.vorgabe)
         self._kurven_neutral()
         self._knoepfe_freischalten()
-        self.fenster.melden(_("{name} geöffnet – {breite} × {hoehe} Pixel")
-                            .format(name=daten.name, breite=daten.breite, hoehe=daten.hoehe))
+        self.fenster.melden(_("{name} geöffnet – {breite} × {hoehe} Pixel, {art}")
+                            .format(name=daten.name, breite=daten.breite, hoehe=daten.hoehe,
+                                    art=art_anzeige(daten)))
         self.zeichnen_anfordern()
 
     def speichern_dialog(self):
         if self.sitzung is None:
             return
-        stamm, endung = os.path.splitext(self.sitzung.daten.pfad)
-        if endung.lower() not in bilddatei.SCHREIBBAR:
-            endung = ".jpg"
-        vorschlag = f"{stamm}-bearbeitet{endung.lower()}"
-        filterliste = ";;".join([
-            "JPEG (*.jpg *.jpeg)", "PNG (*.png)", "TIFF (*.tif *.tiff)", "WebP (*.webp)"])
+        daten = self.sitzung.daten
+        stamm, endung = os.path.splitext(daten.pfad)
+        endung = endung.lower()
+        formate = speicherformate()
+        if daten.raw or daten.bits == 16:
+            # Mehr als 8 Bit im Original: als 16-Bit-TIFF vorschlagen, damit nichts verloren geht
+            endung, vorauswahl = ".tif", formate[4][0]
+        else:
+            if endung not in bilddatei.SCHREIBBAR:
+                endung = ".jpg"
+            vorauswahl = next(b for b, e, bits in formate
+                              if bits == 8 and e == {".jpeg": ".jpg", ".tiff": ".tif"}
+                              .get(endung, endung))
         pfad, gewaehlt = QFileDialog.getSaveFileName(
-            self, _("Bild speichern"), vorschlag, filterliste)
+            self, _("Bild speichern"), f"{stamm}-bearbeitet{endung}",
+            ";;".join(b for b, _e, _bits in formate), vorauswahl)
         if not pfad:
             return
-        if os.path.splitext(pfad)[1].lower() not in bilddatei.SCHREIBBAR:
-            pfad += "." + gewaehlt.split("*.")[1].split(" ")[0].rstrip(")")
+        pfad, bits = ziel_bestimmen(pfad, gewaehlt)
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            ms = self.sitzung.exportieren(pfad)
+            ms = self.sitzung.exportieren(pfad, bits)
         except bilddatei.BildFehler as fehler:
             self._fehler(_("Das Bild lässt sich nicht speichern."), str(fehler))
             return

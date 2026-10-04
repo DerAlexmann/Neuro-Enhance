@@ -8,7 +8,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "Alexander Unverhau" }]
 keywords = [
     "image-enhancer", "upscaler", "ai", "cuda", "gpu-acceleration", "deep-learning",
-    "super-resolution", "denoising", "photo-editing",
+    "super-resolution", "denoising", "photo-editing", "raw", "16-bit",
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
@@ -29,6 +29,9 @@ dependencies = [
     "nvidia-ml-py>=12.570",
     "Pillow>=10",
     "numpy>=1.26",
+    "tifffile>=2024.1",
+    "imagecodecs>=2024.1",
+    "rawpy>=0.21",
     "cupy-cuda12x[ctk]>=14",
     "cuda-toolkit==12.8.*",
 ]
