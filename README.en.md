@@ -53,6 +53,11 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 - **Basic adjustments on the GPU**: white balance (temperature, tint), exposure,
   contrast, highlights, shadows, vibrance, saturation and sharpening with adjustable
   radius.
+- **Tone curve** for luminance and for red, green and blue separately, with a histogram
+  in the background. Click to add a point, drag to move it, double-click to remove it;
+  the luminance curve leaves the colours untouched.
+- **Clarity**: more or less local contrast in the midtones.
+- **Dehaze** using the dark channel prior – also in reverse, to add haze.
 - **Non-destructive**: every change is recomputed from the untouched original.
   Double-click resets a slider, "Before" shows the original while the button is held.
 - **Fast**: the preview is computed at screen resolution in a few milliseconds; the
@@ -70,7 +75,7 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 
 ## Planned
 
-- **More classic filters**: curves, LUTs, clarity, dehaze, denoising, geometry, 16 bits
+- **More classic filters**: LUTs, HSL per colour range, denoising, geometry, 16 bits
   and RAW development.
 - **AI features**: upscaling, denoising, deblurring, background removal, click-to-select
   objects, object removal, depth maps for synthetic depth of field.
@@ -85,8 +90,9 @@ python Neuro-Enhance.pyw
 ```
 
 The packages bring CuPy and the required CUDA libraries from NVIDIA (just over 1 GB in
-total); a separate CUDA Toolkit installation is not needed. For the very first image the
-graphics card compiles its filter programs once, which takes one or two seconds.
+total); a separate CUDA Toolkit installation is not needed. The first time a filter is
+used, the graphics card compiles the matching program once; this takes one to three
+seconds and is kept for all later starts.
 
 A ready-made executable will follow with the first release.
 

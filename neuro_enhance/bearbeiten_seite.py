@@ -27,9 +27,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import bilddatei, einstellungen, filter
+from . import bilddatei, einstellungen, filter, kurven
 from .bearbeitung import Sitzung
 from .cuda import cupy as cp
+from .kurveneditor import KurvenEditor
 from .leinwand import Leinwand
 from .uebersetzung import _
 
@@ -40,6 +41,7 @@ def gruppen_titel(gruppe: str) -> str:
     return {
         "weissabgleich": _("Weißabgleich"),
         "licht": _("Licht"),
+        "praesenz": _("Präsenz"),
         "farbe": _("Farbe"),
         "details": _("Details"),
     }[gruppe]
@@ -53,6 +55,8 @@ def regler_titel(name: str) -> str:
         "kontrast": _("Kontrast"),
         "lichter": _("Lichter"),
         "tiefen": _("Tiefen"),
+        "klarheit": _("Klarheit"),
+        "dunst": _("Dunst entfernen"),
         "dynamik": _("Dynamik"),
         "saettigung": _("Sättigung"),
         "schaerfe": _("Schärfen"),
@@ -223,9 +227,33 @@ class BearbeitenSeite(QWidget):
             self.zeilen[regler.name] = ReglerZeile(self, regler, gruppen[regler.gruppe],
                                                    zaehler[regler.gruppe])
             zaehler[regler.gruppe] += 2
+        # Die Gradationskurve gehoert hinter die Tonwerte, vor Praesenz und Farbe
+        spalte.insertWidget(2, self._kurvenkarte())
         spalte.addStretch(1)
         flaeche.setWidget(inhalt)
         return flaeche
+
+    def _kurvenkarte(self) -> QFrame:
+        karte = QFrame(objectName="karte")
+        innen = QVBoxLayout(karte)
+        innen.setContentsMargins(16, 12, 16, 14)
+        titel = QLabel(objectName="kartentitel")
+        self.fenster.beschriften(titel.setText, _("Gradationskurve"))
+        innen.addWidget(titel)
+        self.kurven = KurvenEditor(
+            self.fenster.beschriften,
+            {"kurve_hell": _("Hell"), "kurve_rot": _("R"), "kurve_gruen": _("G"),
+             "kurve_blau": _("B")},
+            _("Zurücksetzen"))
+        self.fenster.beschriften(
+            self.kurven.flaeche.setToolTip,
+            _("Klicken setzt einen Punkt, Ziehen verschiebt ihn, Doppelklick entfernt ihn."))
+        self.kurven.geaendert.connect(self.wert_geaendert)
+        innen.addWidget(self.kurven)
+        return karte
+
+    def _kurven_neutral(self):
+        self.kurven.alle_setzen(dict.fromkeys(filter.KURVEN, kurven.IDENTITAET))
 
     def _knoepfe_freischalten(self):
         offen = self.sitzung is not None
@@ -233,12 +261,13 @@ class BearbeitenSeite(QWidget):
             widget.setEnabled(offen)
         for zeile in self.zeilen.values():
             zeile.schieber.setEnabled(offen)
+        self.kurven.setEnabled(offen)
 
     # ------------------------------------------------------------------
     # Regler und Vorschau
     # ------------------------------------------------------------------
 
-    def wert_geaendert(self, name: str, wert: float):
+    def wert_geaendert(self, name: str, wert):
         if self.sitzung is None:
             return
         setattr(self.sitzung.werte, name, wert)
@@ -254,10 +283,12 @@ class BearbeitenSeite(QWidget):
         self._zeichnen_angefordert = False
         if self.sitzung is None:
             self.leinwand.zeigen(None)
+            self.kurven.histogramm_zeigen(None)
             self.fenster.rechenzeit_zeigen(None)
             return
-        bild, ms = self.sitzung.vorschau(unbearbeitet=self._vorher)
+        bild, ms, histogramm = self.sitzung.vorschau(unbearbeitet=self._vorher)
         self.leinwand.zeigen(bild)
+        self.kurven.histogramm_zeigen(histogramm)
         self.fenster.rechenzeit_zeigen(ms)
 
     def _vorher_zeigen(self, an: bool):
@@ -267,6 +298,7 @@ class BearbeitenSeite(QWidget):
     def alles_zuruecksetzen(self):
         for zeile in self.zeilen.values():
             zeile.setzen(zeile.regler.vorgabe)
+        self._kurven_neutral()
         if self.sitzung is not None:
             self.sitzung.werte = filter.Einstellungen()
         self.zeichnen_anfordern()
@@ -329,6 +361,7 @@ class BearbeitenSeite(QWidget):
         self._letzten_ordner_merken(pfad)
         for zeile in self.zeilen.values():
             zeile.setzen(zeile.regler.vorgabe)
+        self._kurven_neutral()
         self._knoepfe_freischalten()
         self.fenster.melden(_("{name} geöffnet – {breite} × {hoehe} Pixel")
                             .format(name=daten.name, breite=daten.breite, hoehe=daten.hoehe))

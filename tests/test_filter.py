@@ -12,16 +12,17 @@ import numpy as np
 import pytest
 
 from neuro_enhance import filter as f
+from neuro_enhance import kurven
 
 
 @pytest.fixture
 def bild():
     """Kleines lineares Testbild mit Verlauf, Farbflaechen, Schwarz und Weiss."""
     zufall = np.random.default_rng(1)
-    rgb = zufall.random((48, 64, 3), dtype=np.float32) * 0.8
+    rgb = zufall.random((96, 128, 3), dtype=np.float32) * 0.8
     rgb[:8] = 0.0                             # schwarz
     rgb[-8:] = 1.0                            # weiss
-    rgb[8:16, :, :] = np.linspace(0, 1, 64, dtype=np.float32)[None, :, None]
+    rgb[8:16, :, :] = np.linspace(0, 1, 128, dtype=np.float32)[None, :, None]
     return rgb
 
 
@@ -42,9 +43,17 @@ def test_neutrale_einstellungen_aendern_nichts(bild):
 
 def test_regler_und_einstellungen_passen_zusammen():
     namen = {feld.name for feld in dataclasses.fields(f.Einstellungen)}
-    assert namen == set(f.REGLER_NACH_NAME)
+    assert namen == set(f.REGLER_NACH_NAME) | set(f.KURVEN)
     for feld in dataclasses.fields(f.Einstellungen):
-        assert feld.default == f.REGLER_NACH_NAME[feld.name].vorgabe
+        if feld.name in f.KURVEN:
+            assert feld.default == kurven.IDENTITAET
+        else:
+            assert feld.default == f.REGLER_NACH_NAME[feld.name].vorgabe
+
+
+def test_geaenderte_kurve_ist_nicht_neutral():
+    werte = f.Einstellungen(kurve_rot=((0.0, 0.0), (0.5, 0.6), (1.0, 1.0)))
+    assert not werte.ist_neutral()
 
 
 def test_belichtung_verdoppelt_licht(bild):
@@ -133,6 +142,113 @@ def test_schaerfen_verstaerkt_kanten():
     assert np.allclose(neu[5, 0], 0) and np.allclose(neu[5, 19], 0.5, atol=1e-4)
 
 
+# ----------------------------------------------------------------------
+# Werkzeuge fuer grosse Nachbarschaften
+# ----------------------------------------------------------------------
+
+def test_verkleinern_box_mittelt():
+    bild = np.arange(16, dtype=np.float32).reshape(4, 4)
+    assert np.allclose(f.verkleinern_box(bild, 2), [[2.5, 4.5], [10.5, 12.5]])
+
+
+def test_vergroessern_form_und_flaechen():
+    flaeche = np.full((5, 7, 3), 0.3, dtype=np.float32)
+    gross = f.vergroessern(flaeche, 40, 31)
+    assert gross.shape == (40, 31, 3) and np.allclose(gross, 0.3)
+
+
+def test_vergroessern_bewahrt_einen_verlauf():
+    verlauf = np.linspace(0, 1, 10, dtype=np.float32)[None, :].repeat(4, axis=0)
+    gross = f.vergroessern(verlauf, 8, 40)
+    assert (np.diff(gross[0]) >= -1e-6).all()
+
+
+def test_box_mittel_wie_von_hand():
+    zufall = np.random.default_rng(3).random((9, 11), dtype=np.float32)
+    ergebnis = f.box_mittel(zufall, 2)
+    for y, x in ((0, 0), (4, 5), (8, 10), (2, 9)):
+        ausschnitt = zufall[max(0, y - 2):y + 3, max(0, x - 2):x + 3]
+        assert np.isclose(ergebnis[y, x], ausschnitt.mean(), atol=1e-6)
+
+
+def test_min_filter_wie_von_hand():
+    zufall = np.random.default_rng(4).random((7, 8), dtype=np.float32)
+    ergebnis = f.min_filter(zufall, 1)
+    assert ergebnis[3, 3] == zufall[2:5, 2:5].min()
+    assert ergebnis[0, 0] == zufall[0:2, 0:2].min()
+
+
+def test_gefuehrter_filter_glaettet_konstante_fuehrung_zum_mittel():
+    fuehrung = np.full((20, 20), 0.5, dtype=np.float32)
+    eingabe = np.random.default_rng(5).random((20, 20), dtype=np.float32)
+    ergebnis = f.gefuehrter_filter(fuehrung, eingabe, 3, 1e-3)
+    assert ergebnis.std() < eingabe.std()
+
+
+# ----------------------------------------------------------------------
+# Dunst, Klarheit, Kurven
+# ----------------------------------------------------------------------
+
+HIMMEL = 24                                    # Zeilen ganz im Dunst
+
+
+def dunstige_szene():
+    """Landschaft unter gleichmaessigem Dunst, oben ein Streifen Himmel.
+
+    Das Verfahren liest die Lichtfarbe des Dunstes an den dunstigsten Stellen
+    ab - in echten Dunstfotos ist das fast immer der Himmel.
+    """
+    zufall = np.random.default_rng(6)
+    szene = zufall.random((96, 128, 3), dtype=np.float32) * 0.5
+    szene[..., 2] *= 0.2                       # jedes Fleckchen hat einen dunklen Kanal
+    licht = np.array([0.8, 0.82, 0.85], dtype=np.float32)
+    dunstig = szene * 0.5 + licht * 0.5
+    dunstig[:HIMMEL] = licht
+    return szene, dunstig
+
+
+def test_dunst_entfernen_hebt_den_kontrast():
+    szene, dunstig = dunstige_szene()
+    klar = f.dunst(dunstig, 100)
+    land, land_klar, land_szene = dunstig[HIMMEL:], klar[HIMMEL:], szene[HIMMEL:]
+    assert land_klar.std() > land.std() * 1.4
+    # und kommt der dunstfreien Szene deutlich naeher als das dunstige Bild
+    assert np.abs(land_klar - land_szene).mean() < np.abs(land - land_szene).mean() * 0.5
+
+
+def test_dunst_hinzufuegen_senkt_den_kontrast(bild):
+    assert f.dunst(bild, -80).std() < bild.std()
+
+
+def test_dunst_null_aendert_nichts(bild):
+    assert f.dunst(bild, 0) is bild
+
+
+def test_klarheit_hebt_lokalen_kontrast():
+    """Weiches Muster in Mitteltoenen: Klarheit verstaerkt, negative Klarheit glaettet."""
+    y, x = np.mgrid[0:120, 0:160].astype(np.float32)
+    muster = 0.18 + 0.06 * np.sin(x / 6) * np.sin(y / 6)
+    bild = np.repeat(muster[..., None], 3, axis=2)
+    assert f.klarheit(bild, 100).std() > bild.std()
+    assert f.klarheit(bild, -100).std() < bild.std()
+
+
+def test_helligkeitskurve_hebt_mitten_farbtreu(bild):
+    werte = f.Einstellungen(kurve_hell=((0.0, 0.0), (0.5, 0.7), (1.0, 1.0)))
+    neu = f.gradation(bild, werte)
+    assert f.luminanz(neu)[16:-8].mean() > f.luminanz(bild)[16:-8].mean()
+    farbig, neu_farbig = bild[16:-8].reshape(-1, 3), neu[16:-8].reshape(-1, 3)
+    assert np.allclose(farbig / farbig.sum(1, keepdims=True),
+                       neu_farbig / neu_farbig.sum(1, keepdims=True), atol=1e-4)
+
+
+def test_kanalkurve_wirkt_nur_auf_ihren_kanal(bild):
+    werte = f.Einstellungen(kurve_rot=((0.0, 0.0), (0.5, 0.3), (1.0, 1.0)))
+    neu = f.gradation(bild, werte)
+    assert neu[..., 0].mean() < bild[..., 0].mean()
+    assert np.array_equal(neu[..., 1:], bild[..., 1:])
+
+
 def test_gpu_rechnet_wie_cpu(bild):
     cp = pytest.importorskip("cupy")
     try:
@@ -152,8 +268,17 @@ def test_gpu_rechnet_wie_cpu(bild):
     f.Einstellungen(kontrast=40, lichter=-30, tiefen=40),
     f.Einstellungen(kontrast=-60, dynamik=30, saettigung=-10),
     f.Einstellungen(schaerfe=80, schaerfe_radius=2.0),
+    f.Einstellungen(dunst=70),
+    f.Einstellungen(dunst=-50, kontrast=20),
+    f.Einstellungen(dunst=40, kontrast=30, klarheit=60),
+    f.Einstellungen(klarheit=-80),
+    f.Einstellungen(kurve_hell=((0.0, 0.1), (0.4, 0.55), (1.0, 0.95))),
+    f.Einstellungen(kurve_rot=((0.0, 0.0), (0.5, 0.6), (1.0, 1.0)),
+                    kurve_blau=((0.0, 0.05), (0.6, 0.5), (1.0, 1.0)), saettigung=20),
     f.Einstellungen(temperatur=100, toenung=-100, belichtung=5, kontrast=100, lichter=-100,
-                    tiefen=100, dynamik=100, saettigung=100, schaerfe=150, schaerfe_radius=3),
+                    tiefen=100, dynamik=100, saettigung=100, schaerfe=150, schaerfe_radius=3,
+                    klarheit=100, dunst=100,
+                    kurve_hell=((0.0, 0.0), (0.3, 0.6), (1.0, 1.0))),
 ])
 def test_cuda_kernel_rechnen_wie_die_referenz(bild, werte):
     """Die zusammengefassten Kernel muessen dieselben Formeln rechnen wie filter.py."""

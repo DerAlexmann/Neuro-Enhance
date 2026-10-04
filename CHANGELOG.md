@@ -7,6 +7,16 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- Gradationskurve für Helligkeit sowie Rot, Grün und Blau, monoton kubisch
+  interpoliert, mit Histogramm der Vorschau im Hintergrund. Die
+  Helligkeitskurve wirkt farbtreu, die Kanalkurven verschieben gezielt die
+  Farbe.
+- Klarheit: lokaler Kontrast in den Mitteltönen mit einem Radius relativ zur
+  Bildgröße – Vorschau und Export wirken gleich.
+- Dunst entfernen nach dem Dark Channel Prior mit Guided Filter; negative
+  Werte fügen Dunst hinzu. Die Schätzung läuft auf einer Kopie mit 512 Pixeln
+  Kantenlänge und wird beim Ziehen am Regler wiederverwendet. Mit allen
+  Filtern zusammen braucht die Vorschau mit 10 Megapixeln rund 20 ms.
 - Erste klassische Filter auf der GPU: Weißabgleich (Temperatur, Tönung),
   Belichtung, Kontrast, Lichter, Tiefen, Dynamik, Sättigung und Schärfen mit
   Radius. Gerechnet wird nicht-destruktiv in linearem Licht; die Kette läuft

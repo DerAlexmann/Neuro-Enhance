@@ -162,6 +162,8 @@ def stylesheet() -> str:
     QPushButton:hover {{ background: {t["BTN_HOVER"]}; }}
     QPushButton:disabled {{ color: {t["BTN_DISABLED"]}; }}
     QPushButton#hauptschalter {{ background: {t["ACCENT"]}; color: {t["ON_ACCENT"]}; }}
+    QPushButton#kanal {{ padding: 3px 9px; border-radius: 4px; font-size: 9pt; }}
+    QPushButton#kanal:checked {{ background: {t["ACCENT"]}; color: {t["ON_ACCENT"]}; }}
     QPushButton#hauptschalter:hover {{ background: {t["ACCENT_DARK"]}; }}
 
     QSlider::groove:horizontal {{
@@ -176,6 +178,14 @@ def stylesheet() -> str:
     }}
     QSlider::handle:horizontal:hover {{ background: {t["ACCENT_DARK"]}; }}
     QSlider::handle:horizontal:disabled {{ background: {t["BTN_DISABLED"]}; }}
+
+    QScrollBar:vertical {{ background: transparent; width: 10px; margin: 0; }}
+    QScrollBar::handle:vertical {{
+        background: {t["BORDER"]}; border-radius: 4px; min-height: 32px; margin: 0 2px;
+    }}
+    QScrollBar::handle:vertical:hover {{ background: {t["MUTED"]}; }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
 
     QStatusBar {{ background: {t["STATUS_BG"]}; color: {t["MUTED"]}; }}
     QStatusBar::item {{ border: none; }}

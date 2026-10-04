@@ -105,6 +105,17 @@ TRANSLATIONS = {
         # Reglergruppen und Regler
         "Weißabgleich": "White balance",
         "Licht": "Light",
+        "Präsenz": "Presence",
+        "Gradationskurve": "Tone curve",
+        "Hell": "Lum",
+        "R": "R",
+        "G": "G",
+        "B": "B",
+        "Zurücksetzen": "Reset",
+        "Klicken setzt einen Punkt, Ziehen verschiebt ihn, Doppelklick entfernt ihn.":
+            "Click to add a point, drag to move it, double-click to remove it.",
+        "Klarheit": "Clarity",
+        "Dunst entfernen": "Dehaze",
         "Farbe": "Colour",
         "Details": "Detail",
         "Temperatur": "Temperature",

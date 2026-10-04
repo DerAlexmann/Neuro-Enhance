@@ -55,6 +55,12 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 - **Grundregler auf der GPU**: Weißabgleich (Temperatur, Tönung), Belichtung,
   Kontrast, Lichter, Tiefen, Dynamik, Sättigung und Schärfen mit einstellbarem
   Radius.
+- **Gradationskurve** für die Helligkeit und für Rot, Grün und Blau einzeln, mit
+  Histogramm im Hintergrund. Klicken setzt einen Punkt, Ziehen verschiebt ihn,
+  Doppelklick entfernt ihn; die Helligkeitskurve verändert die Farben nicht.
+- **Klarheit**: mehr oder weniger lokaler Kontrast in den Mitteltönen.
+- **Dunst entfernen** nach dem Dark-Channel-Prior-Verfahren – auch umgekehrt, um
+  Dunst hinzuzufügen.
 - **Nicht-destruktiv**: Jede Änderung wird aus dem unveränderten Original neu
   gerechnet. Doppelklick setzt einen Regler zurück, „Vorher“ zeigt das Original,
   solange der Knopf gedrückt ist.
@@ -76,8 +82,8 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 
 ## Geplant
 
-- **Weitere klassische Filter**: Kurven, LUTs, Klarheit, Dunst entfernen,
-  Entrauschen, Geometrie, 16 Bit und RAW-Entwicklung.
+- **Weitere klassische Filter**: LUTs, HSL je Farbbereich, Entrauschen,
+  Geometrie, 16 Bit und RAW-Entwicklung.
 - **KI-Funktionen**: Hochskalieren, Entrauschen, Entschärfen, Freistellen,
   Objektauswahl per Klick, Objekte entfernen, Tiefenkarte für künstliche Unschärfe.
 
@@ -92,8 +98,9 @@ python Neuro-Enhance.pyw
 
 Die Pakete bringen CuPy und die nötigen CUDA-Bibliotheken von NVIDIA mit
 (zusammen gut 1 GB); ein eigenes CUDA-Toolkit muss nicht installiert sein. Beim
-allerersten Bild übersetzt die Grafikkarte ihre Filterprogramme einmalig, das
-dauert ein bis zwei Sekunden.
+ersten Einsatz eines Filters übersetzt die Grafikkarte das passende Programm
+einmalig; das dauert ein bis drei Sekunden und wird für alle weiteren Starts
+gespeichert.
 
 Eine fertige EXE folgt mit dem ersten Release.
 
