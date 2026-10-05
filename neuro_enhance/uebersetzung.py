@@ -142,7 +142,21 @@ TRANSLATIONS = {
             "AI features need at least 4 GB of video memory.",
         "Dieses Modell braucht mindestens Funktionsstufe {stufe}.":
             "This model needs at least feature tier {stufe}.",
-        "Modelldateien fehlen im Ordner {ordner}.": "Model files are missing in {ordner}.",
+        "Dieses Modell ist noch nicht geladen.": "This model has not been downloaded yet.",
+        "Modell herunterladen ({mb} MB)": "Download model ({mb} MB)",
+        "Neuro-Enhance lädt {mb} MB von:\n{quelle}\n\n"
+        "Die Modelle stammen von Real-ESRGAN (BSD 3-Clause, Copyright 2021 Xintao Wang) "
+        "und werden nach dem Laden gegen ihre Prüfsumme geprüft.\n\n"
+        "Ablage: {ordner}\n\nJetzt herunterladen?":
+            "Neuro-Enhance downloads {mb} MB from:\n{quelle}\n\n"
+            "The models come from Real-ESRGAN (BSD 3-Clause, Copyright 2021 Xintao Wang) "
+            "and are checked against their checksum after downloading.\n\n"
+            "Location: {ordner}\n\nDownload now?",
+        "KI-Modell herunterladen": "Download AI model",
+        "Modell wird heruntergeladen …": "Downloading model …",
+        "Herunterladen abgebrochen.": "Download cancelled.",
+        "Das Modell ließ sich nicht herunterladen.": "The model could not be downloaded.",
+        "KI-Modell geladen: {ordner}": "AI model downloaded: {ordner}",
         "Wird beim Speichern angewendet. KI ergänzt Details, die im Original "
         "nicht vorhanden waren.":
             "Applied when saving. AI adds details that were not present in the original.",

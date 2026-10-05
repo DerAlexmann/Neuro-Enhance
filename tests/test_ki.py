@@ -29,7 +29,7 @@ def test_kachelgroesse_waechst_mit_der_stufe():
 
 
 def test_beschaedigte_datei_wird_abgelehnt(tmp_path, monkeypatch):
-    monkeypatch.setattr(ki, "modell_ordner", lambda: str(tmp_path))
+    monkeypatch.setattr(ki, "ordner_kandidaten", lambda: [str(tmp_path)])
     (tmp_path / "x.onnx").write_bytes(b"nicht das Modell")
     with pytest.raises(ki.KiFehler):
         ki.datei_pruefen("x.onnx", "0" * 64)
@@ -101,3 +101,64 @@ def test_abbruch(schnell, bild):
 
 def test_modellordner_liegt_neben_dem_programm():
     assert os.path.basename(ki.modell_ordner()) == "modelle"
+
+
+def test_katalog_vollstaendig():
+    for modell in ki.MODELLE.values():
+        for name in ki.dateien(modell):
+            assert name in ki.DATEIEN
+        assert modell.sha256 == ki.DATEIEN[modell.datei][0]
+
+
+# ----------------------------------------------------------------------
+# Herunterladen - mit einem file://-Ordner statt GitHub
+# ----------------------------------------------------------------------
+
+@pytest.fixture
+def quelle_und_ziel(tmp_path, monkeypatch):
+    """Ein Quellordner mit den Dateien des schnellen Modells (Inhalt erfunden)."""
+    import hashlib
+    quelle, ziel = tmp_path / "quelle", tmp_path / "ziel"
+    quelle.mkdir()
+    katalog = {}
+    for name in ki.dateien(ki.MODELLE["schnell"]):
+        inhalt = (name * 50000).encode()
+        (quelle / name).write_bytes(inhalt)
+        katalog[name] = (hashlib.sha256(inhalt).hexdigest(), len(inhalt))
+    monkeypatch.setattr(ki, "DATEIEN", katalog)
+    monkeypatch.setattr(ki, "ordner_kandidaten", lambda: [str(ziel)])
+    return quelle.as_uri() + "/", ziel
+
+
+def test_herunterladen(quelle_und_ziel):
+    url, ziel = quelle_und_ziel
+    modell = ki.MODELLE["schnell"]
+    assert not ki.vorhanden(modell)
+    meldungen = []
+    ki.herunterladen(modell, lambda g, n: meldungen.append((g, n)) or True, quelle=url)
+    assert ki.vorhanden(modell) and ki.fehlende(modell) == []
+    assert meldungen[-1][0] == meldungen[-1][1] == sum(v[1] for v in ki.DATEIEN.values())
+    assert not list(ziel.glob("*.teil"))
+
+
+def test_falsche_pruefsumme_wird_verworfen(quelle_und_ziel, monkeypatch):
+    url, ziel = quelle_und_ziel
+    name = ki.MODELLE["schnell"].datei
+    monkeypatch.setitem(ki.DATEIEN, name, ("0" * 64, ki.DATEIEN[name][1]))
+    with pytest.raises(ki.KiFehler):
+        ki.herunterladen(ki.MODELLE["schnell"], quelle=url)
+    assert not (ziel / name).exists() and not list(ziel.glob("*.teil"))
+
+
+def test_abbruch_hinterlaesst_nichts(quelle_und_ziel):
+    url, ziel = quelle_und_ziel
+    with pytest.raises(ki.KiAbbruch):
+        ki.herunterladen(ki.MODELLE["schnell"], lambda g, n: False, quelle=url)
+    assert not list(ziel.glob("*.teil"))
+    assert not ki.vorhanden(ki.MODELLE["schnell"])
+
+
+def test_fehlende_quelle(quelle_und_ziel):
+    url, _ziel = quelle_und_ziel
+    with pytest.raises(ki.KiFehler):
+        ki.herunterladen(ki.MODELLE["schnell"], quelle=url + "gibt-es-nicht/")

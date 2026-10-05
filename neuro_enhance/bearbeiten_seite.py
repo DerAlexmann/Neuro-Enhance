@@ -509,6 +509,9 @@ class BearbeitenSeite(QWidget):
         self.ki_hinweis = QLabel(objectName="nebentext")
         self.ki_hinweis.setWordWrap(True)
         innen.addWidget(self.ki_hinweis)
+        self.ki_laden_knopf = QPushButton()
+        self.ki_laden_knopf.clicked.connect(self.ki_modell_laden)
+        innen.addWidget(self.ki_laden_knopf)
         self.ki_faktor.currentIndexChanged.connect(self._ki_anzeigen)
         self.ki_modell.currentIndexChanged.connect(self._ki_anzeigen)
         self._ki_anzeigen()
@@ -527,8 +530,8 @@ class BearbeitenSeite(QWidget):
         nutzbar = stufe in ki.STUFEN
         modell = self._ki_modell()
         an = self.ki_faktor.currentData() > 0
-        self.ki_faktor.setEnabled(offen and nutzbar)
-        self.ki_modell.setEnabled(offen and nutzbar)
+        self.ki_faktor.setEnabled(nutzbar)
+        self.ki_modell.setEnabled(nutzbar)
         self.ki_entrauschen.schieber.setEnabled(offen and nutzbar and modell.mischung is not None)
         if not nutzbar:
             text = _("KI-Funktionen brauchen mindestens 4 GB Grafikspeicher.")
@@ -536,17 +539,64 @@ class BearbeitenSeite(QWidget):
             text = _("Dieses Modell braucht mindestens Funktionsstufe {stufe}.").format(
                 stufe=modell.mindeststufe)
         elif not ki.vorhanden(modell):
-            text = _("Modelldateien fehlen im Ordner {ordner}.").format(ordner=ki.modell_ordner())
+            text = _("Dieses Modell ist noch nicht geladen.")
         else:
             text = _("Wird beim Speichern angewendet. KI ergänzt Details, die im Original "
                      "nicht vorhanden waren.")
         self.fenster.beschriften(self.ki_hinweis.setText, text)
+        laden = nutzbar and ki.angeboten(modell, stufe) and not ki.vorhanden(modell)
+        self.ki_laden_knopf.setVisible(laden)
+        if laden:
+            self.fenster.beschriften(self.ki_laden_knopf.setText, _(
+                "Modell herunterladen ({mb} MB)").format(
+                    mb=f"{ki.download_groesse(modell) / 2**20:.0f}"))
         if offen and an:
             hoehe, breite = ki.ausgabe_form(self.sitzung.ausgabe_form(),
                                             self.ki_faktor.currentData())
             self.ki_ergebnis.setText(f"{breite} × {hoehe} px")
         else:
             self.ki_ergebnis.setText("")
+
+    def ki_modell_laden(self):
+        """Fehlende Modelldateien laden - erst nach Rueckfrage mit Quelle, Groesse und Lizenz."""
+        modell = self._ki_modell()
+        groesse = ki.download_groesse(modell)
+        ziel = ki.modell_ordner()
+        frage = _(
+            "Neuro-Enhance lädt {mb} MB von:\n{quelle}\n\n"
+            "Die Modelle stammen von Real-ESRGAN (BSD 3-Clause, Copyright 2021 Xintao Wang) "
+            "und werden nach dem Laden gegen ihre Prüfsumme geprüft.\n\n"
+            "Ablage: {ordner}\n\nJetzt herunterladen?").format(
+                mb=f"{groesse / 2**20:.1f}", quelle=ki.MODELL_RELEASE, ordner=ziel)
+        antwort = QMessageBox.question(self, _("KI-Modell herunterladen"), frage,
+                                       QMessageBox.StandardButton.Yes
+                                       | QMessageBox.StandardButton.No,
+                                       QMessageBox.StandardButton.No)
+        if antwort != QMessageBox.StandardButton.Yes:
+            return
+        anzeige = QProgressDialog(_("Modell wird heruntergeladen …"), _("Abbrechen"), 0, 100,
+                                  self)
+        anzeige.setWindowTitle(self.fenster.windowTitle())
+        anzeige.setWindowModality(Qt.WindowModality.WindowModal)
+        anzeige.setMinimumDuration(0)
+
+        def fortschritt(geladen, gesamt):
+            anzeige.setValue(round(100 * geladen / max(gesamt, 1)))
+            QApplication.processEvents()
+            return not anzeige.wasCanceled()
+
+        try:
+            ki.herunterladen(modell, fortschritt)
+        except ki.KiAbbruch:
+            self.fenster.melden(_("Herunterladen abgebrochen."))
+            return
+        except ki.KiFehler as fehler:
+            self._fehler(_("Das Modell ließ sich nicht herunterladen."), str(fehler))
+            return
+        finally:
+            anzeige.close()
+            self._ki_anzeigen()
+        self.fenster.melden(_("KI-Modell geladen: {ordner}").format(ordner=ziel))
 
     def _ki_auftrag(self):
         """(Hochskalierer, Faktor, Kachel) fuer den Export - oder None, wenn KI aus ist."""

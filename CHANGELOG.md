@@ -18,6 +18,12 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- KI-Modelle per Knopfdruck laden: Die Karte „KI-Hochskalieren“ bietet
+  „Modell herunterladen“ an, fragt mit Quelle, Größe und Lizenz nach und lädt
+  aus dem Release `modelle-1` dieses Projekts. Jede Datei wird zuerst unter
+  `.teil` gespeichert und erst nach bestandener SHA-256-Prüfung umbenannt;
+  Abbrechen hinterlässt nichts. Ist der Programmordner schreibgeschützt,
+  landen die Modelle unter `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
 - KI-Hochskalieren um 2 × oder 4 × beim Speichern mit Real-ESRGAN über ONNX
   Runtime (CUDA): schnelles Modell (realesr-general-x4v3) mit Regler für die
   Entrauschstärke, für den die Gewichte zweier Modelle auf der GPU gemischt

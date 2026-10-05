@@ -118,7 +118,6 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 - **More AI features**: denoising, deblurring, background removal, click-to-select
   objects, object removal, depth maps for synthetic depth of field.
 - **TensorRT**: even faster AI via TensorRT or TensorRT for RTX.
-- **Model download**: fetch AI models at the click of a button, with checksum.
 
 ## Running it
 
@@ -139,14 +138,22 @@ A ready-made executable will follow with the first release.
 ## Privacy
 
 Neuro-Enhance works entirely on your own computer. No images are uploaded and no usage
-data is sent. The AI also runs locally on the graphics card. In later versions the program
-downloads AI models **only on explicit request**, from the source stated for each model.
+data is sent. The AI also runs locally on the graphics card. The only network access is
+downloading an AI model – and only when you explicitly click it in the "AI upscaling" card
+and confirm the prompt that names source, size and licence.
 
-## Setting up the AI models
+## AI models
 
-The models are not part of the repository. Until the program can download them itself,
-they are created from the official weights of
-[Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (BSD 3-Clause):
+The models are not part of the program. In the "AI upscaling" card, "Download model"
+fetches them from the release
+[modelle-1](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-1) of this
+project: the fast model with just under 10 MB, the large one with 64 MB. Every file is
+checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
+folder next to the program or, if that is read-only, in
+`%LOCALAPPDATA%\Neuro-Enhance\modelle`.
+
+The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)
+(BSD 3-Clause, Copyright 2021 Xintao Wang), converted to ONNX. To reproduce this yourself:
 
 1. Download `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` and
    `RealESRGAN_x4plus.pth` from the
@@ -155,8 +162,6 @@ they are created from the official weights of
 2. `pip install torch onnx` (only needed for this step).
 3. `python werkzeuge/modelle_exportieren.py` – this writes the ONNX models to `modelle/`
    and checks them against PyTorch.
-
-The program checks every model file against its SHA-256 checksum before loading it.
 
 ## A note on AI results
 

@@ -2,9 +2,14 @@
 KI-Hochskalieren mit Real-ESRGAN ueber ONNX Runtime (CUDA)
 
 Die Modelle stammen aus dem offiziellen Real-ESRGAN-Release (BSD-3-Clause) und
-sind mit werkzeuge/modelle_exportieren.py nach ONNX gewandelt. Die App sucht
-sie im Ordner `modelle` neben dem Programm und prueft jede Datei gegen ihre
-SHA-256-Pruefsumme, bevor sie geladen wird.
+sind mit werkzeuge/modelle_exportieren.py nach ONNX gewandelt. Bereit liegen
+sie als Dateien eines eigenen Releases dieses Projekts (MODELL_RELEASE), mit
+dem Lizenztext von Real-ESRGAN daneben. Heruntergeladen wird nur auf Wunsch
+des Anwenders; jede Datei wird gegen ihre SHA-256-Pruefsumme geprueft, bevor
+sie an ihren Platz kommt und bevor sie geladen wird.
+
+Gesucht wird im Ordner `modelle` neben dem Programm und - falls der
+schreibgeschuetzt ist, etwa unter "Programme" - im Benutzerordner.
 
 Gerechnet wird in Kacheln mit Ueberlappung, damit auch grosse Bilder in den
 Grafikspeicher passen. Die Daten bleiben dabei auf der GPU: ONNX Runtime liest
@@ -24,6 +29,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 
 import numpy as np
@@ -32,6 +39,23 @@ from . import einstellungen
 from .cuda import cupy as cp
 
 QUELLE = "https://github.com/xinntao/Real-ESRGAN"
+MODELL_RELEASE = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-1/"
+BLOCK = 1 << 20
+
+# Datei -> (SHA-256, Groesse in Bytes)
+DATEIEN = {
+    "realesr-general-x4v3.onnx":
+        ("68b895a3b16ba12734c0c5c76e5293dbee13b3d86a6a2120c5bce1ac35507b56", 20751),
+    "realesr-general-x4v3.npz":
+        ("83000adde069d737a495f409607e4a3a404d7c0085d8267884d67fcb518e72bd", 4879300),
+    "realesr-general-wdn-x4v3.npz":
+        ("c8aaf96ed78d524e836a990d102e09cde7e045ab2c8aaf8acb0068528e7eeb05", 4879300),
+    "realesrgan-x4plus.onnx":
+        ("9c887160648173a00ef2e998609bc198f0868a11e6801c9c3abeb1868808926a", 67051953),
+    "LICENSE-Real-ESRGAN.txt":
+        ("4a699ec4863d96a91fc265948a0c90033f7e8735d515524dcf3444736406e0c2", 1519),
+}
+LIZENZDATEI = "LICENSE-Real-ESRGAN.txt"
 RAND = 10                    # Ueberlappung je Kachelseite in Eingabepixeln, wie in Real-ESRGAN
 
 
@@ -74,8 +98,45 @@ class KiFehler(Exception):
     """Modell fehlt, ist beschaedigt oder laesst sich nicht ausfuehren."""
 
 
+def ordner_kandidaten() -> list[str]:
+    """Wo Modelle liegen duerfen: neben dem Programm, sonst im Benutzerordner."""
+    benutzer = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+    return [os.path.join(einstellungen.programm_ordner(), "modelle"),
+            os.path.join(benutzer, "Neuro-Enhance", "modelle")]
+
+
+def _beschreibbar(ordner: str) -> bool:
+    try:
+        os.makedirs(ordner, exist_ok=True)
+        probe = os.path.join(ordner, ".schreibprobe")
+        with open(probe, "w", encoding="ascii") as datei:
+            datei.write("x")
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
 def modell_ordner() -> str:
-    return os.path.join(einstellungen.programm_ordner(), "modelle")
+    """Ordner fuer neue Modelle: der erste beschreibbare Kandidat."""
+    for ordner in ordner_kandidaten():
+        if _beschreibbar(ordner):
+            return ordner
+    return ordner_kandidaten()[-1]
+
+
+def datei_pfad(name: str) -> str | None:
+    for ordner in ordner_kandidaten():
+        pfad = os.path.join(ordner, name)
+        if os.path.isfile(pfad):
+            return pfad
+    return None
+
+
+def dateien(modell: Modell) -> list[str]:
+    """Alle Dateien, die ein Modell braucht - samt Lizenztext."""
+    namen = [modell.datei] + ([n for n, _s in modell.mischung] if modell.mischung else [])
+    return [*namen, LIZENZDATEI]
 
 
 def angeboten(modell: Modell, stufe: str) -> bool:
@@ -101,9 +162,9 @@ _GEPRUEFT: dict[str, float] = {}
 
 def datei_pruefen(name: str, sha256: str) -> str:
     """Pfad der Modelldatei, wenn sie da ist und die Pruefsumme stimmt."""
-    pfad = os.path.join(modell_ordner(), name)
-    if not os.path.isfile(pfad):
-        raise KiFehler(f"Modelldatei fehlt: {pfad}")
+    pfad = datei_pfad(name)
+    if pfad is None:
+        raise KiFehler(f"Modelldatei fehlt: {name}")
     zeit = os.path.getmtime(pfad)
     if _GEPRUEFT.get(pfad) != zeit:
         if _sha256(pfad) != sha256:
@@ -113,8 +174,67 @@ def datei_pruefen(name: str, sha256: str) -> str:
 
 
 def vorhanden(modell: Modell) -> bool:
-    namen = [modell.datei] + ([n for n, _s in modell.mischung] if modell.mischung else [])
-    return all(os.path.isfile(os.path.join(modell_ordner(), n)) for n in namen)
+    return all(datei_pfad(n) is not None for n in dateien(modell))
+
+
+def fehlende(modell: Modell) -> list[str]:
+    return [n for n in dateien(modell) if datei_pfad(n) is None]
+
+
+def download_groesse(modell: Modell) -> int:
+    return sum(DATEIEN[n][1] for n in fehlende(modell))
+
+
+def herunterladen(modell: Modell, fortschritt=None, quelle: str | None = None) -> str:
+    """Fehlende Dateien eines Modells laden und pruefen; Rueckgabe: Zielordner.
+
+    Jede Datei wird zuerst unter `.teil` geschrieben und erst nach bestandener
+    Pruefsumme umbenannt - ein abgebrochener oder verfaelschter Download landet
+    nie dort, wo das Programm Modelle sucht. fortschritt(geladen, gesamt) wird
+    nach jedem Block aufgerufen; gibt es False zurueck, wird abgebrochen.
+    """
+    quelle = MODELL_RELEASE if quelle is None else quelle
+    ziel = modell_ordner()
+    os.makedirs(ziel, exist_ok=True)
+    namen = fehlende(modell)
+    gesamt = sum(DATEIEN[n][1] for n in namen)
+    geladen = 0
+    for name in namen:
+        sha256, groesse = DATEIEN[name]
+        teil = os.path.join(ziel, name + ".teil")
+        pruef = hashlib.sha256()
+        try:
+            anfrage = urllib.request.Request(quelle + name,
+                                             headers={"User-Agent": "Neuro-Enhance"})
+            with urllib.request.urlopen(anfrage, timeout=30) as antwort, \
+                    open(teil, "wb") as datei:
+                while True:
+                    block = antwort.read(BLOCK)
+                    if not block:
+                        break
+                    datei.write(block)
+                    pruef.update(block)
+                    geladen += len(block)
+                    if fortschritt is not None and fortschritt(geladen, gesamt) is False:
+                        raise KiAbbruch()
+        except KiAbbruch:
+            _entfernen(teil)
+            raise
+        except (urllib.error.URLError, OSError, TimeoutError) as fehler:
+            _entfernen(teil)
+            raise KiFehler(f"{name}: {fehler}") from fehler
+        if pruef.hexdigest() != sha256:
+            _entfernen(teil)
+            raise KiFehler(f"{name}: Prüfsumme stimmt nicht - die Datei wurde verworfen.")
+        os.replace(teil, os.path.join(ziel, name))
+    return ziel
+
+
+def _entfernen(pfad: str):
+    try:
+        os.remove(pfad)
+    except OSError:
+        pass
 
 
 def ausgabe_form(form, faktor: int) -> tuple[int, int]:

@@ -128,7 +128,6 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 - **Weitere KI-Funktionen**: Entrauschen, Entschärfen, Freistellen, Objektauswahl
   per Klick, Objekte entfernen, Tiefenkarte für künstliche Unschärfe.
 - **TensorRT**: noch schnellere KI über TensorRT bzw. TensorRT for RTX.
-- **Modelle laden**: KI-Modelle per Knopfdruck herunterladen, mit Prüfsumme.
 
 ## Starten
 
@@ -151,14 +150,23 @@ Eine fertige EXE folgt mit dem ersten Release.
 
 Neuro-Enhance arbeitet vollständig auf dem eigenen Rechner. Es werden keine Bilder
 hochgeladen und keine Nutzungsdaten gesendet. Auch die KI rechnet lokal auf der
-Grafikkarte. In späteren Versionen lädt das Programm KI-Modelle **nur auf
-ausdrücklichen Wunsch** von der jeweils angegebenen Quelle herunter.
+Grafikkarte. Die einzige Verbindung ins Netz ist das Laden eines KI-Modells – und
+das nur, wenn man in der Karte „KI-Hochskalieren“ ausdrücklich darauf klickt und
+die Rückfrage mit Quelle, Größe und Lizenz bestätigt.
 
-## KI-Modelle einrichten
+## KI-Modelle
 
-Die Modelle gehören nicht zum Repository. Bis das Programm sie selbst
-herunterladen kann, werden sie aus den offiziellen Gewichten von
-[Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (BSD 3-Clause) erzeugt:
+Die Modelle gehören nicht zum Programm. In der Karte „KI-Hochskalieren“ lädt
+„Modell herunterladen“ sie aus dem Release
+[modelle-1](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-1)
+dieses Projekts: das schnelle Modell mit knapp 10 MB, das große mit 64 MB. Jede
+Datei wird gegen ihre SHA-256-Prüfsumme geprüft, bevor sie verwendet wird.
+Abgelegt werden sie im Ordner `modelle` neben dem Programm oder, wenn der
+schreibgeschützt ist, unter `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
+
+Die Modelle sind die offiziellen Gewichte von
+[Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (BSD 3-Clause, Copyright 2021
+Xintao Wang), nach ONNX gewandelt. Wer das selbst nachvollziehen will:
 
 1. Aus den [Releases von Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/releases)
    `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` und
@@ -166,8 +174,6 @@ herunterladen kann, werden sie aus den offiziellen Gewichten von
 2. `pip install torch onnx` (nur für diesen Schritt nötig).
 3. `python werkzeuge/modelle_exportieren.py` – das legt die ONNX-Modelle in
    `modelle/` ab und prüft sie gegen PyTorch.
-
-Das Programm prüft jede Modelldatei vor dem Laden gegen ihre SHA-256-Prüfsumme.
 
 ## Hinweis zu KI-Ergebnissen
 
