@@ -72,6 +72,11 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   away automatically.
 - **Lens**: correct distortion, vignetting and colour fringes (chromatic aberration). All
   geometry and lens corrections are resampled in a single bicubic step.
+- **AI upscaling** by 2 × or 4 × when saving, with Real-ESRGAN via ONNX Runtime on the
+  GPU: a fast model with a denoise strength slider (from 4 GB of video memory) and a
+  large model with more sharpness (from feature tier M). Processing runs in tiles sized
+  to the video memory; with the fast model a 24 MP image is upscaled to 96 MP in about
+  11 seconds.
 - **100 % view**: zoom to 100, 200 and 400 % with the mouse wheel, pan by dragging,
   double-click toggles between fit and 100 %. It shows a part of the image at full
   resolution – exactly what will be saved.
@@ -110,8 +115,10 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   from a lens database (lensfun).
 - **X-Trans on the GPU**: demosaicing for Fujifilm sensors on the graphics card as
   well.
-- **AI features**: upscaling, denoising, deblurring, background removal, click-to-select
+- **More AI features**: denoising, deblurring, background removal, click-to-select
   objects, object removal, depth maps for synthetic depth of field.
+- **TensorRT**: even faster AI via TensorRT or TensorRT for RTX.
+- **Model download**: fetch AI models at the click of a button, with checksum.
 
 ## Running it
 
@@ -132,8 +139,24 @@ A ready-made executable will follow with the first release.
 ## Privacy
 
 Neuro-Enhance works entirely on your own computer. No images are uploaded and no usage
-data is sent. In later versions the program downloads AI models **only on explicit
-request**, from the source stated for each model.
+data is sent. The AI also runs locally on the graphics card. In later versions the program
+downloads AI models **only on explicit request**, from the source stated for each model.
+
+## Setting up the AI models
+
+The models are not part of the repository. Until the program can download them itself,
+they are created from the official weights of
+[Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (BSD 3-Clause):
+
+1. Download `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` and
+   `RealESRGAN_x4plus.pth` from the
+   [Real-ESRGAN releases](https://github.com/xinntao/Real-ESRGAN/releases) into
+   `modelle/quellen/`.
+2. `pip install torch onnx` (only needed for this step).
+3. `python werkzeuge/modelle_exportieren.py` – this writes the ONNX models to `modelle/`
+   and checks them against PyTorch.
+
+The program checks every model file against its SHA-256 checksum before loading it.
 
 ## A note on AI results
 

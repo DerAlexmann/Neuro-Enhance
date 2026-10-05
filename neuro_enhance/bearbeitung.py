@@ -99,14 +99,46 @@ class Sitzung:
         """Das zwischengespeicherte Vollbild freigeben (etwa beim Wechsel zur Einpassung)."""
         self._vollbild = None
 
-    def exportieren(self, pfad: str, bits: int = 8) -> float:
-        """Rechnet das Bild in voller Groesse und speichert es; Rueckgabe in ms."""
+    def _alpha(self, faktor: int = 1):
+        """Alphakanal mit derselben Geometrie wie das Bild - ohne Vignette und Farbsaeume."""
+        alpha = self.daten.alpha
+        if alpha is None:
+            return None
+        geo = geometrie.aus(self.werte)
+        if geo.ist_neutral() and faktor == 1:
+            return alpha
+        hoechst = 65535.0 if alpha.dtype == np.uint16 else 255.0
+        ebene = cp.asarray(alpha, dtype=cp.float32) / hoechst
+        if not geo.ist_neutral():
+            nur_form = dataclasses.replace(geo, vignette=0.0, ca_rot=0.0, ca_blau=0.0)
+            ebene = geometrie.anwenden(cp.repeat(ebene[..., None], 3, axis=2), nur_form)[..., 0]
+        if faktor > 1:
+            ebene = filter.vergroessern(ebene, ebene.shape[0] * faktor, ebene.shape[1] * faktor)
+        return cp.asnumpy((cp.clip(ebene, 0, 1) * hoechst + 0.5).astype(alpha.dtype))
+
+    def exportieren(self, pfad: str, bits: int = 8, ki_auftrag=None, fortschritt=None) -> float:
+        """Rechnet das Bild in voller Groesse und speichert es; Rueckgabe in ms.
+
+        ki_auftrag ist (Hochskalierer, Faktor, Kachelgroesse) oder None. Mit KI
+        wird das fertige Bild in 16 Bit gerechnet und danach in Kacheln
+        vergroessert; fortschritt(i, n) meldet jede fertige Kachel.
+        """
         beginn = time.perf_counter()
-        rgb = cp.asnumpy(filter.anwenden_ausgabe(self.original, self.werte, 1.0, bits=bits))
+        if ki_auftrag is None:
+            rgb = cp.asnumpy(filter.anwenden_ausgabe(self.original, self.werte, 1.0, bits=bits))
+            faktor = 1
+        else:
+            hochskalierer, faktor, kachel = ki_auftrag
+            fertig = filter.anwenden_ausgabe(self.original, self.werte, 1.0, bits=16)
+            srgb = fertig.astype(cp.float32) / 65535
+            del fertig
+            cp.get_default_memory_pool().free_all_blocks()
+            rgb = hochskalierer.hochskalieren(srgb, faktor, kachel, bits, fortschritt)
+            del srgb
         # Zwischenergebnisse der vollen Groesse sofort zurueckgeben - der
         # Speicherpool von CuPy hielte sie sonst fuer das naechste Mal fest.
         cp.get_default_memory_pool().free_all_blocks()
-        bilddatei.speichern(pfad, rgb, self.daten.alpha, self.daten.exif)
+        bilddatei.speichern(pfad, rgb, self._alpha(faktor), self.daten.exif)
         self.gespeicherte_werte = dataclasses.replace(self.werte)
         return (time.perf_counter() - beginn) * 1000
 

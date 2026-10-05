@@ -5,3 +5,7 @@ ruff>=0.6
 
 # Nur fürs Programmsymbol:
 # Pillow
+
+# Nur zum Wandeln der Modelle (werkzeuge/modelle_exportieren.py):
+# torch
+# onnx

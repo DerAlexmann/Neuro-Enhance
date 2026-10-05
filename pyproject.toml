@@ -34,6 +34,8 @@ dependencies = [
     "rawpy>=0.21",
     "cupy-cuda12x[ctk]>=14",
     "cuda-toolkit==12.8.*",
+    "onnxruntime-gpu==1.26.*",
+    "nvidia-cudnn-cu12==9.10.*",
 ]
 
 [project.optional-dependencies]

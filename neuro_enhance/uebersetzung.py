@@ -133,6 +133,23 @@ TRANSLATIONS = {
         "Magenta": "Magenta",
         "LUT": "LUT",
         "Geometrie": "Geometry",
+        "KI-Hochskalieren": "AI upscaling",
+        "Aus": "Off",
+        "Schnell": "Fast",
+        "Hohe Qualität": "High quality",
+        "Entrauschen": "Denoise",
+        "KI-Funktionen brauchen mindestens 4 GB Grafikspeicher.":
+            "AI features need at least 4 GB of video memory.",
+        "Dieses Modell braucht mindestens Funktionsstufe {stufe}.":
+            "This model needs at least feature tier {stufe}.",
+        "Modelldateien fehlen im Ordner {ordner}.": "Model files are missing in {ordner}.",
+        "Wird beim Speichern angewendet. KI ergänzt Details, die im Original "
+        "nicht vorhanden waren.":
+            "Applied when saving. AI adds details that were not present in the original.",
+        "KI vergrößert das Bild …": "AI is upscaling the image …",
+        "Abbrechen": "Cancel",
+        "Speichern abgebrochen.": "Saving cancelled.",
+        "Die KI-Vergrößerung ist fehlgeschlagen.": "AI upscaling failed.",
         "Objektiv": "Lens",
         "Begradigen": "Straighten",
         "Perspektive senkrecht": "Vertical perspective",

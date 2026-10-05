@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QScrollArea,
     QSlider,
@@ -30,7 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import bilddatei, einstellungen, filter, lut
+from . import bilddatei, einstellungen, filter, ki, lut
 from .bearbeitung import Sitzung
 from .cuda import cupy as cp
 from .geometrie import VOLLER_ZUSCHNITT
@@ -90,6 +91,7 @@ def regler_titel(name: str) -> str:
         "vignette": _("Vignette"),
         "ca_rot": _("Farbsaum Rot/Cyan"),
         "ca_blau": _("Farbsaum Blau/Gelb"),
+        "ki_entrauschen": _("Entrauschen"),
     }[name] if not name.startswith("hsl_") else farbbereich_titel(int(name[4:]))
 
 
@@ -128,6 +130,9 @@ def art_anzeige(daten: bilddatei.Bilddaten) -> str:
     return _("16 Bit") if daten.bits == 16 else _("8 Bit")
 
 
+KI_ENTRAUSCHEN = filter.Regler("ki_entrauschen", "ki", 0, 100, vorgabe=50)
+
+
 def seitenverhaeltnisse() -> list[tuple[str, float | None]]:
     """Auswahl fuer den Zuschnitt: Beschriftung und Breite/Hoehe; None heisst frei."""
     return [(_("Frei"), None), (_("Original"), -1.0), ("1:1", 1.0), ("3:2", 3 / 2),
@@ -156,7 +161,7 @@ def wert_anzeige(regler: filter.Regler, wert: float) -> str:
         text += " EV"
     elif regler.name == "schaerfe_radius":
         text += " px"
-    elif regler.name == "lut_staerke":
+    elif regler.name in ("lut_staerke", "ki_entrauschen"):
         text += " %"
     elif regler.name == "begradigen":
         text += "°"
@@ -344,6 +349,7 @@ class BearbeitenSeite(QWidget):
         # Gradationskurve hinter die Tonwerte, Farbbereiche hinter Dynamik und Saettigung
         spalte.insertWidget(spalte.indexOf(karten["licht"]) + 1, self._kurvenkarte())
         spalte.insertWidget(spalte.indexOf(karten["farbe"]) + 1, self._hsl_karte())
+        spalte.addWidget(self._ki_karte())
         spalte.addStretch(1)
         flaeche.setWidget(inhalt)
         return flaeche
@@ -476,6 +482,88 @@ class BearbeitenSeite(QWidget):
             self.sitzung.vollbild_vergessen()     # Grafikspeicher des Vollbildes freigeben
         self.zeichnen_anfordern()
 
+    # ------------------------------------------------------------------
+    # KI-Hochskalieren
+    # ------------------------------------------------------------------
+
+    def _ki_karte(self) -> QFrame:
+        karte, innen = self._karte(_("KI-Hochskalieren"))
+        self._ki_hochskalierer = None            # (Schluessel, Entrauschen, Hochskalierer)
+        zeile = QHBoxLayout()
+        self.ki_faktor = QComboBox()
+        for text, wert in ((_("Aus"), 0), ("2 ×", 2), ("4 ×", 4)):
+            self.ki_faktor.addItem(text, wert)
+        self.ki_modell = QComboBox()
+        self.ki_modell.addItem(_("Schnell"), "schnell")
+        self.ki_modell.addItem(_("Hohe Qualität"), "qualitaet")
+        zeile.addWidget(self.ki_faktor)
+        zeile.addWidget(self.ki_modell, 1)
+        innen.addLayout(zeile)
+        gitter = QGridLayout()
+        gitter.setVerticalSpacing(2)
+        gitter.setColumnStretch(0, 1)
+        innen.addLayout(gitter)
+        self.ki_entrauschen = ReglerZeile(self, KI_ENTRAUSCHEN, gitter, 0)
+        self.ki_ergebnis = QLabel(objectName="wert")
+        innen.addWidget(self.ki_ergebnis)
+        self.ki_hinweis = QLabel(objectName="nebentext")
+        self.ki_hinweis.setWordWrap(True)
+        innen.addWidget(self.ki_hinweis)
+        self.ki_faktor.currentIndexChanged.connect(self._ki_anzeigen)
+        self.ki_modell.currentIndexChanged.connect(self._ki_anzeigen)
+        self._ki_anzeigen()
+        return karte
+
+    def _ki_stufe(self) -> str:
+        return self.fenster.befund.stufe
+
+    def _ki_modell(self) -> ki.Modell:
+        return ki.MODELLE[self.ki_modell.currentData()]
+
+    def _ki_anzeigen(self, *_args):
+        """Bedienbarkeit, Ergebnisgroesse und Hinweis der KI-Karte aufraeumen."""
+        offen = self.sitzung is not None
+        stufe = self._ki_stufe()
+        nutzbar = stufe in ki.STUFEN
+        modell = self._ki_modell()
+        an = self.ki_faktor.currentData() > 0
+        self.ki_faktor.setEnabled(offen and nutzbar)
+        self.ki_modell.setEnabled(offen and nutzbar)
+        self.ki_entrauschen.schieber.setEnabled(offen and nutzbar and modell.mischung is not None)
+        if not nutzbar:
+            text = _("KI-Funktionen brauchen mindestens 4 GB Grafikspeicher.")
+        elif not ki.angeboten(modell, stufe):
+            text = _("Dieses Modell braucht mindestens Funktionsstufe {stufe}.").format(
+                stufe=modell.mindeststufe)
+        elif not ki.vorhanden(modell):
+            text = _("Modelldateien fehlen im Ordner {ordner}.").format(ordner=ki.modell_ordner())
+        else:
+            text = _("Wird beim Speichern angewendet. KI ergänzt Details, die im Original "
+                     "nicht vorhanden waren.")
+        self.fenster.beschriften(self.ki_hinweis.setText, text)
+        if offen and an:
+            hoehe, breite = ki.ausgabe_form(self.sitzung.ausgabe_form(),
+                                            self.ki_faktor.currentData())
+            self.ki_ergebnis.setText(f"{breite} × {hoehe} px")
+        else:
+            self.ki_ergebnis.setText("")
+
+    def _ki_auftrag(self):
+        """(Hochskalierer, Faktor, Kachel) fuer den Export - oder None, wenn KI aus ist."""
+        faktor = self.ki_faktor.currentData()
+        if not faktor:
+            return None
+        modell, stufe = self._ki_modell(), self._ki_stufe()
+        if not ki.angeboten(modell, stufe):
+            raise ki.KiFehler(_("Dieses Modell braucht mindestens Funktionsstufe {stufe}.")
+                              .format(stufe=modell.mindeststufe))
+        entrauschen = self.ki_entrauschen.wert() / 100
+        schluessel = (modell.schluessel, entrauschen)
+        if self._ki_hochskalierer is None or self._ki_hochskalierer[0] != schluessel:
+            self._ki_hochskalierer = None             # das alte Modell zuerst freigeben
+            self._ki_hochskalierer = (schluessel, ki.Hochskalierer(modell, entrauschen))
+        return self._ki_hochskalierer[1], faktor, ki.kachelgroesse(modell, stufe)
+
     def _hsl_karte(self) -> QFrame:
         karte, innen = self._karte(_("Farbbereiche"))
         leiste = QHBoxLayout()
@@ -596,6 +684,7 @@ class BearbeitenSeite(QWidget):
             knopf.setEnabled(offen)
         self.kurven.setEnabled(offen)
         self.lut_knopf.setEnabled(offen)
+        self._ki_anzeigen()
         for widget in (self.links_knopf, self.rechts_knopf, self.spiegeln_knopf,
                        self.zuschneiden_knopf, self.verhaeltnis_wahl, self.zuschnitt_weg_knopf,
                        self.einpassen_knopf, self.zoom100_knopf):
@@ -607,7 +696,7 @@ class BearbeitenSeite(QWidget):
     # ------------------------------------------------------------------
 
     def wert_geaendert(self, name: str, wert):
-        if self.sitzung is None:
+        if self.sitzung is None or name == "ki_entrauschen":
             return
         if name.startswith("hsl_") and name[4:].isdigit():
             # Ein Farbbereichsregler: gilt fuer die gerade gewaehlte Eigenschaft
@@ -647,6 +736,7 @@ class BearbeitenSeite(QWidget):
             self.leinwand.zeigen_ausschnitt(bild, x0, y0)
         self.kurven.histogramm_zeigen(histogramm)
         self.fenster.rechenzeit_zeigen(ms)
+        self._ki_anzeigen()
         zoom = self.leinwand.zoom
         self.zoom_anzeige.setText("" if zoom is None else f"{zoom * 100:.0f} %")
 
@@ -768,8 +858,28 @@ class BearbeitenSeite(QWidget):
             return
         pfad, bits = ziel_bestimmen(pfad, gewaehlt)
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        fortschritt_fenster = None
         try:
-            ms = self.sitzung.exportieren(pfad, bits)
+            auftrag = self._ki_auftrag()
+            fortschritt = None
+            if auftrag is not None:
+                fortschritt_fenster = QProgressDialog(_("KI vergrößert das Bild …"),
+                                                      _("Abbrechen"), 0, 100, self)
+                fortschritt_fenster.setWindowTitle(self.fenster.windowTitle())
+                fortschritt_fenster.setWindowModality(Qt.WindowModality.WindowModal)
+                fortschritt_fenster.setMinimumDuration(0)
+
+                def fortschritt(nummer, anzahl):
+                    fortschritt_fenster.setValue(round(100 * nummer / anzahl))
+                    QApplication.processEvents()
+                    return not fortschritt_fenster.wasCanceled()
+            ms = self.sitzung.exportieren(pfad, bits, auftrag, fortschritt)
+        except ki.KiAbbruch:
+            self.fenster.melden(_("Speichern abgebrochen."))
+            return
+        except ki.KiFehler as fehler:
+            self._fehler(_("Die KI-Vergrößerung ist fehlgeschlagen."), str(fehler))
+            return
         except bilddatei.BildFehler as fehler:
             self._fehler(_("Das Bild lässt sich nicht speichern."), str(fehler))
             return
@@ -778,6 +888,8 @@ class BearbeitenSeite(QWidget):
             return
         finally:
             QApplication.restoreOverrideCursor()
+            if fortschritt_fenster is not None:
+                fortschritt_fenster.close()
         self._letzten_ordner_merken(pfad)
         self.fenster.melden(_("Gespeichert: {name} ({ms} ms)")
                             .format(name=os.path.basename(pfad), ms=f"{ms:.0f}"))

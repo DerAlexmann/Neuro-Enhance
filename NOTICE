@@ -75,8 +75,20 @@ pillow-heif (optional, only for opening HEIC/HEIF files)
   Licence: BSD 3-Clause; bundles libheif (LGPL-3.0) and further codecs.
   https://github.com/bigcat88/pillow_heif
 
+ONNX Runtime (onnxruntime-gpu)
+  Copyright Microsoft Corporation
+  Licence: MIT
+  https://github.com/microsoft/onnxruntime
+
+NVIDIA cuDNN (nvidia-cudnn-cu12)
+  Copyright NVIDIA Corporation
+  Licence: NVIDIA cuDNN Software License Agreement
+  https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html
+  Installed by pip from NVIDIA's own package on the Python Package Index.
+  This repository does not contain or redistribute it.
+
 Planned for later versions (listed here once they are used):
-  ONNX Runtime (MIT), NVIDIA TensorRT (NVIDIA licence agreement).
+  NVIDIA TensorRT (NVIDIA licence agreement).
 
 ===========================================================================
 AI models
@@ -84,7 +96,17 @@ AI models
 
 AI models are not part of this repository. Each model is subject to its own
 licence, which Neuro-Enhance shows together with its source before
-downloading. Only models whose licence permits use and redistribution in an
+downloading.
+
+Real-ESRGAN (models realesr-general-x4v3, realesr-general-wdn-x4v3,
+RealESRGAN_x4plus)
+  Copyright (c) 2021, Xintao Wang
+  Licence: BSD 3-Clause
+  https://github.com/xinntao/Real-ESRGAN
+  The official weights are converted to ONNX with
+  werkzeuge/modelle_exportieren.py; the network architectures are
+  re-implemented there. Converted model files passed on to others must be
+  accompanied by the BSD 3-Clause licence text of Real-ESRGAN. Only models whose licence permits use and redistribution in an
 open-source project are offered by default.
 
 ===========================================================================

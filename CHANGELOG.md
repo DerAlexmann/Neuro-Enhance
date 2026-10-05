@@ -7,6 +7,9 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Behoben
 
+- Ein Bild mit Alphakanal ließ sich nach Zuschnitt oder Drehung nicht
+  speichern: Der Alphakanal behielt seine alte Größe. Er bekommt jetzt
+  dieselbe Geometrie wie das Bild (ohne Vignette und Farbsäume).
 - RAWs der meisten Kameras (getestet mit Nikon NEF und Canon CR2) liefen nicht
   über die GPU, sondern fielen auf LibRaw zurück: rawpy gibt die Farbmatrix
   bei ihnen nur als Nullen heraus. Sie wird jetzt wie in LibRaw aus der
@@ -15,6 +18,15 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- KI-Hochskalieren um 2 × oder 4 × beim Speichern mit Real-ESRGAN über ONNX
+  Runtime (CUDA): schnelles Modell (realesr-general-x4v3) mit Regler für die
+  Entrauschstärke, für den die Gewichte zweier Modelle auf der GPU gemischt
+  werden, und großes Modell (RealESRGAN_x4plus) ab Funktionsstufe M.
+  Kacheln mit Überlappung, Größe je VRAM-Stufe, bei Speichermangel kleiner;
+  Fortschritt mit Abbrechen. Jede Modelldatei wird vor dem Laden gegen ihre
+  SHA-256-Prüfsumme geprüft.
+- `werkzeuge/modelle_exportieren.py` wandelt die offiziellen Real-ESRGAN-
+  Gewichte nach ONNX und prüft das Ergebnis gegen PyTorch.
 - 100-%-Ansicht: Zoom auf 100, 200 und 400 % per Mausrad oder `Strg`+`1`,
   Verschieben durch Ziehen, Doppelklick wechselt zur Einpassung. Gerechnet
   wird das ganze Bild in voller Auflösung, gezeigt der sichtbare Ausschnitt –

@@ -77,6 +77,12 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 - **Objektiv**: Verzeichnung, Vignette und Farbsäume (chromatische Aberration)
   ausgleichen. Alle Geometrie- und Objektivkorrekturen werden in einem einzigen
   bikubischen Schritt abgetastet.
+- **KI-Hochskalieren** um 2 × oder 4 × beim Speichern, mit Real-ESRGAN über ONNX
+  Runtime auf der GPU: ein schnelles Modell mit Regler für die Entrauschstärke
+  (ab 4 GB Grafikspeicher) und ein großes Modell mit mehr Schärfe (ab
+  Funktionsstufe M). Gerechnet wird in Kacheln, deren Größe sich nach dem
+  Grafikspeicher richtet; ein 24-MP-Bild ist mit dem schnellen Modell in rund
+  11 Sekunden auf 96 MP vergrößert.
 - **100-%-Ansicht**: Zoom auf 100, 200 und 400 % per Mausrad, Verschieben durch
   Ziehen, Doppelklick wechselt zwischen eingepasst und 100 %. Gezeigt wird ein
   Ausschnitt des Bildes in voller Auflösung – genau das, was gespeichert wird.
@@ -119,8 +125,10 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   einer Objektivdatenbank (lensfun).
 - **X-Trans auf der GPU**: Demosaicing auch für Fujis Sensoren auf der
   Grafikkarte.
-- **KI-Funktionen**: Hochskalieren, Entrauschen, Entschärfen, Freistellen,
-  Objektauswahl per Klick, Objekte entfernen, Tiefenkarte für künstliche Unschärfe.
+- **Weitere KI-Funktionen**: Entrauschen, Entschärfen, Freistellen, Objektauswahl
+  per Klick, Objekte entfernen, Tiefenkarte für künstliche Unschärfe.
+- **TensorRT**: noch schnellere KI über TensorRT bzw. TensorRT for RTX.
+- **Modelle laden**: KI-Modelle per Knopfdruck herunterladen, mit Prüfsumme.
 
 ## Starten
 
@@ -142,8 +150,24 @@ Eine fertige EXE folgt mit dem ersten Release.
 ## Datenschutz
 
 Neuro-Enhance arbeitet vollständig auf dem eigenen Rechner. Es werden keine Bilder
-hochgeladen und keine Nutzungsdaten gesendet. In späteren Versionen lädt das Programm
-KI-Modelle **nur auf ausdrücklichen Wunsch** von der jeweils angegebenen Quelle herunter.
+hochgeladen und keine Nutzungsdaten gesendet. Auch die KI rechnet lokal auf der
+Grafikkarte. In späteren Versionen lädt das Programm KI-Modelle **nur auf
+ausdrücklichen Wunsch** von der jeweils angegebenen Quelle herunter.
+
+## KI-Modelle einrichten
+
+Die Modelle gehören nicht zum Repository. Bis das Programm sie selbst
+herunterladen kann, werden sie aus den offiziellen Gewichten von
+[Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (BSD 3-Clause) erzeugt:
+
+1. Aus den [Releases von Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/releases)
+   `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` und
+   `RealESRGAN_x4plus.pth` nach `modelle/quellen/` laden.
+2. `pip install torch onnx` (nur für diesen Schritt nötig).
+3. `python werkzeuge/modelle_exportieren.py` – das legt die ONNX-Modelle in
+   `modelle/` ab und prüft sie gegen PyTorch.
+
+Das Programm prüft jede Modelldatei vor dem Laden gegen ihre SHA-256-Prüfsumme.
 
 ## Hinweis zu KI-Ergebnissen
 

@@ -34,6 +34,8 @@ Meldung – siehe [SECURITY.md](SECURITY.md).
 | `neuro_enhance/demosaik.py` | RAW-Entwicklung auf der GPU (Bayer-Mosaik), Malvar-He-Cutler |
 | `neuro_enhance/rcd.py` | Demosaicing nach RCD: Referenz und CUDA-Kernel |
 | `neuro_enhance/icc.py` | ICC-Matrixprofile lesen und nach linearem sRGB umrechnen |
+| `neuro_enhance/ki.py` | KI-Hochskalieren: Modellkatalog, ONNX Runtime, Kacheln |
+| `werkzeuge/modelle_exportieren.py` | Real-ESRGAN-Gewichte nach ONNX wandeln (braucht PyTorch) |
 | `neuro_enhance/cuda.py` | lädt CuPy an einer Stelle |
 | `neuro_enhance/farben.py` | Farbschemata, Schriften, Qt-Stylesheet |
 | `neuro_enhance/uebersetzung.py` | Sprachumschaltung und Sprachtabelle |

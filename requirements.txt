@@ -13,5 +13,11 @@ rawpy>=0.21           # RAW-Entwicklung mit LibRaw
 cupy-cuda12x[ctk]>=14
 cuda-toolkit==12.8.*
 
+# KI: ONNX Runtime mit CUDA. Ab 1.27 sind die PyPI-Pakete fuer CUDA 13 gebaut,
+# 1.26 ist die letzte Fassung fuer CUDA 12.8. cuDNN 9.10 passt dazu - neuere
+# cuDNN-Fassungen setzen neuere CUDA-12-Bibliotheken voraus.
+onnxruntime-gpu==1.26.*
+nvidia-cudnn-cu12==9.10.*
+
 # Optional: HEIC/HEIF-Fotos öffnen
 # pillow-heif
