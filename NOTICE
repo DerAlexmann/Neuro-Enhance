@@ -120,7 +120,25 @@ RealESRGAN_x4plus)
   re-implemented there. The converted model files are published as assets
   of the release "modelle-1" of this project, together with the BSD 3-Clause
   licence text of Real-ESRGAN (LICENSE-Real-ESRGAN.txt), which Neuro-Enhance
-  also downloads and stores next to the models. Only models whose licence permits use and redistribution in an
+  also downloads and stores next to the models.
+
+SCUNet (model scunet_color_real_psnr)
+  Copyright 2022 Kai Zhang
+  Licence: Apache License 2.0
+  https://github.com/cszn/SCUNet
+  The official weights (published in the release v1.0 of
+  https://github.com/cszn/KAIR) are converted to ONNX with
+  werkzeuge/modelle_exportieren.py. The network architecture is
+  re-implemented there without einops and timm; as a change to the original,
+  the attention mask of the shifted windows is computed from coordinates and
+  the padding to multiples of 64 is done outside the network, so the ONNX
+  model accepts any image size. The weights themselves are unchanged. The
+  converted model file is published as an asset of the release "modelle-2"
+  of this project, together with the Apache 2.0 licence text of SCUNet
+  (LICENSE-SCUNet.txt), which Neuro-Enhance also downloads and stores next to
+  the model.
+
+Only models whose licence permits use and redistribution in an
 open-source project are offered by default.
 
 ===========================================================================

@@ -54,6 +54,7 @@ def gruppen_titel(gruppe: str) -> str:
         "geometrie": _("Geometrie"),
         "objektiv": _("Objektiv"),
         "lut": _("LUT"),
+        "ki_rauschen": _("KI-Entrauschen"),
     }[gruppe]
 
 
@@ -93,6 +94,7 @@ def regler_titel(name: str) -> str:
         "ca_rot": _("Farbsaum Rot/Cyan"),
         "ca_blau": _("Farbsaum Blau/Gelb"),
         "ki_entrauschen": _("Entrauschen"),
+        "ki_rauschen": _("Stärke"),
     }[name] if not name.startswith("hsl_") else farbbereich_titel(int(name[4:]))
 
 
@@ -162,7 +164,7 @@ def wert_anzeige(regler: filter.Regler, wert: float) -> str:
         text += " EV"
     elif regler.name == "schaerfe_radius":
         text += " px"
-    elif regler.name in ("lut_staerke", "ki_entrauschen"):
+    elif regler.name in ("lut_staerke", "ki_entrauschen", "ki_rauschen"):
         text += " %"
     elif regler.name == "begradigen":
         text += "°"
@@ -329,6 +331,8 @@ class BearbeitenSeite(QWidget):
                     self._lut_bedienung(innen)
                 if regler.gruppe == "geometrie":
                     self._geometrie_bedienung(innen)
+                if regler.gruppe == "ki_rauschen":
+                    self._ki_rauschen_bedienung(innen)
                 gitter = QGridLayout()
                 gitter.setVerticalSpacing(2)
                 gitter.setColumnStretch(0, 1)
@@ -511,7 +515,7 @@ class BearbeitenSeite(QWidget):
         self.ki_hinweis.setWordWrap(True)
         innen.addWidget(self.ki_hinweis)
         self.ki_laden_knopf = QPushButton()
-        self.ki_laden_knopf.clicked.connect(self.ki_modell_laden)
+        self.ki_laden_knopf.clicked.connect(lambda: self.ki_modell_laden(self._ki_modell()))
         innen.addWidget(self.ki_laden_knopf)
         self.ki_faktor.currentIndexChanged.connect(self._ki_anzeigen)
         self.ki_modell.currentIndexChanged.connect(self._ki_anzeigen)
@@ -558,17 +562,17 @@ class BearbeitenSeite(QWidget):
         else:
             self.ki_ergebnis.setText("")
 
-    def ki_modell_laden(self):
+    def ki_modell_laden(self, modell: ki.Modell):
         """Fehlende Modelldateien laden - erst nach Rueckfrage mit Quelle, Groesse und Lizenz."""
-        modell = self._ki_modell()
         groesse = ki.download_groesse(modell)
         ziel = ki.modell_ordner()
         frage = _(
             "Neuro-Enhance lädt {mb} MB von:\n{quelle}\n\n"
-            "Die Modelle stammen von Real-ESRGAN (BSD 3-Clause, Copyright 2021 Xintao Wang) "
-            "und werden nach dem Laden gegen ihre Prüfsumme geprüft.\n\n"
+            "Das Modell stammt von {herkunft} und wird nach dem Laden gegen seine "
+            "Prüfsumme geprüft.\n\n"
             "Ablage: {ordner}\n\nJetzt herunterladen?").format(
-                mb=f"{groesse / 2**20:.1f}", quelle=ki.MODELL_RELEASE, ordner=ziel)
+                mb=f"{groesse / 2**20:.1f}", quelle=modell.release, herkunft=modell.herkunft,
+                ordner=ziel)
         antwort = QMessageBox.question(self, _("KI-Modell herunterladen"), frage,
                                        QMessageBox.StandardButton.Yes
                                        | QMessageBox.StandardButton.No,
@@ -597,6 +601,7 @@ class BearbeitenSeite(QWidget):
         finally:
             anzeige.close()
             self._ki_anzeigen()
+            self._ki_rauschen_anzeigen()
         self.fenster.melden(_("KI-Modell geladen: {ordner}").format(ordner=ziel))
 
     def _ki_auftrag(self):
@@ -612,19 +617,22 @@ class BearbeitenSeite(QWidget):
         schluessel = (modell.schluessel, entrauschen)
         if self._ki_hochskalierer is None or self._ki_hochskalierer[0] != schluessel:
             self._ki_hochskalierer = None             # das alte Modell zuerst freigeben
+            kachel = ki.kachelgroesse(modell, stufe)
             self._ki_hochskalierer = (schluessel, self._ki_laden(
-                modell, entrauschen, ki.kachelgroesse(modell, stufe)))
+                modell, kachel, lambda **art: ki.Hochskalierer(modell, entrauschen,
+                                                               kachel=kachel, **art)))
         return self._ki_hochskalierer[1], faktor, ki.kachelgroesse(modell, stufe)
 
-    def _ki_laden(self, modell: ki.Modell, entrauschen: float, kachel: int):
-        """Hochskalierer anlegen. Muss TensorRT erst eine Engine bauen, laeuft das
-        in einem eigenen Prozess, und ein Fenster sagt, warum es dauert."""
+    def _ki_laden(self, modell: ki.Modell, kachel: int, anlegen):
+        """Netz anlegen - anlegen(**art) baut Hochskalierer oder Entrauscher. Muss
+        TensorRT erst eine Engine bauen, laeuft das in einem eigenen Prozess, und
+        ein Fenster sagt, warum es dauert."""
         if not ki.tensorrt_baut(modell, kachel):
-            return ki.Hochskalierer(modell, entrauschen, kachel=kachel)
+            return anlegen()
         anzeige = QProgressDialog("", "", 0, 0, self)
         hinweis = QLabel(_(
             "TensorRT bereitet das Modell einmalig für diese Grafikkarte vor – das dauert "
-            "ein bis zwei Minuten. Danach geht jede Vergrößerung rund doppelt so schnell."))
+            "einige Minuten. Danach rechnet die KI rund doppelt so schnell."))
         hinweis.setWordWrap(True)
         hinweis.setMinimumWidth(420)
         anzeige.setLabel(hinweis)
@@ -643,8 +651,101 @@ class BearbeitenSeite(QWidget):
         except Exception:                        # dann eben ohne TensorRT
             self.fenster.melden(_("TensorRT ließ sich nicht vorbereiten – die KI rechnet "
                                   "mit CUDA."), fehler=True)
-            return ki.Hochskalierer(modell, entrauschen, kachel=kachel, tensorrt=False)
-        return ki.Hochskalierer(modell, entrauschen, kachel=kachel)
+            return anlegen(tensorrt=False)
+        return anlegen()
+
+    # ------------------------------------------------------------------
+    # KI-Entrauschen
+    # ------------------------------------------------------------------
+
+    def _ki_rauschen_bedienung(self, innen: QVBoxLayout):
+        self.ki_rauschen_hinweis = QLabel(objectName="nebentext")
+        self.ki_rauschen_hinweis.setWordWrap(True)
+        innen.addWidget(self.ki_rauschen_hinweis)
+        self.ki_rauschen_knopf = QPushButton()
+        self.ki_rauschen_knopf.clicked.connect(self._ki_rauschen_knopf_gedrueckt)
+        innen.addWidget(self.ki_rauschen_knopf)
+
+    def _ki_rauschen_modell(self) -> ki.Modell:
+        return ki.ENTRAUSCH_MODELLE["scunet"]
+
+    def _ki_rauschen_anzeigen(self):
+        """Hinweis, Knopf und Staerkeregler der Karte KI-Entrauschen aufraeumen."""
+        modell, stufe = self._ki_rauschen_modell(), self._ki_stufe()
+        offen = self.sitzung is not None
+        fertig = offen and self.sitzung.ki_entrauscht
+        knopf = None
+        if not ki.angeboten(modell, stufe):
+            text = _("KI-Funktionen brauchen mindestens 4 GB Grafikspeicher.")
+        elif not ki.vorhanden(modell):
+            text = _("Dieses Modell ist noch nicht geladen.")
+            knopf = _("Modell herunterladen ({mb} MB)").format(
+                mb=f"{ki.download_groesse(modell) / 2**20:.0f}")
+        elif fertig:
+            text = _("Für dieses Bild berechnet. Der Regler mischt zwischen Original und "
+                     "entrauschtem Bild.")
+        else:
+            text = _("Rechnet einmal über das ganze Bild – bei 24 Megapixeln 10 bis 30 "
+                     "Sekunden. Danach wirkt der Regler sofort.")
+            knopf = _("Entrauschen berechnen")
+        self.fenster.beschriften(self.ki_rauschen_hinweis.setText, text)
+        self.ki_rauschen_knopf.setVisible(knopf is not None)
+        if knopf is not None:
+            self.fenster.beschriften(self.ki_rauschen_knopf.setText, knopf)
+            self.ki_rauschen_knopf.setEnabled(offen or not ki.vorhanden(modell))
+        self.zeilen["ki_rauschen"].schieber.setEnabled(fertig)
+
+    def _ki_rauschen_knopf_gedrueckt(self):
+        modell = self._ki_rauschen_modell()
+        if not ki.vorhanden(modell):
+            self.ki_modell_laden(modell)
+        else:
+            self.ki_rauschen_berechnen()
+
+    def ki_rauschen_berechnen(self):
+        """Das ganze Bild einmal mit KI entrauschen, mit Fortschritt und Abbrechen."""
+        if self.sitzung is None:
+            return
+        modell = self._ki_rauschen_modell()
+        kachel = ki.kachelgroesse(modell, self._ki_stufe())
+        anzeige = None
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            entrauscher = self._ki_laden(
+                modell, kachel, lambda **art: ki.Entrauscher(modell, kachel=kachel, **art))
+            anzeige = QProgressDialog(_("KI entrauscht das Bild …"), _("Abbrechen"), 0, 100,
+                                      self)
+            anzeige.setWindowTitle(self.fenster.windowTitle())
+            anzeige.setWindowModality(Qt.WindowModality.WindowModal)
+            anzeige.setMinimumDuration(0)
+
+            def fortschritt(nummer, anzahl):
+                anzeige.setValue(round(100 * nummer / anzahl))
+                QApplication.processEvents()
+                return not anzeige.wasCanceled()
+
+            ms = self.sitzung.ki_entrauschen(entrauscher, kachel, fortschritt)
+            weg = entrauscher.beschleuniger
+            del entrauscher                      # Grafikspeicher fuer die Bearbeitung frei
+        except ki.KiAbbruch:
+            self.fenster.melden(_("KI-Entrauschen abgebrochen."))
+            return
+        except ki.KiFehler as fehler:
+            self._fehler(_("Das KI-Entrauschen ist fehlgeschlagen."), str(fehler))
+            return
+        except cp.cuda.memory.OutOfMemoryError:
+            self._fehler(_("Für dieses Bild reicht der Grafikspeicher nicht."), "")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+            if anzeige is not None:
+                anzeige.close()
+            cp.get_default_memory_pool().free_all_blocks()
+            self._ki_rauschen_anzeigen()
+        self.fenster.melden(_("KI-Entrauschen fertig ({s} s, über {weg})").format(
+            s=f"{ms / 1000:.1f}", weg=weg))
+        self.zeilen["ki_rauschen"].setzen(100)
+        self.wert_geaendert("ki_rauschen", 100.0)
 
     def _hsl_karte(self) -> QFrame:
         karte, innen = self._karte(_("Farbbereiche"))
@@ -819,6 +920,7 @@ class BearbeitenSeite(QWidget):
         self.kurven.histogramm_zeigen(histogramm)
         self.fenster.rechenzeit_zeigen(ms)
         self._ki_anzeigen()
+        self._ki_rauschen_anzeigen()
         zoom = self.leinwand.zoom
         self.zoom_anzeige.setText("" if zoom is None else f"{zoom * 100:.0f} %")
 
@@ -841,6 +943,7 @@ class BearbeitenSeite(QWidget):
         self.kurven.alle_setzen({name: getattr(werte, name) for name in filter.KURVEN})
         self._hsl_anzeigen()
         self._lut_anzeigen()
+        self._ki_rauschen_anzeigen()
 
     # ------------------------------------------------------------------
     # Oeffnen und Speichern

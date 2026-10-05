@@ -77,6 +77,9 @@ REGLER = (
     Regler("saettigung", "farbe", -100, 100),
     Regler("rauschen_luminanz", "rauschen", 0, 100),
     Regler("rauschen_farbe", "rauschen", 0, 100),
+    # Staerke des KI-Entrauschens; wirkt erst, wenn es fuer das Bild berechnet ist
+    # (bearbeitung.Sitzung) - die Filterkette selbst kennt es nicht.
+    Regler("ki_rauschen", "ki_rauschen", 0, 100),
     Regler("schaerfe", "details", 0, 150),
     Regler("schaerfe_radius", "details", 0.5, 3.0, vorgabe=1.0, schritt=0.1, nachkomma=1),
     Regler("begradigen", "geometrie", -45.0, 45.0, schritt=0.1, nachkomma=1),
@@ -128,6 +131,7 @@ class Einstellungen:
     lut: str = ""
     rauschen_luminanz: float = 0.0
     rauschen_farbe: float = 0.0
+    ki_rauschen: float = 0.0
     lut_staerke: float = 100.0
     # Geometrie (geometrie.py)
     drehung90: int = 0

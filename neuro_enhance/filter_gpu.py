@@ -441,7 +441,7 @@ def _entrauscht(bild, werte: f.Einstellungen, speicher: dict | None):
     Kopie, denn die folgenden Schritte schreiben in ihr Bild hinein.
     """
     schluessel = ("rauschen", bild.shape, werte.temperatur, werte.toenung, werte.belichtung,
-                  werte.rauschen_luminanz, werte.rauschen_farbe)
+                  werte.rauschen_luminanz, werte.rauschen_farbe, werte.ki_rauschen)
     if speicher is not None and schluessel in speicher:
         return speicher[schluessel].copy()
     hoehe, breite = bild.shape[:2]
@@ -482,7 +482,7 @@ def _dunst_schaetzung(bild, werte: f.Einstellungen, speicher: dict | None):
     Ziehen am Dunstregler muss sie deshalb nur einmal gerechnet werden.
     """
     schluessel = ("dunst", bild.shape, werte.temperatur, werte.toenung, werte.belichtung,
-                  werte.rauschen_luminanz, werte.rauschen_farbe)
+                  werte.rauschen_luminanz, werte.rauschen_farbe, werte.ki_rauschen)
     if speicher is not None and schluessel in speicher:
         return speicher[schluessel]
     ergebnis = f.dunst_schaetzen(bild)

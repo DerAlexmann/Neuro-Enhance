@@ -145,18 +145,32 @@ TRANSLATIONS = {
         "Dieses Modell ist noch nicht geladen.": "This model has not been downloaded yet.",
         "Modell herunterladen ({mb} MB)": "Download model ({mb} MB)",
         "Neuro-Enhance lädt {mb} MB von:\n{quelle}\n\n"
-        "Die Modelle stammen von Real-ESRGAN (BSD 3-Clause, Copyright 2021 Xintao Wang) "
-        "und werden nach dem Laden gegen ihre Prüfsumme geprüft.\n\n"
+        "Das Modell stammt von {herkunft} und wird nach dem Laden gegen seine "
+        "Prüfsumme geprüft.\n\n"
         "Ablage: {ordner}\n\nJetzt herunterladen?":
             "Neuro-Enhance downloads {mb} MB from:\n{quelle}\n\n"
-            "The models come from Real-ESRGAN (BSD 3-Clause, Copyright 2021 Xintao Wang) "
-            "and are checked against their checksum after downloading.\n\n"
+            "The model comes from {herkunft} and is checked against its checksum "
+            "after downloading.\n\n"
             "Location: {ordner}\n\nDownload now?",
+        "KI-Entrauschen": "AI denoise",
+        "Für dieses Bild berechnet. Der Regler mischt zwischen Original und "
+        "entrauschtem Bild.":
+            "Computed for this image. The slider blends between the original and the "
+            "denoised image.",
+        "Rechnet einmal über das ganze Bild – bei 24 Megapixeln 10 bis 30 "
+        "Sekunden. Danach wirkt der Regler sofort.":
+            "Runs once over the whole image – 10 to 30 seconds for 24 megapixels. "
+            "After that the slider responds instantly.",
+        "Entrauschen berechnen": "Compute denoise",
+        "KI entrauscht das Bild …": "AI is denoising the image …",
+        "KI-Entrauschen abgebrochen.": "AI denoise cancelled.",
+        "Das KI-Entrauschen ist fehlgeschlagen.": "AI denoise failed.",
+        "KI-Entrauschen fertig ({s} s, über {weg})": "AI denoise done ({s} s, via {weg})",
         "KI-Modell herunterladen": "Download AI model",
         "TensorRT bereitet das Modell einmalig für diese Grafikkarte vor – das dauert "
-        "ein bis zwei Minuten. Danach geht jede Vergrößerung rund doppelt so schnell.":
-            "TensorRT is preparing the model for this graphics card once – this takes one "
-            "to two minutes. After that, every upscale runs about twice as fast.",
+        "einige Minuten. Danach rechnet die KI rund doppelt so schnell.":
+            "TensorRT is preparing the model for this graphics card once – this takes a few "
+            "minutes. After that, the AI runs about twice as fast.",
         "Gespeichert: {name} ({ms} ms, KI über {weg})": "Saved: {name} ({ms} ms, AI via {weg})",
         "nicht installiert (optional, siehe README)": "not installed (optional, see README)",
         "TensorRT ließ sich nicht vorbereiten – die KI rechnet mit CUDA.":

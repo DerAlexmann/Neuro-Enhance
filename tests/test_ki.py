@@ -201,10 +201,29 @@ def test_modellordner_liegt_neben_dem_programm():
 
 
 def test_katalog_vollstaendig():
-    for modell in ki.MODELLE.values():
+    for modell in ki.ALLE_MODELLE.values():
         for name in ki.dateien(modell):
             assert name in ki.DATEIEN
         assert modell.sha256 == ki.DATEIEN[modell.datei][0]
+        assert modell.lizenzdatei in ki.dateien(modell)
+        assert modell.release.startswith("https://github.com/DerAlexmann/Neuro-Enhance/")
+        assert modell.mindeststufe in ki.STUFEN and set(modell.kacheln) <= set(ki.STUFEN)
+    assert set(ki.ALLE_MODELLE) == set(ki.MODELLE) | set(ki.ENTRAUSCH_MODELLE)
+
+
+def test_entrauschmodell_aus_eigenem_release():
+    """modelle-1 bleibt unveraendert - neue Modelle kommen in ein neues Release."""
+    scunet = ki.ENTRAUSCH_MODELLE["scunet"]
+    assert scunet.release == ki.MODELL_RELEASE_2 != ki.MODELL_RELEASE
+    assert all(m.release == ki.MODELL_RELEASE for m in ki.MODELLE.values())
+
+
+def test_eingabe_groesse_ist_vielfaches():
+    modell = ki.ENTRAUSCH_MODELLE["scunet"]
+    for kachel in modell.kacheln.values():
+        assert ki.eingabe_groesse(modell, kachel) % 64 == 0
+    assert ki.eingabe_groesse(modell, 100) == 192
+    assert ki.eingabe_groesse(ki.MODELLE["schnell"], 384) == 404
 
 
 # ----------------------------------------------------------------------
@@ -259,3 +278,18 @@ def test_fehlende_quelle(quelle_und_ziel):
     url, _ziel = quelle_und_ziel
     with pytest.raises(ki.KiFehler):
         ki.herunterladen(ki.MODELLE["schnell"], quelle=url + "gibt-es-nicht/")
+
+
+def test_herunterladen_nimmt_das_release_des_modells(tmp_path, monkeypatch):
+    """Ohne ausdrueckliche Quelle laedt jedes Modell aus seinem eigenen Release."""
+    angefragt = []
+
+    def urlopen(anfrage, timeout=None):
+        angefragt.append(anfrage.full_url)
+        raise ki.urllib.error.URLError("kein Netz im Test")
+
+    monkeypatch.setattr(ki.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(ki, "ordner_kandidaten", lambda: [str(tmp_path)])
+    with pytest.raises(ki.KiFehler):
+        ki.herunterladen(ki.ENTRAUSCH_MODELLE["scunet"])
+    assert angefragt[0] == ki.MODELL_RELEASE_2 + "scunet-color-real-psnr.onnx"

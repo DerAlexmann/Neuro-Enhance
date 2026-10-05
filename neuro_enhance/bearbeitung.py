@@ -9,6 +9,11 @@ Jede Aenderung an einem Regler rechnet die Vorschau aus dem unveraenderten
 Original neu; nichts wird ueberschrieben, jeder Regler bleibt jederzeit
 umkehrbar.
 
+KI-Entrauschen ist zu teuer, um es bei jeder Reglerbewegung zu rechnen. Es
+laeuft einmal ueber das ganze Original und liegt danach als zweites Original
+im Grafikspeicher; der Staerkeregler mischt nur noch zwischen beiden - das
+kostet je Vorschau Bruchteile einer Millisekunde.
+
 Dieses Modul importiert CuPy und darf deshalb erst nach der Startprufung
 geladen werden.
 
@@ -27,6 +32,10 @@ import numpy as np
 from . import bilddatei, filter, geometrie
 from .cuda import cupy as cp
 from .filter import Einstellungen
+
+# a + s * (b - a) in einem Durchlauf, ohne Zwischenpuffer
+_mischen = cp.ElementwiseKernel("float32 a, float32 b, float32 s", "float32 c",
+                                "c = a + s * (b - a)", "ne_mischen")
 
 
 def histogramm_von(rgb_uint8):
@@ -47,6 +56,7 @@ class Sitzung:
         self.gespeicherte_werte = Einstellungen()
         self._speicher: dict = {}            # Zwischenergebnisse der Filter, je Bildgroesse
         self._vollbild = None                 # (Einstellungen, fertiges Bild auf der GPU)
+        self._ki_rauschfrei = None            # (voll, Vorschau): KI-entrauschtes Original
 
         self.original = daten.linear(cp)
         # Zwischenpuffer des Demosaicing an den Grafikspeicher zurueckgeben
@@ -58,14 +68,53 @@ class Sitzung:
     def geaendert(self) -> bool:
         return self.werte != self.gespeicherte_werte
 
+    @property
+    def ki_entrauscht(self) -> bool:
+        return self._ki_rauschfrei is not None
+
+    def ki_entrauschen(self, entrauscher, kachel: int, fortschritt=None) -> float:
+        """Das Original einmal mit KI entrauschen; Rueckgabe: Rechenzeit in ms.
+
+        Das Netz kennt Bilder in sRGB von 0 bis 1. Was heller ist - Lichter
+        einer RAW -, bekommt es begrenzt zu sehen; zurueck kommt nur seine
+        Korrektur, aufs ungekuerzte Original gelegt. So bleiben die Lichter
+        erhalten.
+        """
+        beginn = time.perf_counter()
+        begrenzt = cp.clip(self.original, 0, 1)
+        glatt = entrauscher.entrauschen(filter.linear_zu_srgb(begrenzt), kachel, fortschritt)
+        voll = filter.srgb_zu_linear(glatt)
+        del glatt
+        voll -= begrenzt
+        del begrenzt
+        voll += self.original
+        faktor = round(1 / self.vorschau_massstab)
+        vorschau = voll if faktor == 1 else filter.verkleinern_box(voll, faktor).astype(cp.float32)
+        self._ki_rauschfrei = (voll, vorschau)
+        # Zwischenergebnisse beruhten auf dem alten Ausgangsbild
+        self._speicher.clear()
+        self._vollbild = None
+        cp.get_default_memory_pool().free_all_blocks()
+        return (time.perf_counter() - beginn) * 1000
+
+    def _ausgang(self, werte: Einstellungen, voll: bool):
+        """Original oder - je nach Staerke - mit dem KI-entrauschten gemischt."""
+        original = self.original if voll else self.vorschau_original
+        if self._ki_rauschfrei is None or werte.ki_rauschen <= 0:
+            return original
+        glatt = self._ki_rauschfrei[0 if voll else 1]
+        if werte.ki_rauschen >= 100:
+            return glatt
+        return _mischen(original, glatt, cp.float32(werte.ki_rauschen / 100))
+
     def vorschau(self, unbearbeitet: bool = False,
                  werte: Einstellungen | None = None) -> tuple[np.ndarray, float, np.ndarray]:
         """Vorschau als sRGB-uint8, Rechenzeit in ms und Helligkeitshistogramm (256 Stufen)."""
         beginn = time.perf_counter()
         if werte is None:
             werte = Einstellungen() if unbearbeitet else self.werte
-        bild = filter.anwenden_ausgabe(self.vorschau_original, werte, self.vorschau_massstab,
-                                       self._speicher)
+        bild = filter.anwenden_ausgabe(self._ausgang(werte, False), werte,
+                                       self.vorschau_massstab, self._speicher)
         histogramm = cp.asnumpy(histogramm_von(bild))
         ergebnis = cp.asnumpy(bild)                     # wartet auf die GPU
         return ergebnis, (time.perf_counter() - beginn) * 1000, histogramm
@@ -88,7 +137,8 @@ class Sitzung:
         beginn = time.perf_counter()
         werte = self.werte if werte is None else werte
         if self._vollbild is None or self._vollbild[0] != werte:
-            bild = filter.anwenden_ausgabe(self.original, werte, 1.0, self._speicher)
+            bild = filter.anwenden_ausgabe(self._ausgang(werte, True), werte, 1.0,
+                                           self._speicher)
             self._vollbild = (dataclasses.replace(werte), bild)
         teil = self._vollbild[1][y0:y0 + hoehe, x0:x0 + breite]
         histogramm = cp.asnumpy(histogramm_von(teil))
@@ -124,12 +174,13 @@ class Sitzung:
         vergroessert; fortschritt(i, n) meldet jede fertige Kachel.
         """
         beginn = time.perf_counter()
+        ausgang = self._ausgang(self.werte, True)
         if ki_auftrag is None:
-            rgb = cp.asnumpy(filter.anwenden_ausgabe(self.original, self.werte, 1.0, bits=bits))
+            rgb = cp.asnumpy(filter.anwenden_ausgabe(ausgang, self.werte, 1.0, bits=bits))
             faktor = 1
         else:
             hochskalierer, faktor, kachel = ki_auftrag
-            fertig = filter.anwenden_ausgabe(self.original, self.werte, 1.0, bits=16)
+            fertig = filter.anwenden_ausgabe(ausgang, self.werte, 1.0, bits=16)
             srgb = fertig.astype(cp.float32) / 65535
             del fertig
             cp.get_default_memory_pool().free_all_blocks()
@@ -147,5 +198,6 @@ class Sitzung:
         self.original = None
         self.vorschau_original = None
         self._vollbild = None
+        self._ki_rauschfrei = None
         self._speicher.clear()
         cp.get_default_memory_pool().free_all_blocks()

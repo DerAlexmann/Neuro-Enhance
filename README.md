@@ -71,6 +71,12 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   einem farbgeführten Filter, der Farbkanten erhält – auch zwischen Farben
   gleicher Helligkeit. Die verkleinerte Vorschau zeigt Rauschen schwächer als
   das gespeicherte Bild – zum Beurteilen gibt es die 100-%-Ansicht.
+- **KI-Entrauschen** mit SCUNet, trainiert auf echtes Kamerarauschen und auf
+  Treue statt auf erfundene Details: einmal über das ganze Bild gerechnet (ein
+  18-MP-Foto braucht auf einer RTX 4060 rund 20 Sekunden, mit TensorRT 11),
+  danach mischt ein Stärkeregler sofort zwischen Original und entrauschtem
+  Bild – in Vorschau, 100-%-Ansicht und Export gleichermaßen. Lichter über
+  Weiß, etwa aus RAWs, bleiben erhalten.
 - **Geometrie**: um 90° drehen, spiegeln, begradigen, Perspektive senkrecht
   und waagrecht, Zuschneiden mit Rahmen und festen Seitenverhältnissen. Leere
   Ecken nach dem Begradigen werden automatisch weggeschnitten.
@@ -159,7 +165,7 @@ pip install -r requirements-tensorrt.txt
 Das sind rund 1,8 GB Download (installiert 2,8 GB) vom Paketindex von NVIDIA.
 Neuro-Enhance erkennt TensorRT von selbst; unter „Info & Copyright“ steht die
 Fassung. Beim ersten Vergrößern mit einem Modell baut TensorRT einmalig eine für
-die Grafikkarte passende Engine – das dauert ein bis zwei Minuten, ein Fenster
+die Grafikkarte passende Engine – das dauert ein bis drei Minuten, ein Fenster
 weist darauf hin. Die Engines liegen danach im Ordner `modelle/tensorrt`. Klappt
 TensorRT nicht, rechnet das Programm wie ohne mit CUDA.
 
@@ -173,26 +179,34 @@ installiert.
 Neuro-Enhance arbeitet vollständig auf dem eigenen Rechner. Es werden keine Bilder
 hochgeladen und keine Nutzungsdaten gesendet. Auch die KI rechnet lokal auf der
 Grafikkarte. Die einzige Verbindung ins Netz ist das Laden eines KI-Modells – und
-das nur, wenn man in der Karte „KI-Hochskalieren“ ausdrücklich darauf klickt und
-die Rückfrage mit Quelle, Größe und Lizenz bestätigt.
+das nur, wenn man in der Karte „KI-Hochskalieren“ oder „KI-Entrauschen“
+ausdrücklich darauf klickt und die Rückfrage mit Quelle, Größe und Lizenz
+bestätigt.
 
 ## KI-Modelle
 
-Die Modelle gehören nicht zum Programm. In der Karte „KI-Hochskalieren“ lädt
-„Modell herunterladen“ sie aus dem Release
+Die Modelle gehören nicht zum Programm. „Modell herunterladen“ lädt sie aus
+Releases dieses Projekts: in der Karte „KI-Hochskalieren“ aus
 [modelle-1](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-1)
-dieses Projekts: das schnelle Modell mit knapp 10 MB, das große mit 64 MB. Jede
-Datei wird gegen ihre SHA-256-Prüfsumme geprüft, bevor sie verwendet wird.
+das schnelle Modell mit knapp 10 MB und das große mit 64 MB, in der Karte
+„KI-Entrauschen“ aus
+[modelle-2](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-2)
+SCUNet mit 71 MB. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft, bevor
+sie verwendet wird.
 Abgelegt werden sie im Ordner `modelle` neben dem Programm oder, wenn der
 schreibgeschützt ist, unter `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
 
 Die Modelle sind die offiziellen Gewichte von
 [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (BSD 3-Clause, Copyright 2021
-Xintao Wang), nach ONNX gewandelt. Wer das selbst nachvollziehen will:
+Xintao Wang) und [SCUNet](https://github.com/cszn/SCUNet) (Apache-2.0, Copyright
+2022 Kai Zhang), nach ONNX gewandelt. Wer das selbst nachvollziehen will:
 
 1. Aus den [Releases von Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/releases)
    `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` und
-   `RealESRGAN_x4plus.pth` nach `modelle/quellen/` laden.
+   `RealESRGAN_x4plus.pth`, aus dem
+   [Release v1.0 von KAIR](https://github.com/cszn/KAIR/releases/tag/v1.0), wo die
+   SCUNet-Gewichte liegen, `scunet_color_real_psnr.pth` nach `modelle/quellen/`
+   laden.
 2. `pip install torch` (nur für diesen Schritt nötig).
 3. `python werkzeuge/modelle_exportieren.py` – das legt die ONNX-Modelle in
    `modelle/` ab und prüft sie gegen PyTorch.

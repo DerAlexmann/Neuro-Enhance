@@ -1,10 +1,10 @@
 """
-KI-Hochskalieren mit Real-ESRGAN ueber ONNX Runtime (CUDA)
+KI-Hochskalieren (Real-ESRGAN) und KI-Entrauschen (SCUNet) ueber ONNX Runtime
 
-Die Modelle stammen aus dem offiziellen Real-ESRGAN-Release (BSD-3-Clause) und
-sind mit werkzeuge/modelle_exportieren.py nach ONNX gewandelt. Bereit liegen
-sie als Dateien eines eigenen Releases dieses Projekts (MODELL_RELEASE), mit
-dem Lizenztext von Real-ESRGAN daneben. Heruntergeladen wird nur auf Wunsch
+Die Modelle stammen aus den offiziellen Releases von Real-ESRGAN (BSD-3-Clause)
+und SCUNet (Apache-2.0) und sind mit werkzeuge/modelle_exportieren.py nach ONNX
+gewandelt. Bereit liegen sie als Dateien eigener Releases dieses Projekts, mit
+dem jeweiligen Lizenztext daneben. Heruntergeladen wird nur auf Wunsch
 des Anwenders; jede Datei wird gegen ihre SHA-256-Pruefsumme geprueft, bevor
 sie an ihren Platz kommt und bevor sie geladen wird.
 
@@ -26,7 +26,7 @@ einer Stufe von 8 Bit. Auch Real-ESRGAN selbst rechnet standardmaessig in FP16.
 
 Ist das optionale Paket tensorrt-cu12-libs installiert (requirements-tensorrt.txt),
 rechnet TensorRT - noch einmal rund doppelt so schnell. TensorRT baut dafuer je
-Modell, Grafikkarte und Kachelgroesse einmalig eine Engine (eine bis zwei Minuten)
+Modell, Grafikkarte und Kachelgroesse einmalig eine Engine (ein bis drei Minuten)
 und legt sie im Ordner `tensorrt` neben den Modellen ab. Gebaut wird in einem
 eigenen Prozess, denn ONNX Runtime haelt dabei die Python-Sperre (GIL) - im
 selben Prozess stuende die Oberflaeche minutenlang still. Scheitert TensorRT,
@@ -59,7 +59,9 @@ from . import einstellungen
 from .cuda import cupy as cp
 
 QUELLE = "https://github.com/xinntao/Real-ESRGAN"
+QUELLE_SCUNET = "https://github.com/cszn/SCUNet"
 MODELL_RELEASE = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-1/"
+MODELL_RELEASE_2 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-2/"
 BLOCK = 1 << 20
 
 # Datei -> (SHA-256, Groesse in Bytes)
@@ -74,6 +76,10 @@ DATEIEN = {
         ("9c887160648173a00ef2e998609bc198f0868a11e6801c9c3abeb1868808926a", 67051953),
     "LICENSE-Real-ESRGAN.txt":
         ("4a699ec4863d96a91fc265948a0c90033f7e8735d515524dcf3444736406e0c2", 1519),
+    "scunet-color-real-psnr.onnx":
+        ("cd446d36b78ca0c92d1c01052f7e3d331e5e35080cf597404ea9b8c9106bf157", 74754219),
+    "LICENSE-SCUNet.txt":
+        ("db7c4e3148d7ff287423d0d62716c6519c71cbcabeb0369cf24c4e14a33865cb", 11409),
 }
 LIZENZDATEI = "LICENSE-Real-ESRGAN.txt"
 RAND = 10                    # Ueberlappung je Kachelseite in Eingabepixeln, wie in Real-ESRGAN
@@ -94,6 +100,12 @@ class Modell:
     kacheln: dict                    # Kachelgroesse in Eingabepixeln je Stufe
     lizenz: str = "BSD-3-Clause"
     quelle: str = QUELLE
+    herkunft: str = "Real-ESRGAN (BSD 3-Clause, Copyright 2021 Xintao Wang)"
+    lizenzdatei: str = LIZENZDATEI
+    release: str = MODELL_RELEASE    # woher die App die Dateien laedt
+    massstab: int = 4                # Ausgabe ist massstab-mal so gross wie die Eingabe
+    rand: int = RAND                 # Ueberlappung je Kachelseite
+    vielfaches: int = 1              # Hoehe und Breite einer Kachel muessen Vielfache sein
 
 
 MODELLE = {
@@ -111,6 +123,21 @@ MODELLE = {
         None,
         "M", {"M": 256, "L": 512, "XL": 768}),
 }
+# Entrauschen: SCUNet fuer echtes Kamerarauschen, auf Treue trainiert (PSNR) -
+# es erfindet keine Details. Die Swin-Fenster verlangen Vielfache von 64; die
+# Ueberlappung ist groesser als beim Hochskalieren, weil SCUNet weiter schaut.
+ENTRAUSCH_MODELLE = {
+    "scunet": Modell(
+        "scunet", "scunet-color-real-psnr.onnx",
+        "cd446d36b78ca0c92d1c01052f7e3d331e5e35080cf597404ea9b8c9106bf157",
+        None,
+        "S", {"S": 256, "M": 512, "L": 768, "XL": 1024},
+        lizenz="Apache-2.0", quelle=QUELLE_SCUNET,
+        herkunft="SCUNet (Apache-2.0, Copyright 2022 Kai Zhang)",
+        lizenzdatei="LICENSE-SCUNet.txt", release=MODELL_RELEASE_2,
+        massstab=1, rand=32, vielfaches=64),
+}
+ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE}
 STUFEN = ("S", "M", "L", "XL")
 
 
@@ -156,7 +183,7 @@ def datei_pfad(name: str) -> str | None:
 def dateien(modell: Modell) -> list[str]:
     """Alle Dateien, die ein Modell braucht - samt Lizenztext."""
     namen = [modell.datei] + ([n for n, _s in modell.mischung] if modell.mischung else [])
-    return [*namen, LIZENZDATEI]
+    return [*namen, modell.lizenzdatei]
 
 
 def angeboten(modell: Modell, stufe: str) -> bool:
@@ -213,7 +240,7 @@ def herunterladen(modell: Modell, fortschritt=None, quelle: str | None = None) -
     nie dort, wo das Programm Modelle sucht. fortschritt(geladen, gesamt) wird
     nach jedem Block aufgerufen; gibt es False zurueck, wird abgebrochen.
     """
-    quelle = MODELL_RELEASE if quelle is None else quelle
+    quelle = modell.release if quelle is None else quelle
     ziel = modell_ordner()
     os.makedirs(ziel, exist_ok=True)
     namen = fehlende(modell)
@@ -328,10 +355,16 @@ def tensorrt_cache() -> str:
     return _cache_ordner or os.path.join(modell_ordner(), "tensorrt")
 
 
+def eingabe_groesse(modell: Modell, kachel: int) -> int:
+    """Groesste Kachel samt Ueberlappung, aufgerundet auf das noetige Vielfache."""
+    roh = kachel + 2 * modell.rand
+    return -(-roh // modell.vielfaches) * modell.vielfaches
+
+
 def tensorrt_marke(modell: Modell, kachel: int, fp16: bool = True) -> str:
     """Datei, die anzeigt, dass die Engine fuer diese Kombination schon gebaut ist."""
     return os.path.join(tensorrt_cache(), "{}-{}-{}-sm{}-trt{}.fertig".format(
-        modell.schluessel, "fp16" if fp16 else "fp32", kachel + 2 * RAND,
+        modell.schluessel, "fp16" if fp16 else "fp32", eingabe_groesse(modell, kachel),
         cp.cuda.Device().compute_capability, tensorrt_fassung()))
 
 
@@ -359,25 +392,25 @@ def _engine_bauen(schluessel: str, kachel: int, fp16: bool, cache: str) -> None:
     """Laeuft im Bauprozess."""
     global _cache_ordner
     _cache_ordner = cache
-    hochskalierer = Hochskalierer(MODELLE[schluessel], 0.5, fp16, kachel, tensorrt=True)
-    if not hochskalierer.tensorrt:
-        raise KiFehler(hochskalierer.tensorrt_fehler)
+    netz = _Netz(ALLE_MODELLE[schluessel], fp16, kachel, tensorrt=True)
+    if not netz.tensorrt:
+        raise KiFehler(netz.tensorrt_fehler)
 
 
 def ausgabe_form(form, faktor: int) -> tuple[int, int]:
     return form[0] * faktor, form[1] * faktor
 
 
-class Hochskalierer:
-    """Ein geladenes Modell. Teuer anzulegen - je Modell und Entrauschstaerke einmal.
+class _Netz:
+    """Ein geladenes Modell mit CUDA (FP16, NHWC) oder TensorRT - teuer anzulegen.
 
     kachel ist die groesste Kachel in Eingabepixeln. Nur mit ihr kann TensorRT
     rechnen, denn die Engine wird fuer eine feste Hoechstgroesse gebaut;
     tensorrt=None nimmt TensorRT, sobald es installiert ist.
     """
 
-    def __init__(self, modell: Modell, entrauschen: float = 0.5, fp16: bool = True,
-                 kachel: int | None = None, tensorrt: bool | None = None):
+    def __init__(self, modell: Modell, fp16: bool = True, kachel: int | None = None,
+                 tensorrt: bool | None = None):
         import onnxruntime as ort
         self._ort = ort
         ort.set_default_logger_severity(3)       # nur Fehler, keine Hinweise auf der Konsole
@@ -385,13 +418,10 @@ class Hochskalierer:
         if hasattr(ort, "preload_dlls"):
             ort.preload_dlls(cuda=True, cudnn=True, msvc=False)
         self.modell = modell
-        self.entrauschen = entrauschen
         self.fp16 = fp16
         self.kachel = kachel
         self._pfad = datei_pruefen(modell.datei, modell.sha256)
         self._gewichte: dict = {}
-        if modell.mischung:
-            self._gewichte = self._mischen(entrauschen)
         if tensorrt is None:
             tensorrt = kachel is not None and tensorrt_ordner() is not None
         self.tensorrt = False
@@ -439,7 +469,8 @@ class Hochskalierer:
             raise KiFehler("Diese ONNX-Runtime-Fassung kennt TensorRT nicht.")
         cache = tensorrt_cache()
         os.makedirs(cache, exist_ok=True)
-        groesse = self.kachel + 2 * RAND
+        groesse = eingabe_groesse(self.modell, self.kachel)
+        klein = self.modell.vielfaches
         self._marke = tensorrt_marke(self.modell, self.kachel, self.fp16)
         self.erster_lauf = not os.path.exists(self._marke)
         trt = {"device_id": 0,
@@ -449,7 +480,7 @@ class Hochskalierer:
                "trt_timing_cache_enable": True,
                "trt_timing_cache_path": cache,
                # Randkacheln sind kleiner, groesser als die volle Kachel wird keine
-               "trt_profile_min_shapes": "eingabe:1x3x1x1",
+               "trt_profile_min_shapes": f"eingabe:1x3x{klein}x{klein}",
                "trt_profile_opt_shapes": f"eingabe:1x3x{groesse}x{groesse}",
                "trt_profile_max_shapes": f"eingabe:1x3x{groesse}x{groesse}"}
         sitzung = self._ort.InferenceSession(
@@ -470,6 +501,81 @@ class Hochskalierer:
         self.sitzung = None                       # TensorRT-Speicher zuerst freigeben
         self.sitzung = self._cuda_sitzung()
 
+    def _kachel(self, eingabe):
+        """Eine Kachel (1, 3, h, w) float32 auf der GPU -> (1, 3, m*h, m*w)."""
+        _n, _k, h, w = eingabe.shape
+        m = self.modell.massstab
+        ausgabe = cp.empty((1, 3, m * h, m * w), dtype=cp.float32)
+        bindung = self.sitzung.io_binding()
+        bindung.bind_input("eingabe", "cuda", 0, np.float32, list(eingabe.shape),
+                           eingabe.data.ptr)
+        for name, gewicht in self._gewichte.items():
+            bindung.bind_input(name, "cuda", 0, np.float32, list(gewicht.shape), gewicht.data.ptr)
+        bindung.bind_output("ausgabe", "cuda", 0, np.float32, list(ausgabe.shape),
+                            ausgabe.data.ptr)
+        cp.cuda.Device().synchronize()             # CuPy hat fertig geschrieben
+        self.sitzung.run_with_iobinding(bindung)
+        return ausgabe
+
+    def _kacheln(self, kanaele, kachel: int, fortschritt, ablegen):
+        """Alle Kacheln rechnen; ablegen(y0, y1, x0, x1, ergebnis) erhaelt den Kern
+        jeder Kachel (3, m*h, m*w) ohne Ueberlappung."""
+        _n, _k, hoehe, breite = kanaele.shape
+        m, rand, vielfaches = self.modell.massstab, self.modell.rand, self.modell.vielfaches
+        zeilen = range(0, hoehe, kachel)
+        spalten = range(0, breite, kachel)
+        anzahl, nummer = len(zeilen) * len(spalten), 0
+        for y0 in zeilen:
+            for x0 in spalten:
+                y1, x1 = min(y0 + kachel, hoehe), min(x0 + kachel, breite)
+                ya, xa = max(y0 - rand, 0), max(x0 - rand, 0)
+                ye, xe = min(y1 + rand, hoehe), min(x1 + rand, breite)
+                teil = kanaele[:, :, ya:ye, xa:xe]
+                fh = -(ye - ya) % vielfaches
+                fb = -(xe - xa) % vielfaches
+                if fh or fb:                       # am Bildrand auffuellen wie im Original
+                    teil = cp.pad(teil, ((0, 0), (0, 0), (0, fh), (0, fb)), mode="edge")
+                ergebnis = self._kachel(cp.ascontiguousarray(teil))[0]
+                ablegen(y0, y1, x0, x1, ergebnis[:, m * (y0 - ya):m * (y1 - ya),
+                                                 m * (x0 - xa):m * (x1 - xa)])
+                nummer += 1
+                if fortschritt is not None and fortschritt(nummer, anzahl) is False:
+                    raise KiAbbruch()
+
+    def _mit_wiederholung(self, arbeit, kachel: int):
+        """arbeit(kachel) ausfuehren; bei Speichermangel mit halber Kachel noch einmal,
+        scheitert TensorRT, mit CUDA."""
+        if self.tensorrt:
+            kachel = min(kachel, self.kachel)    # groesser kann die Engine nicht
+        while True:
+            try:
+                return arbeit(kachel)
+            except cp.cuda.memory.OutOfMemoryError:
+                pass
+            except KiAbbruch:
+                raise
+            except Exception as fehler:          # ORT meldet Speichermangel als eigenen Fehler
+                if "memory" not in str(fehler).lower() and "alloc" not in str(fehler).lower():
+                    if not self.tensorrt:
+                        raise KiFehler(str(fehler)) from fehler
+                    self._auf_cuda_wechseln(fehler)  # und mit CUDA noch einmal
+                    continue
+            cp.get_default_memory_pool().free_all_blocks()
+            if kachel <= 64:
+                raise KiFehler("Zu wenig Grafikspeicher - auch mit kleinsten Kacheln.")
+            kachel = max(64, kachel // 2 // self.modell.vielfaches * self.modell.vielfaches)
+
+
+class Hochskalierer(_Netz):
+    """Real-ESRGAN - je Modell und Entrauschstaerke einmal anzulegen."""
+
+    def __init__(self, modell: Modell, entrauschen: float = 0.5, fp16: bool = True,
+                 kachel: int | None = None, tensorrt: bool | None = None):
+        super().__init__(modell, fp16, kachel, tensorrt)
+        self.entrauschen = entrauschen
+        if modell.mischung:
+            self._gewichte = self._mischen(entrauschen)
+
     def _mischen(self, staerke: float) -> dict:
         """Beide Gewichtssaetze mischen (staerke 1 = volles, 0 = schwaches Entrauschen).
 
@@ -484,21 +590,6 @@ class Hochskalierer:
                     staerke * stark[name] + (1 - staerke) * schwach[name], dtype=cp.float32))
                 for name in stark.files}
 
-    def _kachel(self, eingabe):
-        """Eine Kachel (1, 3, h, w) float32 auf der GPU -> (1, 3, 4h, 4w)."""
-        _n, _k, h, w = eingabe.shape
-        ausgabe = cp.empty((1, 3, 4 * h, 4 * w), dtype=cp.float32)
-        bindung = self.sitzung.io_binding()
-        bindung.bind_input("eingabe", "cuda", 0, np.float32, list(eingabe.shape),
-                           eingabe.data.ptr)
-        for name, gewicht in self._gewichte.items():
-            bindung.bind_input(name, "cuda", 0, np.float32, list(gewicht.shape), gewicht.data.ptr)
-        bindung.bind_output("ausgabe", "cuda", 0, np.float32, list(ausgabe.shape),
-                            ausgabe.data.ptr)
-        cp.cuda.Device().synchronize()             # CuPy hat fertig geschrieben
-        self.sitzung.run_with_iobinding(bindung)
-        return ausgabe
-
     def hochskalieren(self, srgb, faktor: int, kachel: int, bits: int = 8,
                       fortschritt=None) -> np.ndarray:
         """sRGB-Bild (H, W, 3) float32 0..1 auf der GPU -> numpy uint8/uint16 (fH, fW, 3).
@@ -508,55 +599,41 @@ class Hochskalierer:
         """
         if faktor not in (2, 4):
             raise ValueError("faktor muss 2 oder 4 sein")
-        if self.tensorrt:
-            kachel = min(kachel, self.kachel)    # groesser kann die Engine nicht
         hoehe, breite = srgb.shape[:2]
         typ, hoechst = (np.uint16, 65535) if bits == 16 else (np.uint8, 255)
         ziel = np.empty((hoehe * faktor, breite * faktor, 3), dtype=typ)
         kanaele = cp.ascontiguousarray(cp.moveaxis(srgb.astype(cp.float32), -1, 0))[None]
-        while True:
-            try:
-                self._alle_kacheln(kanaele, ziel, faktor, kachel, hoechst, typ, fortschritt)
-                return ziel
-            except cp.cuda.memory.OutOfMemoryError:
-                pass
-            except KiAbbruch:
-                raise
-            except Exception as fehler:          # ORT meldet Speichermangel als eigenen Fehler
-                if "memory" not in str(fehler).lower() and "alloc" not in str(fehler).lower():
-                    if not self.tensorrt:
-                        raise KiFehler(str(fehler)) from fehler
-                    self._auf_cuda_wechseln(fehler)  # und mit CUDA noch einmal
-                    continue
-            cp.get_default_memory_pool().free_all_blocks()
-            if kachel <= 64:
-                raise KiFehler("Zu wenig Grafikspeicher - auch mit kleinsten Kacheln.")
-            kachel //= 2
 
-    def _alle_kacheln(self, kanaele, ziel, faktor, kachel, hoechst, typ, fortschritt):
-        _n, _k, hoehe, breite = kanaele.shape
-        zeilen = range(0, hoehe, kachel)
-        spalten = range(0, breite, kachel)
-        anzahl, nummer = len(zeilen) * len(spalten), 0
-        for y0 in zeilen:
-            for x0 in spalten:
-                y1, x1 = min(y0 + kachel, hoehe), min(x0 + kachel, breite)
-                ya, xa = max(y0 - RAND, 0), max(x0 - RAND, 0)
-                ye, xe = min(y1 + RAND, hoehe), min(x1 + RAND, breite)
-                teil = cp.ascontiguousarray(kanaele[:, :, ya:ye, xa:xe])
-                gross = self._kachel(teil)[0]
-                # Ueberlappung wieder abschneiden
-                gross = gross[:, 4 * (y0 - ya):4 * (y1 - ya), 4 * (x0 - xa):4 * (x1 - xa)]
-                if faktor == 2:
-                    c, h, w = gross.shape
-                    gross = gross.reshape(c, h // 2, 2, w // 2, 2).mean(axis=(2, 4))
-                werte = (cp.clip(gross, 0, 1) * hoechst + 0.5).astype(typ)
-                ziel[y0 * faktor:y1 * faktor, x0 * faktor:x1 * faktor] = \
-                    cp.asnumpy(cp.moveaxis(werte, 0, -1))
-                nummer += 1
-                if fortschritt is not None and fortschritt(nummer, anzahl) is False:
-                    raise KiAbbruch()
+        def ablegen(y0, y1, x0, x1, gross):
+            if faktor == 2:
+                c, h, w = gross.shape
+                gross = gross.reshape(c, h // 2, 2, w // 2, 2).mean(axis=(2, 4))
+            werte = (cp.clip(gross, 0, 1) * hoechst + 0.5).astype(typ)
+            ziel[y0 * faktor:y1 * faktor, x0 * faktor:x1 * faktor] = \
+                cp.asnumpy(cp.moveaxis(werte, 0, -1))
+
+        self._mit_wiederholung(lambda k: self._kacheln(kanaele, k, fortschritt, ablegen), kachel)
+        return ziel
+
+
+class Entrauscher(_Netz):
+    """SCUNet - entrauscht ein sRGB-Bild in voller Groesse, Ergebnis bleibt auf der GPU."""
+
+    def __init__(self, modell: Modell | None = None, fp16: bool = True,
+                 kachel: int | None = None, tensorrt: bool | None = None):
+        super().__init__(modell or ENTRAUSCH_MODELLE["scunet"], fp16, kachel, tensorrt)
+
+    def entrauschen(self, srgb, kachel: int, fortschritt=None):
+        """sRGB (H, W, 3) float32 0..1 auf der GPU -> entrauscht, gleiche Form, auf der GPU."""
+        kanaele = cp.ascontiguousarray(cp.moveaxis(srgb.astype(cp.float32), -1, 0))[None]
+        ziel = cp.empty((3,) + srgb.shape[:2], dtype=cp.float32)
+
+        def ablegen(y0, y1, x0, x1, kern):
+            ziel[:, y0:y1, x0:x1] = kern
+
+        self._mit_wiederholung(lambda k: self._kacheln(kanaele, k, fortschritt, ablegen), kachel)
+        return cp.ascontiguousarray(cp.moveaxis(cp.clip(ziel, 0, 1), 0, -1))
 
 
 class KiAbbruch(Exception):
-    """Der Anwender hat das Hochskalieren abgebrochen."""
+    """Der Anwender hat eine KI-Berechnung oder einen Download abgebrochen."""

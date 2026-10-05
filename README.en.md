@@ -67,6 +67,11 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   colour-guided filter that keeps colour edges – even between colours of equal
   brightness. The scaled-down preview shows less noise than the saved image – use the
   100 % view to judge it.
+- **AI denoise** with SCUNet, trained on real camera noise and for fidelity rather than
+  invented detail: computed once over the whole image (an 18 MP photo takes about 20
+  seconds on an RTX 4060, 11 with TensorRT); after that a strength slider instantly blends
+  between original and denoised image – in the preview, the 100 % view and the export
+  alike. Highlights above white, for example from RAWs, are preserved.
 - **Geometry**: rotate by 90°, flip, straighten, vertical and horizontal perspective, crop
   with a frame and fixed aspect ratios. Empty corners after straightening are cropped
   away automatically.
@@ -147,7 +152,7 @@ pip install -r requirements-tensorrt.txt
 That is about 1.8 GB to download (2.8 GB installed) from NVIDIA's package index.
 Neuro-Enhance detects TensorRT by itself; "Info & Copyright" shows the version. The
 first time a model is used, TensorRT builds an engine for the graphics card once – this
-takes one to two minutes, and a window says so. The engines are then kept in the
+takes one to three minutes, and a window says so. The engines are then kept in the
 `modelle/tensorrt` folder. If TensorRT does not work, the program computes with CUDA as
 it does without it.
 
@@ -159,26 +164,30 @@ it is not part of any ready-made executable and is always installed separately.
 
 Neuro-Enhance works entirely on your own computer. No images are uploaded and no usage
 data is sent. The AI also runs locally on the graphics card. The only network access is
-downloading an AI model – and only when you explicitly click it in the "AI upscaling" card
-and confirm the prompt that names source, size and licence.
+downloading an AI model – and only when you explicitly click it in the "AI upscaling" or
+"AI denoise" card and confirm the prompt that names source, size and licence.
 
 ## AI models
 
-The models are not part of the program. In the "AI upscaling" card, "Download model"
-fetches them from the release
-[modelle-1](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-1) of this
-project: the fast model with just under 10 MB, the large one with 64 MB. Every file is
-checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
+The models are not part of the program. "Download model" fetches them from releases of
+this project: in the "AI upscaling" card from
+[modelle-1](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-1) the fast
+model with just under 10 MB and the large one with 64 MB, in the "AI denoise" card from
+[modelle-2](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-2) SCUNet
+with 71 MB. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
 folder next to the program or, if that is read-only, in
 `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
 
 The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)
-(BSD 3-Clause, Copyright 2021 Xintao Wang), converted to ONNX. To reproduce this yourself:
+(BSD 3-Clause, Copyright 2021 Xintao Wang) and [SCUNet](https://github.com/cszn/SCUNet)
+(Apache-2.0, Copyright 2022 Kai Zhang), converted to ONNX. To reproduce this yourself:
 
 1. Download `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` and
    `RealESRGAN_x4plus.pth` from the
-   [Real-ESRGAN releases](https://github.com/xinntao/Real-ESRGAN/releases) into
-   `modelle/quellen/`.
+   [Real-ESRGAN releases](https://github.com/xinntao/Real-ESRGAN/releases), and
+   `scunet_color_real_psnr.pth` from the
+   [KAIR release v1.0](https://github.com/cszn/KAIR/releases/tag/v1.0), where the SCUNet
+   weights are published, into `modelle/quellen/`.
 2. `pip install torch` (only needed for this step).
 3. `python werkzeuge/modelle_exportieren.py` – this writes the ONNX models to `modelle/`
    and checks them against PyTorch.

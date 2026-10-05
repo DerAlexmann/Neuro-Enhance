@@ -29,12 +29,24 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- KI-Entrauschen mit SCUNet (scunet_color_real_psnr, Apache-2.0) in einer
+  eigenen Karte: einmal über das ganze Bild gerechnet, danach mischt ein
+  Stärkeregler ohne Wartezeit zwischen Original und entrauschtem Bild – in
+  Vorschau, 100-%-Ansicht und Export. Gerechnet wird in sRGB wie beim
+  Training; Lichter über Weiß bleiben, weil nur die Korrektur des Netzes aufs
+  Original gelegt wird. 18 MP brauchen auf einer RTX 4060 rund 20 s, mit
+  TensorRT 11 s. Das Modell (71 MB) kommt aus dem neuen Release `modelle-2`;
+  `modelle-1` bleibt unverändert.
+- `werkzeuge/modelle_exportieren.py` baut SCUNet ohne einops und timm nach
+  (rechnet bitgenau wie das Original) und exportiert es für beliebige
+  Bildgrößen; mit Argumenten lassen sich einzelne Modelle exportieren.
+
 - TensorRT als optionales Zusatzpaket (`requirements-tensorrt.txt`, rund
   1,8 GB von NVIDIA): Ist es installiert, rechnet die KI darüber – auf einer
   RTX 4060 noch einmal rund doppelt so schnell (12 MP × 2 mit dem großen
   Modell: 24 s statt 54 s). Die Engine entsteht beim ersten Einsatz einmalig
   je Modell, Grafikkarte und Kachelgröße in einem eigenen Prozess (ein bis
-  zwei Minuten, mit Hinweisfenster) und liegt danach unter
+  drei Minuten, mit Hinweisfenster) und liegt danach unter
   `modelle/tensorrt`. Scheitert TensorRT, rechnet das Programm mit CUDA
   weiter. „Info & Copyright“ zeigt die TensorRT-Fassung, die Statuszeile nach
   dem Speichern den Rechenweg.
