@@ -88,6 +88,14 @@ def cuda_anzeige() -> str:
     return f"{cupy.__version__} / NVRTC {haupt}.{neben}"
 
 
+def tensorrt_anzeige() -> str:
+    from . import ki
+    fassung = ki.tensorrt_fassung()
+    if fassung is None:
+        return _("nicht installiert (optional, siehe README)")
+    return fassung
+
+
 def vram_anzeige(befund: Befund) -> str:
     if not befund.karte:
         return "–"
@@ -251,6 +259,7 @@ class Hauptfenster(QMainWindow):
             (_("Python"), platform.python_version()),
             (_("PySide6 / Qt"), f"{PYSIDE_VERSION} / {qVersion()}"),
             (_("CuPy / CUDA"), cuda_anzeige()),
+            ("TensorRT", tensorrt_anzeige()),
             (_("Einstellungen"), einstellungen.config_path()),
         ]
         for nummer, (bezeichnung, wert) in enumerate(zeilen):

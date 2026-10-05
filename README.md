@@ -83,7 +83,8 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   Funktionsstufe M). Gerechnet wird in halber Genauigkeit (FP16) auf den
   Tensorkernen und in Kacheln, deren Größe sich nach dem Grafikspeicher
   richtet; ein 24-MP-Bild ist mit dem schnellen Modell auf einer RTX 4060 in
-  knapp 6 Sekunden auf 96 MP vergrößert.
+  knapp 6 Sekunden auf 96 MP vergrößert. Mit dem optionalen
+  [TensorRT](#tensorrt-optional) geht es noch einmal rund doppelt so schnell.
 - **100-%-Ansicht**: Zoom auf 100, 200 und 400 % per Mausrad, Verschieben durch
   Ziehen, Doppelklick wechselt zwischen eingepasst und 100 %. Gezeigt wird ein
   Ausschnitt des Bildes in voller Auflösung – genau das, was gespeichert wird.
@@ -128,7 +129,6 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   Grafikkarte.
 - **Weitere KI-Funktionen**: Entrauschen, Entschärfen, Freistellen, Objektauswahl
   per Klick, Objekte entfernen, Tiefenkarte für künstliche Unschärfe.
-- **TensorRT**: noch schnellere KI über TensorRT bzw. TensorRT for RTX.
 
 ## Starten
 
@@ -146,6 +146,27 @@ einmalig; das dauert ein bis drei Sekunden und wird für alle weiteren Starts
 gespeichert.
 
 Eine fertige EXE folgt mit dem ersten Release.
+
+### TensorRT (optional)
+
+Mit TensorRT rechnet die KI noch einmal rund doppelt so schnell – auf einer
+RTX 4060 vergrößert das große Modell ein 12-MP-Bild in 24 statt 54 Sekunden:
+
+```bash
+pip install -r requirements-tensorrt.txt
+```
+
+Das sind rund 1,8 GB Download (installiert 2,8 GB) vom Paketindex von NVIDIA.
+Neuro-Enhance erkennt TensorRT von selbst; unter „Info & Copyright“ steht die
+Fassung. Beim ersten Vergrößern mit einem Modell baut TensorRT einmalig eine für
+die Grafikkarte passende Engine – das dauert ein bis zwei Minuten, ein Fenster
+weist darauf hin. Die Engines liegen danach im Ordner `modelle/tensorrt`. Klappt
+TensorRT nicht, rechnet das Programm wie ohne mit CUDA.
+
+TensorRT steht unter einer proprietären Lizenz von NVIDIA, die mit der
+Installation gilt. Sie erlaubt nicht, TensorRT mit Neuro-Enhance weiterzugeben –
+deshalb gehört es auch zu keiner fertigen EXE, sondern wird immer selbst
+installiert.
 
 ## Datenschutz
 
@@ -172,7 +193,7 @@ Xintao Wang), nach ONNX gewandelt. Wer das selbst nachvollziehen will:
 1. Aus den [Releases von Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/releases)
    `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` und
    `RealESRGAN_x4plus.pth` nach `modelle/quellen/` laden.
-2. `pip install torch onnx` (nur für diesen Schritt nötig).
+2. `pip install torch` (nur für diesen Schritt nötig).
 3. `python werkzeuge/modelle_exportieren.py` – das legt die ONNX-Modelle in
    `modelle/` ab und prüft sie gegen PyTorch.
 

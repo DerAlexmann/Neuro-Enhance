@@ -24,6 +24,16 @@ beim Laden im Speicher gewandelt (etwa eine halbe Sekunde); Ein- und Ausgaenge
 bleiben FP32. Die Abweichung zu FP32 liegt im Mittel bei 0,0002 - weit unter
 einer Stufe von 8 Bit. Auch Real-ESRGAN selbst rechnet standardmaessig in FP16.
 
+Ist das optionale Paket tensorrt-cu12-libs installiert (requirements-tensorrt.txt),
+rechnet TensorRT - noch einmal rund doppelt so schnell. TensorRT baut dafuer je
+Modell, Grafikkarte und Kachelgroesse einmalig eine Engine (eine bis zwei Minuten)
+und legt sie im Ordner `tensorrt` neben den Modellen ab. Gebaut wird in einem
+eigenen Prozess, denn ONNX Runtime haelt dabei die Python-Sperre (GIL) - im
+selben Prozess stuende die Oberflaeche minutenlang still. Scheitert TensorRT,
+rechnet das Programm mit CUDA weiter. TensorRT steht unter einer NVIDIA-Lizenz,
+die die Weitergabe des ONNX-Parsers nicht erlaubt - es gehoert deshalb nie zum
+Programm, sondern wird vom Anwender selbst installiert.
+
 Dieses Modul laedt ONNX Runtime erst beim ersten Gebrauch, also immer nach
 der Startpruefung.
 
@@ -35,7 +45,10 @@ Created with assistance of Claude AI
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
+import importlib.util
 import os
+import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -259,38 +272,203 @@ def _halbe_genauigkeit(pfad: str) -> bytes:
     return modell.SerializeToString()
 
 
+TENSORRT_PAKET = "tensorrt-cu12-libs"
+_tensorrt_geladen = False
+_cache_ordner: str | None = None          # im Bauprozess vom Hauptprozess vorgegeben
+
+
+def tensorrt_ordner() -> str | None:
+    """Ordner mit den TensorRT-Bibliotheken aus dem pip-Paket - oder None."""
+    try:
+        spec = importlib.util.find_spec("tensorrt_libs")
+    except (ImportError, ValueError):
+        return None
+    if spec is None or not spec.submodule_search_locations:
+        return None
+    ordner = list(spec.submodule_search_locations)[0]
+    try:
+        namen = os.listdir(ordner)
+    except OSError:
+        return None
+    if not any(n.startswith(("nvinfer_10", "libnvinfer.so.10")) for n in namen):
+        return None
+    return ordner
+
+
+def tensorrt_fassung() -> str | None:
+    """Fassung des installierten TensorRT - oder None, wenn es fehlt."""
+    if tensorrt_ordner() is None:
+        return None
+    try:
+        return importlib.metadata.version(TENSORRT_PAKET)
+    except importlib.metadata.PackageNotFoundError:
+        return "?"
+
+
+def _tensorrt_laden() -> bool:
+    """TensorRT-Bibliotheken auffindbar machen, bevor ONNX Runtime sie sucht."""
+    global _tensorrt_geladen
+    if _tensorrt_geladen:
+        return True
+    ordner = tensorrt_ordner()
+    if ordner is None:
+        return False
+    if sys.platform == "win32":
+        # Nur den Suchpfad erweitern - das Paket selbst wuerde beim Import alle
+        # Bibliotheken samt der 1,7 GB Builder-Ressourcen laden.
+        os.add_dll_directory(ordner)
+        os.environ["PATH"] = ordner + os.pathsep + os.environ.get("PATH", "")
+    else:
+        import tensorrt_libs  # noqa: F401  laedt libnvinfer & Co. global
+    _tensorrt_geladen = True
+    return True
+
+
+def tensorrt_cache() -> str:
+    return _cache_ordner or os.path.join(modell_ordner(), "tensorrt")
+
+
+def tensorrt_marke(modell: Modell, kachel: int, fp16: bool = True) -> str:
+    """Datei, die anzeigt, dass die Engine fuer diese Kombination schon gebaut ist."""
+    return os.path.join(tensorrt_cache(), "{}-{}-{}-sm{}-trt{}.fertig".format(
+        modell.schluessel, "fp16" if fp16 else "fp32", kachel + 2 * RAND,
+        cp.cuda.Device().compute_capability, tensorrt_fassung()))
+
+
+def tensorrt_baut(modell: Modell, kachel: int, fp16: bool = True) -> bool:
+    """Muss TensorRT beim Laden dieses Modells erst eine Engine bauen (Minuten)?"""
+    return tensorrt_ordner() is not None and not os.path.exists(
+        tensorrt_marke(modell, kachel, fp16))
+
+
+def tensorrt_vorbereiten(modell: Modell, kachel: int, fp16: bool = True):
+    """Engine in einem eigenen Prozess bauen; gibt ein Future zurueck.
+
+    Danach laedt Hochskalierer sie in einer halben Sekunde aus dem Zwischenspeicher.
+    Scheitert der Bau, wirft future.result() den Fehler.
+    """
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+    ausfuehrer = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
+    zukunft = ausfuehrer.submit(_engine_bauen, modell.schluessel, kachel, fp16, tensorrt_cache())
+    ausfuehrer.shutdown(wait=False)               # der Auftrag laeuft weiter
+    return zukunft
+
+
+def _engine_bauen(schluessel: str, kachel: int, fp16: bool, cache: str) -> None:
+    """Laeuft im Bauprozess."""
+    global _cache_ordner
+    _cache_ordner = cache
+    hochskalierer = Hochskalierer(MODELLE[schluessel], 0.5, fp16, kachel, tensorrt=True)
+    if not hochskalierer.tensorrt:
+        raise KiFehler(hochskalierer.tensorrt_fehler)
+
+
 def ausgabe_form(form, faktor: int) -> tuple[int, int]:
     return form[0] * faktor, form[1] * faktor
 
 
 class Hochskalierer:
-    """Ein geladenes Modell. Teuer anzulegen - je Modell und Entrauschstaerke einmal."""
+    """Ein geladenes Modell. Teuer anzulegen - je Modell und Entrauschstaerke einmal.
 
-    def __init__(self, modell: Modell, entrauschen: float = 0.5, fp16: bool = True):
+    kachel ist die groesste Kachel in Eingabepixeln. Nur mit ihr kann TensorRT
+    rechnen, denn die Engine wird fuer eine feste Hoechstgroesse gebaut;
+    tensorrt=None nimmt TensorRT, sobald es installiert ist.
+    """
+
+    def __init__(self, modell: Modell, entrauschen: float = 0.5, fp16: bool = True,
+                 kachel: int | None = None, tensorrt: bool | None = None):
         import onnxruntime as ort
+        self._ort = ort
+        ort.set_default_logger_severity(3)       # nur Fehler, keine Hinweise auf der Konsole
         # CUDA- und cuDNN-Bibliotheken aus den pip-Paketen von NVIDIA laden
         if hasattr(ort, "preload_dlls"):
             ort.preload_dlls(cuda=True, cudnn=True, msvc=False)
         self.modell = modell
         self.entrauschen = entrauschen
         self.fp16 = fp16
-        pfad = datei_pruefen(modell.datei, modell.sha256)
-        netz = _halbe_genauigkeit(pfad) if fp16 else pfad
-        optionen = ort.SessionOptions()
-        optionen.log_severity_level = 3
+        self.kachel = kachel
+        self._pfad = datei_pruefen(modell.datei, modell.sha256)
         self._gewichte: dict = {}
         if modell.mischung:
             self._gewichte = self._mischen(entrauschen)
+        if tensorrt is None:
+            tensorrt = kachel is not None and tensorrt_ordner() is not None
+        self.tensorrt = False
+        self.tensorrt_fehler = ""
+        self.erster_lauf = False                  # TensorRT hat beim Laden die Engine gebaut
+        if tensorrt:
+            if kachel is None:
+                raise ValueError("TensorRT braucht die Kachelgroesse")
+            try:
+                self.sitzung = self._tensorrt_sitzung()
+                self.tensorrt = True
+            except Exception as fehler:           # dann eben mit CUDA
+                self.tensorrt_fehler = str(fehler)
+                self.erster_lauf = False
+        if not self.tensorrt:
+            self.sitzung = self._cuda_sitzung()
+
+    @property
+    def beschleuniger(self) -> str:
+        return "TensorRT" if self.tensorrt else "CUDA"
+
+    def _optionen(self):
+        optionen = self._ort.SessionOptions()
+        optionen.log_severity_level = 3
+        return optionen
+
+    def _cuda_sitzung(self):
+        netz = _halbe_genauigkeit(self._pfad) if self.fp16 else self._pfad
         anbieter = [("CUDAExecutionProvider", {"device_id": 0,
                                                "cudnn_conv_algo_search": "HEURISTIC",
-                                               "prefer_nhwc": "1" if fp16 else "0"})]
+                                               "prefer_nhwc": "1" if self.fp16 else "0"})]
         try:
-            self.sitzung = ort.InferenceSession(netz, optionen, providers=anbieter)
+            sitzung = self._ort.InferenceSession(netz, self._optionen(), providers=anbieter)
         except Exception as fehler:               # ORT wirft eigene Fehlerklassen
             raise KiFehler(str(fehler)) from fehler
-        if "CUDAExecutionProvider" not in self.sitzung.get_providers():
+        if "CUDAExecutionProvider" not in sitzung.get_providers():
             raise KiFehler("ONNX Runtime kann die Grafikkarte nicht nutzen (CUDA).")
-        self._ort = ort
+        return sitzung
+
+    def _tensorrt_sitzung(self):
+        """Sitzung ueber TensorRT. FP16 waehlt TensorRT selbst, das Netz bleibt FP32."""
+        if not _tensorrt_laden():
+            raise KiFehler("TensorRT ist nicht installiert.")
+        if "TensorrtExecutionProvider" not in self._ort.get_available_providers():
+            raise KiFehler("Diese ONNX-Runtime-Fassung kennt TensorRT nicht.")
+        cache = tensorrt_cache()
+        os.makedirs(cache, exist_ok=True)
+        groesse = self.kachel + 2 * RAND
+        self._marke = tensorrt_marke(self.modell, self.kachel, self.fp16)
+        self.erster_lauf = not os.path.exists(self._marke)
+        trt = {"device_id": 0,
+               "trt_fp16_enable": self.fp16,
+               "trt_engine_cache_enable": True,
+               "trt_engine_cache_path": cache,
+               "trt_timing_cache_enable": True,
+               "trt_timing_cache_path": cache,
+               # Randkacheln sind kleiner, groesser als die volle Kachel wird keine
+               "trt_profile_min_shapes": "eingabe:1x3x1x1",
+               "trt_profile_opt_shapes": f"eingabe:1x3x{groesse}x{groesse}",
+               "trt_profile_max_shapes": f"eingabe:1x3x{groesse}x{groesse}"}
+        sitzung = self._ort.InferenceSession(
+            self._pfad, self._optionen(),
+            providers=[("TensorrtExecutionProvider", trt),
+                       ("CUDAExecutionProvider", {"device_id": 0})])
+        if "TensorrtExecutionProvider" not in sitzung.get_providers():
+            raise KiFehler("ONNX Runtime konnte TensorRT nicht laden.")
+        # Die Engine entsteht schon beim Anlegen der Sitzung, nicht erst beim Rechnen
+        with open(self._marke, "w", encoding="utf-8"):
+            pass
+        return sitzung
+
+    def _auf_cuda_wechseln(self, fehler: Exception):
+        self.tensorrt_fehler = str(fehler)
+        self.tensorrt = False
+        self.erster_lauf = False
+        self.sitzung = None                       # TensorRT-Speicher zuerst freigeben
+        self.sitzung = self._cuda_sitzung()
 
     def _mischen(self, staerke: float) -> dict:
         """Beide Gewichtssaetze mischen (staerke 1 = volles, 0 = schwaches Entrauschen).
@@ -330,6 +508,8 @@ class Hochskalierer:
         """
         if faktor not in (2, 4):
             raise ValueError("faktor muss 2 oder 4 sein")
+        if self.tensorrt:
+            kachel = min(kachel, self.kachel)    # groesser kann die Engine nicht
         hoehe, breite = srgb.shape[:2]
         typ, hoechst = (np.uint16, 65535) if bits == 16 else (np.uint8, 255)
         ziel = np.empty((hoehe * faktor, breite * faktor, 3), dtype=typ)
@@ -344,7 +524,10 @@ class Hochskalierer:
                 raise
             except Exception as fehler:          # ORT meldet Speichermangel als eigenen Fehler
                 if "memory" not in str(fehler).lower() and "alloc" not in str(fehler).lower():
-                    raise KiFehler(str(fehler)) from fehler
+                    if not self.tensorrt:
+                        raise KiFehler(str(fehler)) from fehler
+                    self._auf_cuda_wechseln(fehler)  # und mit CUDA noch einmal
+                    continue
             cp.get_default_memory_pool().free_all_blocks()
             if kachel <= 64:
                 raise KiFehler("Zu wenig Grafikspeicher - auch mit kleinsten Kacheln.")

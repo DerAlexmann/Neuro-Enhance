@@ -153,6 +153,14 @@ TRANSLATIONS = {
             "and are checked against their checksum after downloading.\n\n"
             "Location: {ordner}\n\nDownload now?",
         "KI-Modell herunterladen": "Download AI model",
+        "TensorRT bereitet das Modell einmalig für diese Grafikkarte vor – das dauert "
+        "ein bis zwei Minuten. Danach geht jede Vergrößerung rund doppelt so schnell.":
+            "TensorRT is preparing the model for this graphics card once – this takes one "
+            "to two minutes. After that, every upscale runs about twice as fast.",
+        "Gespeichert: {name} ({ms} ms, KI über {weg})": "Saved: {name} ({ms} ms, AI via {weg})",
+        "nicht installiert (optional, siehe README)": "not installed (optional, see README)",
+        "TensorRT ließ sich nicht vorbereiten – die KI rechnet mit CUDA.":
+            "TensorRT could not be prepared – the AI computes with CUDA.",
         "Modell wird heruntergeladen …": "Downloading model …",
         "Herunterladen abgebrochen.": "Download cancelled.",
         "Das Modell ließ sich nicht herunterladen.": "The model could not be downloaded.",

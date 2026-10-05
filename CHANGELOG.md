@@ -16,6 +16,8 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Behoben
 
+- `python -m neuro_enhance` startete das Programm auch in jedem Hilfsprozess
+  erneut; der Start steht jetzt hinter `if __name__ == "__main__"`.
 - Ein Bild mit Alphakanal ließ sich nach Zuschnitt oder Drehung nicht
   speichern: Der Alphakanal behielt seine alte Größe. Er bekommt jetzt
   dieselbe Geometrie wie das Bild (ohne Vignette und Farbsäume).
@@ -26,6 +28,16 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
   überein; eine 24-MP-RAW ist in rund 0,5 s offen statt in 1,3 s.
 
 ### Hinzugefügt
+
+- TensorRT als optionales Zusatzpaket (`requirements-tensorrt.txt`, rund
+  1,8 GB von NVIDIA): Ist es installiert, rechnet die KI darüber – auf einer
+  RTX 4060 noch einmal rund doppelt so schnell (12 MP × 2 mit dem großen
+  Modell: 24 s statt 54 s). Die Engine entsteht beim ersten Einsatz einmalig
+  je Modell, Grafikkarte und Kachelgröße in einem eigenen Prozess (ein bis
+  zwei Minuten, mit Hinweisfenster) und liegt danach unter
+  `modelle/tensorrt`. Scheitert TensorRT, rechnet das Programm mit CUDA
+  weiter. „Info & Copyright“ zeigt die TensorRT-Fassung, die Statuszeile nach
+  dem Speichern den Rechenweg.
 
 - KI-Modelle per Knopfdruck laden: Die Karte „KI-Hochskalieren“ bietet
   „Modell herunterladen“ an, fragt mit Quelle, Größe und Lizenz nach und lädt

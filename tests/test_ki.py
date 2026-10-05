@@ -110,6 +110,92 @@ def test_abbruch(schnell, bild):
         schnell.hochskalieren(cp.asarray(bild), 4, 32, fortschritt=lambda i, n: i < 2)
 
 
+# ----------------------------------------------------------------------
+# TensorRT - optional
+
+
+def test_ohne_tensorrt(monkeypatch):
+    monkeypatch.setattr(ki.importlib.util, "find_spec", lambda name: None)
+    assert ki.tensorrt_ordner() is None and ki.tensorrt_fassung() is None
+
+
+def test_tensorrt_ordner_ohne_bibliotheken(tmp_path, monkeypatch):
+    """Ein Paket ohne nvinfer zaehlt nicht als installiert."""
+    spec = ki.importlib.util.spec_from_file_location(
+        "tensorrt_libs", tmp_path / "__init__.py", submodule_search_locations=[str(tmp_path)])
+    monkeypatch.setattr(ki.importlib.util, "find_spec", lambda name: spec)
+    assert ki.tensorrt_ordner() is None
+    (tmp_path / "nvinfer_10.dll").write_bytes(b"")
+    assert ki.tensorrt_ordner() == str(tmp_path)
+
+
+def test_ohne_kachel_kein_tensorrt(bild):
+    bereit("schnell")
+    assert ki.Hochskalierer(ki.MODELLE["schnell"], 0.5).beschleuniger == "CUDA"
+
+
+def test_tensorrt_scheitert_beim_laden(bild, monkeypatch):
+    cp = bereit("schnell")
+
+    def kaputt(self):
+        raise ki.KiFehler("kaputt")
+
+    monkeypatch.setattr(ki.Hochskalierer, "_tensorrt_sitzung", kaputt)
+    h = ki.Hochskalierer(ki.MODELLE["schnell"], 0.5, kachel=64, tensorrt=True)
+    assert h.beschleuniger == "CUDA" and h.tensorrt_fehler == "kaputt" and not h.erster_lauf
+    assert h.hochskalieren(cp.asarray(bild), 2, 64).shape == (192, 256, 3)
+
+
+def test_tensorrt_scheitert_beim_rechnen(bild):
+    """Bricht TensorRT mitten im Lauf ab, rechnet CUDA das Bild fertig."""
+    cp = bereit("schnell")
+    h = ki.Hochskalierer(ki.MODELLE["schnell"], 0.5, kachel=64, tensorrt=False)
+    erwartet = h.hochskalieren(cp.asarray(bild), 2, 64)
+    echt = h.sitzung
+
+    class Scheitert:
+        io_binding = echt.io_binding
+
+        def run_with_iobinding(self, bindung):
+            raise RuntimeError("TensorRT EP execution context enqueue failed")
+
+    h.sitzung, h.tensorrt, h.kachel = Scheitert(), True, 64
+    aus = h.hochskalieren(cp.asarray(bild), 2, 64)
+    assert h.beschleuniger == "CUDA" and "enqueue" in h.tensorrt_fehler
+    assert np.array_equal(aus, erwartet)
+
+
+@pytest.mark.parametrize("schluessel", ["schnell", "qualitaet"])
+def test_tensorrt_wie_cuda(bild, schluessel, monkeypatch, pytestconfig):
+    """Nur wo TensorRT installiert ist. Der erste Lauf baut die Engines (Minuten)."""
+    cp = bereit(schluessel)
+    if ki.tensorrt_ordner() is None:
+        pytest.skip("TensorRT nicht installiert")
+    monkeypatch.setattr(ki, "tensorrt_cache", lambda: str(pytestconfig.cache.mkdir("tensorrt")))
+    trt = ki.Hochskalierer(ki.MODELLE[schluessel], 0.5, kachel=64)
+    assert trt.beschleuniger == "TensorRT", trt.tensorrt_fehler
+    assert not ki.tensorrt_baut(ki.MODELLE[schluessel], 64)
+    cuda = ki.Hochskalierer(ki.MODELLE[schluessel], 0.5)
+    a = trt.hochskalieren(cp.asarray(bild), 4, 64, bits=16).astype(np.float64) / 65535
+    assert trt.beschleuniger == "TensorRT", trt.tensorrt_fehler
+    b = cuda.hochskalieren(cp.asarray(bild), 4, 64, bits=16).astype(np.float64) / 65535
+    assert np.abs(a - b).mean() < 0.002 and np.abs(a - b).max() < 0.05
+
+
+def test_tensorrt_baut_in_eigenem_prozess(tmp_path, monkeypatch):
+    """Der Bau laeuft in einem eigenen Prozess; danach liegt die Engine bereit."""
+    bereit("schnell")
+    if ki.tensorrt_ordner() is None:
+        pytest.skip("TensorRT nicht installiert")
+    monkeypatch.setattr(ki, "tensorrt_cache", lambda: str(tmp_path))
+    modell = ki.MODELLE["schnell"]
+    assert ki.tensorrt_baut(modell, 48)
+    ki.tensorrt_vorbereiten(modell, 48).result(timeout=600)
+    assert not ki.tensorrt_baut(modell, 48)
+    h = ki.Hochskalierer(modell, 0.5, kachel=48)
+    assert h.beschleuniger == "TensorRT" and not h.erster_lauf
+
+
 def test_modellordner_liegt_neben_dem_programm():
     assert os.path.basename(ki.modell_ordner()) == "modelle"
 

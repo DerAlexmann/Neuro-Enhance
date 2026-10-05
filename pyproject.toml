@@ -41,6 +41,8 @@ dependencies = [
 
 [project.optional-dependencies]
 heif = ["pillow-heif"]
+# Aus https://pypi.nvidia.com - siehe requirements-tensorrt.txt
+tensorrt = ["tensorrt-cu12-libs==10.14.*"]
 
 [project.urls]
 Homepage = "https://github.com/DerAlexmann/Neuro-Enhance"

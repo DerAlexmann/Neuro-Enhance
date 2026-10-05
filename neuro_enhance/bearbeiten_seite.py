@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+from concurrent.futures import wait
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
@@ -611,8 +612,39 @@ class BearbeitenSeite(QWidget):
         schluessel = (modell.schluessel, entrauschen)
         if self._ki_hochskalierer is None or self._ki_hochskalierer[0] != schluessel:
             self._ki_hochskalierer = None             # das alte Modell zuerst freigeben
-            self._ki_hochskalierer = (schluessel, ki.Hochskalierer(modell, entrauschen))
+            self._ki_hochskalierer = (schluessel, self._ki_laden(
+                modell, entrauschen, ki.kachelgroesse(modell, stufe)))
         return self._ki_hochskalierer[1], faktor, ki.kachelgroesse(modell, stufe)
+
+    def _ki_laden(self, modell: ki.Modell, entrauschen: float, kachel: int):
+        """Hochskalierer anlegen. Muss TensorRT erst eine Engine bauen, laeuft das
+        in einem eigenen Prozess, und ein Fenster sagt, warum es dauert."""
+        if not ki.tensorrt_baut(modell, kachel):
+            return ki.Hochskalierer(modell, entrauschen, kachel=kachel)
+        anzeige = QProgressDialog("", "", 0, 0, self)
+        hinweis = QLabel(_(
+            "TensorRT bereitet das Modell einmalig für diese Grafikkarte vor – das dauert "
+            "ein bis zwei Minuten. Danach geht jede Vergrößerung rund doppelt so schnell."))
+        hinweis.setWordWrap(True)
+        hinweis.setMinimumWidth(420)
+        anzeige.setLabel(hinweis)
+        anzeige.setCancelButton(None)             # der Bau laesst sich nicht unterbrechen
+        anzeige.setWindowTitle(self.fenster.windowTitle())
+        anzeige.setWindowModality(Qt.WindowModality.WindowModal)
+        anzeige.setMinimumDuration(0)
+        anzeige.show()
+        zukunft = ki.tensorrt_vorbereiten(modell, kachel)
+        while not zukunft.done():
+            QApplication.processEvents()
+            wait([zukunft], timeout=0.05)
+        anzeige.close()
+        try:
+            zukunft.result()
+        except Exception:                        # dann eben ohne TensorRT
+            self.fenster.melden(_("TensorRT ließ sich nicht vorbereiten – die KI rechnet "
+                                  "mit CUDA."), fehler=True)
+            return ki.Hochskalierer(modell, entrauschen, kachel=kachel, tensorrt=False)
+        return ki.Hochskalierer(modell, entrauschen, kachel=kachel)
 
     def _hsl_karte(self) -> QFrame:
         karte, innen = self._karte(_("Farbbereiche"))
@@ -941,6 +973,10 @@ class BearbeitenSeite(QWidget):
             if fortschritt_fenster is not None:
                 fortschritt_fenster.close()
         self._letzten_ordner_merken(pfad)
+        if auftrag is not None:
+            self.fenster.melden(_("Gespeichert: {name} ({ms} ms, KI über {weg})").format(
+                name=os.path.basename(pfad), ms=f"{ms:.0f}", weg=auftrag[0].beschleuniger))
+            return
         self.fenster.melden(_("Gespeichert: {name} ({ms} ms)")
                             .format(name=os.path.basename(pfad), ms=f"{ms:.0f}"))
 

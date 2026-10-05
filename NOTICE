@@ -92,8 +92,15 @@ NVIDIA cuDNN (nvidia-cudnn-cu12)
   Installed by pip from NVIDIA's own package on the Python Package Index.
   This repository does not contain or redistribute it.
 
-Planned for later versions (listed here once they are used):
-  NVIDIA TensorRT (NVIDIA licence agreement).
+NVIDIA TensorRT (tensorrt-cu12-libs, optional)
+  Copyright NVIDIA Corporation
+  Licence: NVIDIA TensorRT Software License Agreement
+  https://docs.nvidia.com/deeplearning/tensorrt/latest/reference/sla.html
+  Only used if the user installs it with requirements-tensorrt.txt from
+  NVIDIA's package index. The licence does not permit redistributing all
+  libraries ONNX Runtime needs (it excludes the ONNX parser); this repository
+  and any binary release of Neuro-Enhance therefore neither contain nor
+  redistribute TensorRT.
 
 ===========================================================================
 AI models

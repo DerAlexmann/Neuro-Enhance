@@ -76,7 +76,8 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   GPU: a fast model with a denoise strength slider (from 4 GB of video memory) and a
   large model with more sharpness (from feature tier M). Processing runs in half
   precision (FP16) on the tensor cores and in tiles sized to the video memory; with the
-  fast model an RTX 4060 upscales a 24 MP image to 96 MP in just under 6 seconds.
+  fast model an RTX 4060 upscales a 24 MP image to 96 MP in just under 6 seconds. The
+  optional [TensorRT](#tensorrt-optional) makes it about twice as fast again.
 - **100 % view**: zoom to 100, 200 and 400 % with the mouse wheel, pan by dragging,
   double-click toggles between fit and 100 %. It shows a part of the image at full
   resolution – exactly what will be saved.
@@ -117,7 +118,6 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   well.
 - **More AI features**: denoising, deblurring, background removal, click-to-select
   objects, object removal, depth maps for synthetic depth of field.
-- **TensorRT**: even faster AI via TensorRT or TensorRT for RTX.
 
 ## Running it
 
@@ -134,6 +134,26 @@ used, the graphics card compiles the matching program once; this takes one to th
 seconds and is kept for all later starts.
 
 A ready-made executable will follow with the first release.
+
+### TensorRT (optional)
+
+With TensorRT the AI runs about twice as fast again – on an RTX 4060 the large model
+upscales a 12 MP image in 24 instead of 54 seconds:
+
+```bash
+pip install -r requirements-tensorrt.txt
+```
+
+That is about 1.8 GB to download (2.8 GB installed) from NVIDIA's package index.
+Neuro-Enhance detects TensorRT by itself; "Info & Copyright" shows the version. The
+first time a model is used, TensorRT builds an engine for the graphics card once – this
+takes one to two minutes, and a window says so. The engines are then kept in the
+`modelle/tensorrt` folder. If TensorRT does not work, the program computes with CUDA as
+it does without it.
+
+TensorRT is licensed under a proprietary NVIDIA licence that applies on installation.
+It does not allow TensorRT to be passed on together with Neuro-Enhance – which is why
+it is not part of any ready-made executable and is always installed separately.
 
 ## Privacy
 
@@ -159,7 +179,7 @@ The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/
    `RealESRGAN_x4plus.pth` from the
    [Real-ESRGAN releases](https://github.com/xinntao/Real-ESRGAN/releases) into
    `modelle/quellen/`.
-2. `pip install torch onnx` (only needed for this step).
+2. `pip install torch` (only needed for this step).
 3. `python werkzeuge/modelle_exportieren.py` – this writes the ONNX models to `modelle/`
    and checks them against PyTorch.
 
