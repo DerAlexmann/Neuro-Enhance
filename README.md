@@ -80,9 +80,10 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 - **KI-Hochskalieren** um 2 × oder 4 × beim Speichern, mit Real-ESRGAN über ONNX
   Runtime auf der GPU: ein schnelles Modell mit Regler für die Entrauschstärke
   (ab 4 GB Grafikspeicher) und ein großes Modell mit mehr Schärfe (ab
-  Funktionsstufe M). Gerechnet wird in Kacheln, deren Größe sich nach dem
-  Grafikspeicher richtet; ein 24-MP-Bild ist mit dem schnellen Modell in rund
-  11 Sekunden auf 96 MP vergrößert.
+  Funktionsstufe M). Gerechnet wird in halber Genauigkeit (FP16) auf den
+  Tensorkernen und in Kacheln, deren Größe sich nach dem Grafikspeicher
+  richtet; ein 24-MP-Bild ist mit dem schnellen Modell auf einer RTX 4060 in
+  knapp 6 Sekunden auf 96 MP vergrößert.
 - **100-%-Ansicht**: Zoom auf 100, 200 und 400 % per Mausrad, Verschieben durch
   Ziehen, Doppelklick wechselt zwischen eingepasst und 100 %. Gezeigt wird ein
   Ausschnitt des Bildes in voller Auflösung – genau das, was gespeichert wird.

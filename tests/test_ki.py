@@ -93,6 +93,17 @@ def test_entrauschregler_wirkt(bild):
     assert np.abs(a - b).mean() > 0.5
 
 
+@pytest.mark.parametrize("schluessel", ["schnell", "qualitaet"])
+def test_fp16_wie_fp32(bild, schluessel):
+    """Halbe Genauigkeit darf sich in 16 Bit kaum vom FP32-Ergebnis unterscheiden."""
+    cp = bereit(schluessel)
+    halb = ki.Hochskalierer(ki.MODELLE[schluessel], 0.5)
+    voll = ki.Hochskalierer(ki.MODELLE[schluessel], 0.5, fp16=False)
+    a = halb.hochskalieren(cp.asarray(bild), 4, 64, bits=16).astype(np.float64) / 65535
+    b = voll.hochskalieren(cp.asarray(bild), 4, 64, bits=16).astype(np.float64) / 65535
+    assert np.abs(a - b).mean() < 0.001 and np.abs(a - b).max() < 0.02
+
+
 def test_abbruch(schnell, bild):
     cp = bereit("schnell")
     with pytest.raises(ki.KiAbbruch):

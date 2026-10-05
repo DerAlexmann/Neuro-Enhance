@@ -18,6 +18,7 @@ cuda-toolkit==12.8.*
 # cuDNN-Fassungen setzen neuere CUDA-12-Bibliotheken voraus.
 onnxruntime-gpu==1.26.*
 nvidia-cudnn-cu12==9.10.*
+onnx>=1.17            # Modelle beim Laden nach FP16 wandeln
 
 # Optional: HEIC/HEIF-Fotos öffnen
 # pillow-heif

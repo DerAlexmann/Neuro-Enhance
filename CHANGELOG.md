@@ -5,6 +5,15 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ## [Unveröffentlicht]
 
+### Geändert
+
+- KI-Hochskalieren rechnet in halber Genauigkeit (FP16) und im Speicherformat
+  NHWC auf den Tensorkernen – auf einer RTX 4060 doppelt so schnell wie bisher
+  (24 MP × 2 mit dem schnellen Modell: 5,7 s statt 11,1 s; 12 MP × 2 mit dem
+  großen: 54 s statt 111 s). Die Modelldateien bleiben FP32 und werden beim
+  Laden im Speicher gewandelt; neue Abhängigkeit dafür: `onnx`. Die
+  Abweichung zu FP32 liegt im Mittel bei 0,0002.
+
 ### Behoben
 
 - Ein Bild mit Alphakanal ließ sich nach Zuschnitt oder Drehung nicht

@@ -6,6 +6,6 @@ ruff>=0.6
 # Nur fürs Programmsymbol:
 # Pillow
 
-# Nur zum Wandeln der Modelle (werkzeuge/modelle_exportieren.py):
+# Nur zum Wandeln der Modelle (werkzeuge/modelle_exportieren.py), dazu onnx
+# aus requirements.txt:
 # torch
-# onnx

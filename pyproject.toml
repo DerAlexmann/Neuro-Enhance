@@ -36,6 +36,7 @@ dependencies = [
     "cuda-toolkit==12.8.*",
     "onnxruntime-gpu==1.26.*",
     "nvidia-cudnn-cu12==9.10.*",
+    "onnx>=1.17",
 ]
 
 [project.optional-dependencies]

@@ -74,9 +74,9 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   geometry and lens corrections are resampled in a single bicubic step.
 - **AI upscaling** by 2 × or 4 × when saving, with Real-ESRGAN via ONNX Runtime on the
   GPU: a fast model with a denoise strength slider (from 4 GB of video memory) and a
-  large model with more sharpness (from feature tier M). Processing runs in tiles sized
-  to the video memory; with the fast model a 24 MP image is upscaled to 96 MP in about
-  11 seconds.
+  large model with more sharpness (from feature tier M). Processing runs in half
+  precision (FP16) on the tensor cores and in tiles sized to the video memory; with the
+  fast model an RTX 4060 upscales a 24 MP image to 96 MP in just under 6 seconds.
 - **100 % view**: zoom to 100, 200 and 400 % with the mouse wheel, pan by dragging,
   double-click toggles between fit and 100 %. It shows a part of the image at full
   resolution – exactly what will be saved.

@@ -80,6 +80,11 @@ ONNX Runtime (onnxruntime-gpu)
   Licence: MIT
   https://github.com/microsoft/onnxruntime
 
+ONNX (onnx)
+  Copyright ONNX Project Contributors
+  Licence: Apache License 2.0
+  https://github.com/onnx/onnx
+
 NVIDIA cuDNN (nvidia-cudnn-cu12)
   Copyright NVIDIA Corporation
   Licence: NVIDIA cuDNN Software License Agreement
