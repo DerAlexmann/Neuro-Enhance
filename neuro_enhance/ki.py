@@ -1,8 +1,9 @@
 """
-KI-Hochskalieren (Real-ESRGAN) und KI-Entrauschen (SCUNet) ueber ONNX Runtime
+KI-Hochskalieren (Real-ESRGAN), KI-Entrauschen (SCUNet) und KI-Schaerfen
+(Restormer) ueber ONNX Runtime
 
-Die Modelle stammen aus den offiziellen Releases von Real-ESRGAN (BSD-3-Clause)
-und SCUNet (Apache-2.0) und sind mit werkzeuge/modelle_exportieren.py nach ONNX
+Die Modelle stammen aus den offiziellen Releases von Real-ESRGAN (BSD-3-Clause),
+SCUNet (Apache-2.0) und Restormer (MIT) und sind mit werkzeuge/modelle_exportieren.py nach ONNX
 gewandelt. Bereit liegen sie als Dateien eigener Releases dieses Projekts, mit
 dem jeweiligen Lizenztext daneben. Heruntergeladen wird nur auf Wunsch
 des Anwenders; jede Datei wird gegen ihre SHA-256-Pruefsumme geprueft, bevor
@@ -23,6 +24,8 @@ rund 2,7-mal schneller als in FP32. Die Modelle liegen als FP32 vor und werden
 beim Laden im Speicher gewandelt (etwa eine halbe Sekunde); Ein- und Ausgaenge
 bleiben FP32. Die Abweichung zu FP32 liegt im Mittel bei 0,0002 - weit unter
 einer Stufe von 8 Bit. Auch Real-ESRGAN selbst rechnet standardmaessig in FP16.
+Ausnahme ist Restormer: Es normiert ueber alle Pixel einer Kachel, ONNX Runtime
+summiert dabei in FP16 und liefe ueber - es rechnet mit CUDA in FP32, gleich schnell.
 
 Ist das optionale Paket tensorrt-cu12-libs installiert (requirements-tensorrt.txt),
 rechnet TensorRT - noch einmal rund doppelt so schnell. TensorRT baut dafuer je
@@ -60,8 +63,10 @@ from .cuda import cupy as cp
 
 QUELLE = "https://github.com/xinntao/Real-ESRGAN"
 QUELLE_SCUNET = "https://github.com/cszn/SCUNet"
+QUELLE_RESTORMER = "https://github.com/swz30/Restormer"
 MODELL_RELEASE = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-1/"
 MODELL_RELEASE_2 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-2/"
+MODELL_RELEASE_3 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-3/"
 BLOCK = 1 << 20
 
 # Datei -> (SHA-256, Groesse in Bytes)
@@ -80,6 +85,10 @@ DATEIEN = {
         ("cd446d36b78ca0c92d1c01052f7e3d331e5e35080cf597404ea9b8c9106bf157", 74754219),
     "LICENSE-SCUNet.txt":
         ("db7c4e3148d7ff287423d0d62716c6519c71cbcabeb0369cf24c4e14a33865cb", 11409),
+    "restormer-defocus.onnx":
+        ("8d51ab54539cc0383208a036380a2118df6551b693900380d7ed242032b009b9", 105955794),
+    "LICENSE-Restormer.txt":
+        ("2b93776512924bc095ec5d97a79d76cf1ab401ae641d1ae1f46e94f1c53a2e59", 1090),
 }
 LIZENZDATEI = "LICENSE-Real-ESRGAN.txt"
 RAND = 10                    # Ueberlappung je Kachelseite in Eingabepixeln, wie in Real-ESRGAN
@@ -106,6 +115,16 @@ class Modell:
     massstab: int = 4                # Ausgabe ist massstab-mal so gross wie die Eingabe
     rand: int = RAND                 # Ueberlappung je Kachelseite
     vielfaches: int = 1              # Hoehe und Breite einer Kachel muessen Vielfache sein
+    # NHWC beschleunigt reine Faltungsnetze; Netze mit Normierung ueber die Kanaele
+    # (Restormer) bremst es auf ein Drittel, weil ONNX Runtime dann staendig umsortiert
+    nhwc: bool = True
+    # Alle Kacheln gleich gross: Randkacheln ruecken ins Bild hinein, statt kleiner zu
+    # werden. cuDNN kompiliert manche Faltungen (Restormer in FP16) fuer jede neue
+    # Kachelgroesse eigens - rund 26 s je Groesse auf einer RTX 4060.
+    feste_kachel: bool = False
+    # Mit CUDA in FP16 rechnen? Restormer normiert ueber alle Pixel einer Kachel; ONNX
+    # Runtime summiert dabei in FP16 und laeuft ueber. In FP32 ist es gleich schnell.
+    cuda_fp16: bool = True
 
 
 MODELLE = {
@@ -137,7 +156,21 @@ ENTRAUSCH_MODELLE = {
         lizenzdatei="LICENSE-SCUNet.txt", release=MODELL_RELEASE_2,
         massstab=1, rand=32, vielfaches=64),
 }
-ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE}
+# Schaerfen: Restormer gegen Fokus-Unschaerfe, trainiert auf echte Fotos (DPDD) und
+# auf Treue (L1). Das Modell gegen Verwacklung ist nur auf kuenstliche Bewegung aus
+# Videobildern trainiert und hilft bei Fotos kaum - es fehlt deshalb bewusst.
+SCHAERF_MODELLE = {
+    "restormer": Modell(
+        "restormer", "restormer-defocus.onnx",
+        "8d51ab54539cc0383208a036380a2118df6551b693900380d7ed242032b009b9",
+        None,
+        "S", {"S": 256, "M": 384, "L": 448, "XL": 448},
+        lizenz="MIT", quelle=QUELLE_RESTORMER,
+        herkunft="Restormer (MIT, Copyright 2022 Syed Waqas Zamir)",
+        lizenzdatei="LICENSE-Restormer.txt", release=MODELL_RELEASE_3,
+        massstab=1, rand=32, vielfaches=8, nhwc=False, feste_kachel=True, cuda_fp16=False),
+}
+ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE, **SCHAERF_MODELLE}
 STUFEN = ("S", "M", "L", "XL")
 
 
@@ -362,9 +395,11 @@ def eingabe_groesse(modell: Modell, kachel: int) -> int:
 
 
 def tensorrt_marke(modell: Modell, kachel: int, fp16: bool = True) -> str:
-    """Datei, die anzeigt, dass die Engine fuer diese Kombination schon gebaut ist."""
-    return os.path.join(tensorrt_cache(), "{}-{}-{}-sm{}-trt{}.fertig".format(
-        modell.schluessel, "fp16" if fp16 else "fp32", eingabe_groesse(modell, kachel),
+    """Datei, die anzeigt, dass die Engine fuer diese Kombination schon gebaut ist -
+    auch fuer genau diese Modelldatei, denn TensorRT baut fuer eine neue neu."""
+    return os.path.join(tensorrt_cache(), "{}-{}-{}-{}-sm{}-trt{}.fertig".format(
+        modell.schluessel, modell.sha256[:8], "fp16" if fp16 else "fp32",
+        eingabe_groesse(modell, kachel),
         cp.cuda.Device().compute_capability, tensorrt_fassung()))
 
 
@@ -449,10 +484,12 @@ class _Netz:
         return optionen
 
     def _cuda_sitzung(self):
-        netz = _halbe_genauigkeit(self._pfad) if self.fp16 else self._pfad
+        halb = self.fp16 and self.modell.cuda_fp16
+        netz = _halbe_genauigkeit(self._pfad) if halb else self._pfad
         anbieter = [("CUDAExecutionProvider", {"device_id": 0,
                                                "cudnn_conv_algo_search": "HEURISTIC",
-                                               "prefer_nhwc": "1" if self.fp16 else "0"})]
+                                               "prefer_nhwc": "1" if halb and self.modell.nhwc
+                                               else "0"})]
         try:
             sitzung = self._ort.InferenceSession(netz, self._optionen(), providers=anbieter)
         except Exception as fehler:               # ORT wirft eigene Fehlerklassen
@@ -517,27 +554,35 @@ class _Netz:
         self.sitzung.run_with_iobinding(bindung)
         return ausgabe
 
-    def _kacheln(self, kanaele, kachel: int, fortschritt, ablegen):
+    def _kacheln(self, kanaele, kachel: int, fortschritt, ablegen, ganz: bool = False):
         """Alle Kacheln rechnen; ablegen(y0, y1, x0, x1, ergebnis) erhaelt den Kern
-        jeder Kachel (3, m*h, m*w) ohne Ueberlappung."""
+        jeder Kachel (3, m*h, m*w) ohne Ueberlappung - mit ganz=True die ganze Kachel
+        samt Ueberlappung, zum Ueberblenden."""
         _n, _k, hoehe, breite = kanaele.shape
         m, rand, vielfaches = self.modell.massstab, self.modell.rand, self.modell.vielfaches
         zeilen = range(0, hoehe, kachel)
         spalten = range(0, breite, kachel)
         anzahl, nummer = len(zeilen) * len(spalten), 0
+        fest = eingabe_groesse(self.modell, kachel) if self.modell.feste_kachel else 0
         for y0 in zeilen:
             for x0 in spalten:
                 y1, x1 = min(y0 + kachel, hoehe), min(x0 + kachel, breite)
                 ya, xa = max(y0 - rand, 0), max(x0 - rand, 0)
                 ye, xe = min(y1 + rand, hoehe), min(x1 + rand, breite)
+                if fest:                           # Randkacheln ruecken ins Bild hinein
+                    ya, xa = max(min(ya, hoehe - fest), 0), max(min(xa, breite - fest), 0)
+                    ye, xe = min(ya + fest, hoehe), min(xa + fest, breite)
                 teil = kanaele[:, :, ya:ye, xa:xe]
                 fh = -(ye - ya) % vielfaches
                 fb = -(xe - xa) % vielfaches
                 if fh or fb:                       # am Bildrand auffuellen wie im Original
                     teil = cp.pad(teil, ((0, 0), (0, 0), (0, fh), (0, fb)), mode="edge")
                 ergebnis = self._kachel(cp.ascontiguousarray(teil))[0]
-                ablegen(y0, y1, x0, x1, ergebnis[:, m * (y0 - ya):m * (y1 - ya),
-                                                 m * (x0 - xa):m * (x1 - xa)])
+                if ganz:
+                    ablegen(ya, ye, xa, xe, ergebnis[:, :m * (ye - ya), :m * (xe - xa)])
+                else:
+                    ablegen(y0, y1, x0, x1, ergebnis[:, m * (y0 - ya):m * (y1 - ya),
+                                                     m * (x0 - xa):m * (x1 - xa)])
                 nummer += 1
                 if fortschritt is not None and fortschritt(nummer, anzahl) is False:
                     raise KiAbbruch()
@@ -616,23 +661,63 @@ class Hochskalierer(_Netz):
         return ziel
 
 
-class Entrauscher(_Netz):
-    """SCUNet - entrauscht ein sRGB-Bild in voller Groesse, Ergebnis bleibt auf der GPU."""
+class _Bildnetz(_Netz):
+    """Netz, das ein sRGB-Bild in gleicher Groesse zurueckgibt; alles bleibt auf der GPU."""
+
+    STANDARD = ""
 
     def __init__(self, modell: Modell | None = None, fp16: bool = True,
                  kachel: int | None = None, tensorrt: bool | None = None):
-        super().__init__(modell or ENTRAUSCH_MODELLE["scunet"], fp16, kachel, tensorrt)
+        super().__init__(modell or ALLE_MODELLE[self.STANDARD], fp16, kachel, tensorrt)
 
-    def entrauschen(self, srgb, kachel: int, fortschritt=None):
-        """sRGB (H, W, 3) float32 0..1 auf der GPU -> entrauscht, gleiche Form, auf der GPU."""
+    def rechnen(self, srgb, kachel: int, fortschritt=None):
+        """sRGB (H, W, 3) float32 0..1 auf der GPU -> Ergebnis, gleiche Form, auf der GPU.
+
+        Die Kacheln werden in ihrer Ueberlappung weich ineinander geblendet, nicht
+        hart aneinandergesetzt: Netze, die ueber die ganze Kachel schauen (SCUNet,
+        Restormer), liefern in benachbarten Kacheln leicht verschiedene Helligkeit -
+        eine harte Grenze waere als Naht zu sehen.
+        """
+        hoehe, breite = srgb.shape[:2]
         kanaele = cp.ascontiguousarray(cp.moveaxis(srgb.astype(cp.float32), -1, 0))[None]
-        ziel = cp.empty((3,) + srgb.shape[:2], dtype=cp.float32)
+        rampe = 2 * self.modell.rand
 
-        def ablegen(y0, y1, x0, x1, kern):
-            ziel[:, y0:y1, x0:x1] = kern
+        def gewicht(anfang, ende, laenge):
+            stelle = cp.arange(ende - anfang, dtype=cp.float32)
+            w = cp.ones(ende - anfang, dtype=cp.float32)
+            if anfang > 0:
+                w = cp.minimum(w, (stelle + 0.5) / rampe)
+            if ende < laenge:
+                w = cp.minimum(w, (ende - anfang - stelle - 0.5) / rampe)
+            return w
 
-        self._mit_wiederholung(lambda k: self._kacheln(kanaele, k, fortschritt, ablegen), kachel)
+        def arbeit(k):
+            summe = cp.zeros((3, hoehe, breite), dtype=cp.float32)
+            gewichte = cp.zeros((hoehe, breite), dtype=cp.float32)
+
+            def ablegen(ya, ye, xa, xe, teil):
+                w = gewicht(ya, ye, hoehe)[:, None] * gewicht(xa, xe, breite)[None, :]
+                summe[:, ya:ye, xa:xe] += teil * w
+                gewichte[ya:ye, xa:xe] += w
+
+            self._kacheln(kanaele, k, fortschritt, ablegen, ganz=True)
+            summe /= gewichte
+            return summe
+
+        ziel = self._mit_wiederholung(arbeit, kachel)
         return cp.ascontiguousarray(cp.moveaxis(cp.clip(ziel, 0, 1), 0, -1))
+
+
+class Entrauscher(_Bildnetz):
+    """SCUNet - entrauscht ein sRGB-Bild in voller Groesse."""
+
+    STANDARD = "scunet"
+
+
+class Schaerfer(_Bildnetz):
+    """Restormer - nimmt Fokus-Unschaerfe aus einem sRGB-Bild in voller Groesse."""
+
+    STANDARD = "restormer"
 
 
 class KiAbbruch(Exception):

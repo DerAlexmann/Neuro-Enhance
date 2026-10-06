@@ -9,10 +9,12 @@ Jede Aenderung an einem Regler rechnet die Vorschau aus dem unveraenderten
 Original neu; nichts wird ueberschrieben, jeder Regler bleibt jederzeit
 umkehrbar.
 
-KI-Entrauschen ist zu teuer, um es bei jeder Reglerbewegung zu rechnen. Es
-laeuft einmal ueber das ganze Original und liegt danach als zweites Original
-im Grafikspeicher; der Staerkeregler mischt nur noch zwischen beiden - das
-kostet je Vorschau Bruchteile einer Millisekunde.
+KI-Entrauschen und KI-Schaerfen sind zu teuer, um sie bei jeder
+Reglerbewegung zu rechnen. Sie laufen einmal ueber das ganze Bild und liegen
+danach im Grafikspeicher - das Entrauschen als zweites Original, das
+Schaerfen als Korrektur, die aufs Ergebnis des Entrauschens gelegt wird. Die
+Staerkeregler mischen nur noch; das kostet je Vorschau Bruchteile einer
+Millisekunde.
 
 Dieses Modul importiert CuPy und darf deshalb erst nach der Startprufung
 geladen werden.
@@ -36,6 +38,11 @@ from .filter import Einstellungen
 # a + s * (b - a) in einem Durchlauf, ohne Zwischenpuffer
 _mischen = cp.ElementwiseKernel("float32 a, float32 b, float32 s", "float32 c",
                                 "c = a + s * (b - a)", "ne_mischen")
+SCHAERFE_GROB = 10.0           # Sigma in Pixeln: groebere Anteile der KI-Schaerfung fallen weg
+
+# a + s * d - eine Korrektur mit Staerke auflegen
+_auflegen = cp.ElementwiseKernel("float32 a, float32 d, float32 s", "float32 c",
+                                 "c = a + s * d", "ne_auflegen")
 
 
 def histogramm_von(rgb_uint8):
@@ -57,6 +64,7 @@ class Sitzung:
         self._speicher: dict = {}            # Zwischenergebnisse der Filter, je Bildgroesse
         self._vollbild = None                 # (Einstellungen, fertiges Bild auf der GPU)
         self._ki_rauschfrei = None            # (voll, Vorschau): KI-entrauschtes Original
+        self._ki_schaerfe = None              # (voll, Vorschau): Korrektur des KI-Schaerfens
 
         self.original = daten.linear(cp)
         # Zwischenpuffer des Demosaicing an den Grafikspeicher zurueckgeben
@@ -72,40 +80,76 @@ class Sitzung:
     def ki_entrauscht(self) -> bool:
         return self._ki_rauschfrei is not None
 
-    def ki_entrauschen(self, entrauscher, kachel: int, fortschritt=None) -> float:
-        """Das Original einmal mit KI entrauschen; Rueckgabe: Rechenzeit in ms.
+    @property
+    def ki_geschaerft(self) -> bool:
+        return self._ki_schaerfe is not None
+
+    def _ki_korrektur(self, netz, bild, kachel: int, fortschritt):
+        """Was das Netz an einem Bild in linearem Licht aendert, als Korrektur.
 
         Das Netz kennt Bilder in sRGB von 0 bis 1. Was heller ist - Lichter
         einer RAW -, bekommt es begrenzt zu sehen; zurueck kommt nur seine
-        Korrektur, aufs ungekuerzte Original gelegt. So bleiben die Lichter
-        erhalten.
+        Korrektur, die aufs ungekuerzte Bild gelegt wird. So bleiben die
+        Lichter erhalten.
         """
-        beginn = time.perf_counter()
-        begrenzt = cp.clip(self.original, 0, 1)
-        glatt = entrauscher.entrauschen(filter.linear_zu_srgb(begrenzt), kachel, fortschritt)
-        voll = filter.srgb_zu_linear(glatt)
-        del glatt
-        voll -= begrenzt
-        del begrenzt
-        voll += self.original
+        begrenzt = cp.clip(bild, 0, 1)
+        neu = netz.rechnen(filter.linear_zu_srgb(begrenzt), kachel, fortschritt)
+        korrektur = filter.srgb_zu_linear(neu)
+        del neu
+        korrektur -= begrenzt
+        return korrektur
+
+    def _vorschau_von(self, voll):
         faktor = round(1 / self.vorschau_massstab)
-        vorschau = voll if faktor == 1 else filter.verkleinern_box(voll, faktor).astype(cp.float32)
-        self._ki_rauschfrei = (voll, vorschau)
+        return voll if faktor == 1 else filter.verkleinern_box(voll, faktor).astype(cp.float32)
+
+    def _ki_fertig(self, beginn: float) -> float:
         # Zwischenergebnisse beruhten auf dem alten Ausgangsbild
         self._speicher.clear()
         self._vollbild = None
         cp.get_default_memory_pool().free_all_blocks()
         return (time.perf_counter() - beginn) * 1000
 
-    def _ausgang(self, werte: Einstellungen, voll: bool):
-        """Original oder - je nach Staerke - mit dem KI-entrauschten gemischt."""
-        original = self.original if voll else self.vorschau_original
-        if self._ki_rauschfrei is None or werte.ki_rauschen <= 0:
-            return original
-        glatt = self._ki_rauschfrei[0 if voll else 1]
-        if werte.ki_rauschen >= 100:
-            return glatt
-        return _mischen(original, glatt, cp.float32(werte.ki_rauschen / 100))
+    def ki_entrauschen(self, entrauscher, kachel: int, fortschritt=None) -> float:
+        """Das Original einmal mit KI entrauschen; Rueckgabe: Rechenzeit in ms."""
+        beginn = time.perf_counter()
+        voll = self._ki_korrektur(entrauscher, self.original, kachel, fortschritt)
+        voll += self.original
+        self._ki_rauschfrei = (voll, self._vorschau_von(voll))
+        return self._ki_fertig(beginn)
+
+    def ki_schaerfen(self, schaerfer, kachel: int, fortschritt=None) -> float:
+        """Das Bild einmal mit KI schaerfen; Rueckgabe: Rechenzeit in ms.
+
+        Geschaerft wird das Original, wie es gerade entrauscht ist - Rauschen
+        wuerde das Netz sonst mitschaerfen. Gespeichert wird nur die Korrektur;
+        sie bleibt gueltig, wenn sich die Staerke des Entrauschens danach
+        noch etwas aendert.
+
+        Von der Korrektur bleibt nur der feine Anteil. Restormer hellt das Bild
+        nebenbei auf und verschiebt die Farbe ein wenig, je Kachel verschieden;
+        Schaerfe aber steckt in den feinen Strukturen. Was groeber ist als etwa
+        zehn Pixel, wird deshalb abgezogen.
+        """
+        beginn = time.perf_counter()
+        korrektur = self._ki_korrektur(schaerfer, self._ausgang(self.werte, True, schaerfen=False),
+                                       kachel, fortschritt)
+        for kanal in range(3):
+            korrektur[..., kanal] -= filter.gauss(korrektur[..., kanal], SCHAERFE_GROB)
+        self._ki_schaerfe = (korrektur, self._vorschau_von(korrektur))
+        return self._ki_fertig(beginn)
+
+    def _ausgang(self, werte: Einstellungen, voll: bool, schaerfen: bool = True):
+        """Original - je nach Staerke mit dem KI-entrauschten gemischt und KI-geschaerft."""
+        stelle = 0 if voll else 1
+        bild = self.original if voll else self.vorschau_original
+        if self._ki_rauschfrei is not None and werte.ki_rauschen > 0:
+            glatt = self._ki_rauschfrei[stelle]
+            bild = glatt if werte.ki_rauschen >= 100 else \
+                _mischen(bild, glatt, cp.float32(werte.ki_rauschen / 100))
+        if schaerfen and self._ki_schaerfe is not None and werte.ki_schaerfe > 0:
+            bild = _auflegen(bild, self._ki_schaerfe[stelle], cp.float32(werte.ki_schaerfe / 100))
+        return bild
 
     def vorschau(self, unbearbeitet: bool = False,
                  werte: Einstellungen | None = None) -> tuple[np.ndarray, float, np.ndarray]:
@@ -199,5 +243,6 @@ class Sitzung:
         self.vorschau_original = None
         self._vollbild = None
         self._ki_rauschfrei = None
+        self._ki_schaerfe = None
         self._speicher.clear()
         cp.get_default_memory_pool().free_all_blocks()

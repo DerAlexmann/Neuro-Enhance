@@ -24,7 +24,7 @@ class Platzhalter:
     def __init__(self):
         self.aufrufe = []
 
-    def entrauschen(self, srgb, kachel, fortschritt=None):
+    def rechnen(self, srgb, kachel, fortschritt=None):
         self.aufrufe.append((srgb.shape, kachel))
         return cp.full_like(srgb, 0.5)
 
@@ -78,7 +78,7 @@ def test_lichter_ueber_eins_bleiben(sitzung):
     sitzung.original[:10] = 3.0
 
     class Unveraendert(Platzhalter):
-        def entrauschen(self, srgb, kachel, fortschritt=None):
+        def rechnen(self, srgb, kachel, fortschritt=None):
             return srgb.copy()
 
     sitzung.ki_entrauschen(Unveraendert(), 64)
@@ -127,7 +127,7 @@ def verrauscht():
 
 def test_scunet_entrauscht(scunet, verrauscht):
     sauber, laut = verrauscht
-    glatt = cp.asnumpy(scunet.entrauschen(cp.asarray(laut), 512))
+    glatt = cp.asnumpy(scunet.rechnen(cp.asarray(laut), 512))
     assert glatt.shape == laut.shape
     vorher = np.sqrt(((laut - sauber) ** 2).mean())
     nachher = np.sqrt(((glatt - sauber) ** 2).mean())
@@ -137,8 +137,8 @@ def test_scunet_entrauscht(scunet, verrauscht):
 def test_scunet_kachelgrenzen_unsichtbar(scunet, verrauscht):
     """Groesse kein Vielfaches von 64, Kacheln kleiner als das Bild."""
     _sauber, laut = verrauscht
-    ganz = cp.asnumpy(scunet.entrauschen(cp.asarray(laut), 512))
-    kacheln = cp.asnumpy(scunet.entrauschen(cp.asarray(laut), 64))
+    ganz = cp.asnumpy(scunet.rechnen(cp.asarray(laut), 512))
+    kacheln = cp.asnumpy(scunet.rechnen(cp.asarray(laut), 64))
     assert np.abs(ganz - kacheln).mean() < 0.003
 
 
@@ -149,15 +149,15 @@ def test_scunet_fp16_wie_fp32(verrauscht):
     if not ki.vorhanden(modell):
         pytest.skip("Modelldateien fehlen")
     _sauber, laut = verrauscht
-    a = cp.asnumpy(ki.Entrauscher(modell).entrauschen(cp.asarray(laut), 256))
-    b = cp.asnumpy(ki.Entrauscher(modell, fp16=False).entrauschen(cp.asarray(laut), 256))
+    a = cp.asnumpy(ki.Entrauscher(modell).rechnen(cp.asarray(laut), 256))
+    b = cp.asnumpy(ki.Entrauscher(modell, fp16=False).rechnen(cp.asarray(laut), 256))
     assert np.abs(a - b).mean() < 0.001
 
 
 def test_scunet_abbruch(scunet, verrauscht):
     _sauber, laut = verrauscht
     with pytest.raises(ki.KiAbbruch):
-        scunet.entrauschen(cp.asarray(laut), 64, fortschritt=lambda i, n: i < 2)
+        scunet.rechnen(cp.asarray(laut), 64, fortschritt=lambda i, n: i < 2)
 
 
 def test_scunet_mit_tensorrt(verrauscht, monkeypatch, pytestconfig):
@@ -171,7 +171,7 @@ def test_scunet_mit_tensorrt(verrauscht, monkeypatch, pytestconfig):
     _sauber, laut = verrauscht
     trt = ki.Entrauscher(modell, kachel=128)
     assert trt.beschleuniger == "TensorRT", trt.tensorrt_fehler
-    a = cp.asnumpy(trt.entrauschen(cp.asarray(laut), 128))
+    a = cp.asnumpy(trt.rechnen(cp.asarray(laut), 128))
     assert trt.beschleuniger == "TensorRT", trt.tensorrt_fehler
-    b = cp.asnumpy(ki.Entrauscher(modell).entrauschen(cp.asarray(laut), 128))
+    b = cp.asnumpy(ki.Entrauscher(modell).rechnen(cp.asarray(laut), 128))
     assert np.abs(a - b).mean() < 0.002

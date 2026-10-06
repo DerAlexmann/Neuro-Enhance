@@ -77,6 +77,14 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   danach mischt ein Stärkeregler sofort zwischen Original und entrauschtem
   Bild – in Vorschau, 100-%-Ansicht und Export gleichermaßen. Lichter über
   Weiß, etwa aus RAWs, bleiben erhalten.
+- **KI-Schärfen** gegen leichte Fokus-Unschärfe mit Restormer, trainiert auf
+  echte, unscharf fotografierte Bilder einer Spiegelreflexkamera und auf Treue:
+  Wimpern, Haare und Hautstruktur werden wieder klarer, ohne die Säume des
+  klassischen Schärfens. Einmal über das ganze Bild gerechnet (24 MP auf einer
+  RTX 4060: rund drei Minuten, mit TensorRT 45 Sekunden), danach regelt ein
+  Stärkeregler ohne Wartezeit. Geschärft wird das entrauschte Bild, falls
+  KI-Entrauschen berechnet ist; übernommen wird nur der feine Anteil, Helligkeit
+  und Farbe bleiben unverändert.
 - **Geometrie**: um 90° drehen, spiegeln, begradigen, Perspektive senkrecht
   und waagrecht, Zuschneiden mit Rahmen und festen Seitenverhältnissen. Leere
   Ecken nach dem Begradigen werden automatisch weggeschnitten.
@@ -165,8 +173,8 @@ pip install -r requirements-tensorrt.txt
 Das sind rund 1,8 GB Download (installiert 2,8 GB) vom Paketindex von NVIDIA.
 Neuro-Enhance erkennt TensorRT von selbst; unter „Info & Copyright“ steht die
 Fassung. Beim ersten Vergrößern mit einem Modell baut TensorRT einmalig eine für
-die Grafikkarte passende Engine – das dauert ein bis drei Minuten, ein Fenster
-weist darauf hin. Die Engines liegen danach im Ordner `modelle/tensorrt`. Klappt
+die Grafikkarte passende Engine – das dauert ein bis drei Minuten (beim
+KI-Schärfen bis zu acht), ein Fenster weist darauf hin. Die Engines liegen danach im Ordner `modelle/tensorrt`. Klappt
 TensorRT nicht, rechnet das Programm wie ohne mit CUDA.
 
 TensorRT steht unter einer proprietären Lizenz von NVIDIA, die mit der
@@ -179,9 +187,9 @@ installiert.
 Neuro-Enhance arbeitet vollständig auf dem eigenen Rechner. Es werden keine Bilder
 hochgeladen und keine Nutzungsdaten gesendet. Auch die KI rechnet lokal auf der
 Grafikkarte. Die einzige Verbindung ins Netz ist das Laden eines KI-Modells – und
-das nur, wenn man in der Karte „KI-Hochskalieren“ oder „KI-Entrauschen“
-ausdrücklich darauf klickt und die Rückfrage mit Quelle, Größe und Lizenz
-bestätigt.
+das nur, wenn man in einer der Karten „KI-Hochskalieren“, „KI-Entrauschen“
+oder „KI-Schärfen“ ausdrücklich darauf klickt und die Rückfrage mit Quelle,
+Größe und Lizenz bestätigt.
 
 ## KI-Modelle
 
@@ -191,22 +199,27 @@ Releases dieses Projekts: in der Karte „KI-Hochskalieren“ aus
 das schnelle Modell mit knapp 10 MB und das große mit 64 MB, in der Karte
 „KI-Entrauschen“ aus
 [modelle-2](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-2)
-SCUNet mit 71 MB. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft, bevor
-sie verwendet wird.
+SCUNet mit 71 MB, in der Karte „KI-Schärfen“ aus
+[modelle-3](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-3)
+Restormer mit 101 MB. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft,
+bevor sie verwendet wird.
 Abgelegt werden sie im Ordner `modelle` neben dem Programm oder, wenn der
 schreibgeschützt ist, unter `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
 
 Die Modelle sind die offiziellen Gewichte von
 [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (BSD 3-Clause, Copyright 2021
-Xintao Wang) und [SCUNet](https://github.com/cszn/SCUNet) (Apache-2.0, Copyright
-2022 Kai Zhang), nach ONNX gewandelt. Wer das selbst nachvollziehen will:
+Xintao Wang), [SCUNet](https://github.com/cszn/SCUNet) (Apache-2.0, Copyright
+2022 Kai Zhang) und [Restormer](https://github.com/swz30/Restormer) (MIT,
+Copyright 2022 Syed Waqas Zamir), nach ONNX gewandelt. Wer das selbst
+nachvollziehen will:
 
 1. Aus den [Releases von Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/releases)
    `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` und
    `RealESRGAN_x4plus.pth`, aus dem
    [Release v1.0 von KAIR](https://github.com/cszn/KAIR/releases/tag/v1.0), wo die
-   SCUNet-Gewichte liegen, `scunet_color_real_psnr.pth` nach `modelle/quellen/`
-   laden.
+   SCUNet-Gewichte liegen, `scunet_color_real_psnr.pth` und aus dem
+   [Release v1.0 von Restormer](https://github.com/swz30/Restormer/releases/tag/v1.0)
+   `single_image_defocus_deblurring.pth` nach `modelle/quellen/` laden.
 2. `pip install torch` (nur für diesen Schritt nötig).
 3. `python werkzeuge/modelle_exportieren.py` – das legt die ONNX-Modelle in
    `modelle/` ab und prüft sie gegen PyTorch.

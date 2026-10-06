@@ -138,6 +138,21 @@ SCUNet (model scunet_color_real_psnr)
   (LICENSE-SCUNet.txt), which Neuro-Enhance also downloads and stores next to
   the model.
 
+Restormer (model single_image_defocus_deblurring)
+  Copyright (c) 2022 Syed Waqas Zamir and contributors
+  Licence: MIT License
+  https://github.com/swz30/Restormer
+  The official weights (release v1.0 of the repository above) are converted
+  to ONNX with werkzeuge/modelle_exportieren.py. The network architecture is
+  re-implemented there without einops; as a change to the original, the
+  normalisation in the attention is computed as the mean of squares after
+  dividing by the largest magnitude, which gives the same result but does
+  not overflow in half precision (FP16). The weights themselves are
+  unchanged. The converted model file is published as an asset of the
+  release "modelle-3" of this project, together with the MIT licence text of
+  Restormer (LICENSE-Restormer.txt), which Neuro-Enhance also downloads and
+  stores next to the model.
+
 Only models whose licence permits use and redistribution in an
 open-source project are offered by default.
 

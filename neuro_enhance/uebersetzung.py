@@ -166,6 +166,20 @@ TRANSLATIONS = {
         "KI-Entrauschen abgebrochen.": "AI denoise cancelled.",
         "Das KI-Entrauschen ist fehlgeschlagen.": "AI denoise failed.",
         "KI-Entrauschen fertig ({s} s, über {weg})": "AI denoise done ({s} s, via {weg})",
+        "KI-Schärfen": "AI sharpen",
+        "Für dieses Bild berechnet. Der Regler bestimmt, wie stark die Schärfung wirkt.":
+            "Computed for this image. The slider sets how strongly the sharpening applies.",
+        "Gegen leichte Fokus-Unschärfe. Rechnet einmal über das ganze Bild – bei 24 "
+        "Megapixeln {zeit}. Erst entrauschen, sonst schärft die KI das Rauschen mit.":
+            "For slight focus blur. Runs once over the whole image – {zeit} for 24 "
+            "megapixels. Denoise first, otherwise the AI sharpens the noise too.",
+        "knapp eine Minute": "just under a minute",
+        "etwa drei Minuten": "about three minutes",
+        "Schärfen berechnen": "Compute sharpening",
+        "KI schärft das Bild …": "AI is sharpening the image …",
+        "KI-Schärfen abgebrochen.": "AI sharpen cancelled.",
+        "Das KI-Schärfen ist fehlgeschlagen.": "AI sharpen failed.",
+        "KI-Schärfen fertig ({s} s, über {weg})": "AI sharpen done ({s} s, via {weg})",
         "KI-Modell herunterladen": "Download AI model",
         "TensorRT bereitet das Modell einmalig für diese Grafikkarte vor – das dauert "
         "einige Minuten. Danach rechnet die KI rund doppelt so schnell.":

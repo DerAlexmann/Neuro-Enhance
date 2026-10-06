@@ -208,7 +208,8 @@ def test_katalog_vollstaendig():
         assert modell.lizenzdatei in ki.dateien(modell)
         assert modell.release.startswith("https://github.com/DerAlexmann/Neuro-Enhance/")
         assert modell.mindeststufe in ki.STUFEN and set(modell.kacheln) <= set(ki.STUFEN)
-    assert set(ki.ALLE_MODELLE) == set(ki.MODELLE) | set(ki.ENTRAUSCH_MODELLE)
+    assert set(ki.ALLE_MODELLE) == (set(ki.MODELLE) | set(ki.ENTRAUSCH_MODELLE)
+                                    | set(ki.SCHAERF_MODELLE))
 
 
 def test_entrauschmodell_aus_eigenem_release():
@@ -216,6 +217,36 @@ def test_entrauschmodell_aus_eigenem_release():
     scunet = ki.ENTRAUSCH_MODELLE["scunet"]
     assert scunet.release == ki.MODELL_RELEASE_2 != ki.MODELL_RELEASE
     assert all(m.release == ki.MODELL_RELEASE for m in ki.MODELLE.values())
+    assert ki.SCHAERF_MODELLE["restormer"].release == ki.MODELL_RELEASE_3
+
+
+def test_feste_kachel_rueckt_randkacheln_ins_bild():
+    """Restormer bekommt nur Kacheln einer Groesse zu sehen - auch am Bildrand."""
+    import dataclasses
+    cp = pytest.importorskip("cupy")
+    try:
+        cp.cuda.runtime.getDeviceCount()
+    except cp.cuda.runtime.CUDARuntimeError:
+        pytest.skip("keine Grafikkarte")
+    modell = dataclasses.replace(ki.SCHAERF_MODELLE["restormer"], rand=4, vielfaches=8)
+    netz = object.__new__(ki._Netz)
+    netz.modell = modell
+    formen = []
+
+    def kachel(eingabe):
+        formen.append(eingabe.shape[2:])
+        return eingabe
+
+    netz._kachel = kachel
+    bild = cp.random.rand(1, 3, 50, 70).astype(cp.float32)
+    ziel = cp.zeros_like(bild[0])
+
+    def ablegen(y0, y1, x0, x1, kern):
+        ziel[:, y0:y1, x0:x1] = kern
+
+    netz._kacheln(bild, 16, None, ablegen)
+    assert set(formen) == {(24, 24)}
+    assert cp.array_equal(ziel, bild[0])
 
 
 def test_eingabe_groesse_ist_vielfaches():

@@ -7,6 +7,11 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Geändert
 
+- KI-Kacheln von KI-Entrauschen und KI-Schärfen werden in ihrer Überlappung
+  weich ineinander geblendet statt hart aneinandergesetzt; Netze, die über die
+  ganze Kachel schauen, liefern sonst sichtbare Nähte.
+- Die Marke einer gebauten TensorRT-Engine enthält jetzt die Prüfsumme der
+  Modelldatei; ändert sich ein Modell, wird die Engine neu gebaut.
 - KI-Hochskalieren rechnet in halber Genauigkeit (FP16) und im Speicherformat
   NHWC auf den Tensorkernen – auf einer RTX 4060 doppelt so schnell wie bisher
   (24 MP × 2 mit dem schnellen Modell: 5,7 s statt 11,1 s; 12 MP × 2 mit dem
@@ -29,6 +34,16 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- KI-Schärfen gegen leichte Fokus-Unschärfe mit Restormer
+  (single_image_defocus_deblurring, MIT) in einer eigenen Karte: einmal über
+  das ganze Bild gerechnet, danach regelt ein Stärkeregler ohne Wartezeit.
+  Geschärft wird das KI-entrauschte Bild, falls vorhanden; gespeichert wird nur
+  die Korrektur, und von ihr nur der feine Anteil (Hochpass, Sigma 10 px) –
+  Restormer hellt nebenbei auf und verschiebt die Farbe je Kachel ein wenig.
+  24 MP brauchen auf einer RTX 4060 rund 3 min, mit TensorRT 45 s. Das Modell
+  (101 MB) kommt aus dem neuen Release `modelle-3`. Getestet und verworfen:
+  NAFNet (GoPro/REDS) – es erzeugt bei Fotos in voller Auflösung Fehlmuster –
+  und das Restormer-Modell gegen Verwacklung, das bei echten Fotos kaum wirkt.
 - KI-Entrauschen mit SCUNet (scunet_color_real_psnr, Apache-2.0) in einer
   eigenen Karte: einmal über das ganze Bild gerechnet, danach mischt ein
   Stärkeregler ohne Wartezeit zwischen Original und entrauschtem Bild – in
