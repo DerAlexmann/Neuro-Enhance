@@ -209,7 +209,7 @@ def test_katalog_vollstaendig():
         assert modell.release.startswith("https://github.com/DerAlexmann/Neuro-Enhance/")
         assert modell.mindeststufe in ki.STUFEN and set(modell.kacheln) <= set(ki.STUFEN)
     assert set(ki.ALLE_MODELLE) == (set(ki.MODELLE) | set(ki.ENTRAUSCH_MODELLE)
-                                    | set(ki.SCHAERF_MODELLE))
+                                    | set(ki.SCHAERF_MODELLE) | set(ki.MASKEN_MODELLE))
 
 
 def test_entrauschmodell_aus_eigenem_release():
@@ -218,6 +218,7 @@ def test_entrauschmodell_aus_eigenem_release():
     assert scunet.release == ki.MODELL_RELEASE_2 != ki.MODELL_RELEASE
     assert all(m.release == ki.MODELL_RELEASE for m in ki.MODELLE.values())
     assert ki.SCHAERF_MODELLE["restormer"].release == ki.MODELL_RELEASE_3
+    assert ki.MASKEN_MODELLE["birefnet"].release == ki.MODELL_RELEASE_4
 
 
 def test_feste_kachel_rueckt_randkacheln_ins_bild():

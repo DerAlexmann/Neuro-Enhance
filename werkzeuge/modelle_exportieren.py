@@ -21,12 +21,16 @@ Erzeugt in modelle/:
                                    Breite muessen Vielfache von 64 sein
   restormer-defocus.onnx           Schaerfen gegen Fokus-Unschaerfe (Restormer,
                                    MIT) - Vielfache von 8
+  birefnet-lite-2k.onnx            Motiv freistellen (BiRefNet, MIT) - feste
+                                   Eingabe 2560 x 1440 wie im Training; das Netz
+                                   ist in werkzeuge/netz_birefnet.py nachgebaut
 und gibt Groesse und SHA-256 jeder Datei aus.
 
 Aufruf (braucht PyTorch, nur zum Entwickeln):
     python werkzeuge/modelle_exportieren.py              alle Modelle
     python werkzeuge/modelle_exportieren.py scunet       nur ausgewaehlte
-                                                         (realesrgan, scunet, restormer)
+                                                         (realesrgan, scunet, restormer,
+                                                         birefnet)
 
 Licensed under MIT License
 Copyright 2026 Alexander Unverhau
@@ -41,6 +45,8 @@ import sys
 
 import numpy as np
 import torch
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from torch import nn
 from torch.nn import functional as F  # noqa: N812
 
@@ -487,7 +493,33 @@ def restormer() -> list[str]:
     return [pfad]
 
 
-EXPORTE = {"realesrgan": realesrgan, "scunet": scunet, "restormer": restormer}
+def birefnet() -> list[str]:
+    from netz_birefnet import BiRefNet
+    daten = gewichte("BiRefNet_lite-general-2K-epoch_232.pth")
+    netz = BiRefNet("swin_v1_t")
+    netz.load_state_dict({k: v.float() if v.is_floating_point() else v for k, v in daten.items()},
+                         strict=True)
+    netz.eval()
+    pfad = os.path.join(ZIEL, "birefnet-lite-2k.onnx")
+    # Feste Groesse wie im Training (Breite 2560, Hoehe 1440): Fenstermasken und
+    # Positionsindizes werden so zu Konstanten
+    torch.onnx.export(netz, (torch.rand(1, 3, 1440, 2560),), pfad, input_names=["eingabe"],
+                      output_names=["ausgabe"], opset_version=17, dynamo=False,
+                      do_constant_folding=True)
+
+    import onnxruntime as ort
+    probe = torch.rand(1, 3, 1440, 2560)
+    with torch.no_grad():
+        soll = netz(probe).numpy()
+    sitzung = ort.InferenceSession(pfad, providers=["CPUExecutionProvider"])
+    ist = sitzung.run(None, {"eingabe": probe.numpy()})[0]
+    print(f"{os.path.basename(pfad)}: ONNX gegen PyTorch, groesste Abweichung "
+          f"{np.abs(ist - soll).max():.2e}")
+    return [pfad]
+
+
+EXPORTE = {"realesrgan": realesrgan, "scunet": scunet, "restormer": restormer,
+           "birefnet": birefnet}
 
 
 def main():

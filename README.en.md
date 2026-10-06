@@ -79,6 +79,13 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   strength slider responds instantly. If AI denoise has been computed, the denoised image
   is sharpened; only the fine part of the correction is applied, brightness and colour
   stay unchanged.
+- **Subject & background** with BiRefNet: the AI detects the subject – people, animals,
+  objects – including hair in about two seconds. After that, exposure, contrast,
+  saturation, temperature and blur of the background can be set separately, for example
+  to darken or soften it; "Invert" applies the sliders to the subject. The edge can be
+  softened and shifted, and a mask view tints the background for checking. When saving
+  as PNG or TIFF, the background can be made transparent. Needs at least 6 GB of graphics
+  memory.
 - **Geometry**: rotate by 90°, flip, straighten, vertical and horizontal perspective, crop
   with a frame and fixed aspect ratios. Empty corners after straightening are cropped
   away automatically.
@@ -159,7 +166,8 @@ pip install -r requirements-tensorrt.txt
 That is about 1.8 GB to download (2.8 GB installed) from NVIDIA's package index.
 Neuro-Enhance detects TensorRT by itself; "Info & Copyright" shows the version. The
 first time a model is used, TensorRT builds an engine for the graphics card once – this
-takes one to three minutes (up to eight for AI sharpen), and a window says so. The engines are then kept in the
+takes one to three minutes (up to ten for AI sharpen and subject detection), and a
+window says so. The engines are then kept in the
 `modelle/tensorrt` folder. If TensorRT does not work, the program computes with CUDA as
 it does without it.
 
@@ -172,7 +180,7 @@ it is not part of any ready-made executable and is always installed separately.
 Neuro-Enhance works entirely on your own computer. No images are uploaded and no usage
 data is sent. The AI also runs locally on the graphics card. The only network access is
 downloading an AI model – and only when you explicitly click it in the "AI upscaling",
-"AI denoise" or "AI sharpen" card and confirm the prompt that names source, size and
+"AI denoise", "AI sharpen" or "Subject & background" card and confirm the prompt that names source, size and
 licence.
 
 ## AI models
@@ -184,14 +192,17 @@ model with just under 10 MB and the large one with 64 MB, in the "AI denoise" ca
 [modelle-2](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-2) SCUNet
 with 71 MB, in the "AI sharpen" card from
 [modelle-3](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-3) Restormer
-with 101 MB. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
+with 101 MB, in the "Subject & background" card from
+[modelle-4](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-4) BiRefNet
+with 177 MB. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
 folder next to the program or, if that is read-only, in
 `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
 
 The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)
 (BSD 3-Clause, Copyright 2021 Xintao Wang), [SCUNet](https://github.com/cszn/SCUNet)
 (Apache-2.0, Copyright 2022 Kai Zhang) and [Restormer](https://github.com/swz30/Restormer)
-(MIT, Copyright 2022 Syed Waqas Zamir), converted to ONNX. To reproduce this yourself:
+(MIT, Copyright 2022 Syed Waqas Zamir) and [BiRefNet](https://github.com/ZhengPeng7/BiRefNet)
+(MIT, Copyright 2024 ZhengPeng), converted to ONNX. To reproduce this yourself:
 
 1. Download `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` and
    `RealESRGAN_x4plus.pth` from the
@@ -199,7 +210,9 @@ The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/
    `scunet_color_real_psnr.pth` from the
    [KAIR release v1.0](https://github.com/cszn/KAIR/releases/tag/v1.0), where the SCUNet
    weights are published, and `single_image_defocus_deblurring.pth` from the
-   [Restormer release v1.0](https://github.com/swz30/Restormer/releases/tag/v1.0) into
+   [Restormer release v1.0](https://github.com/swz30/Restormer/releases/tag/v1.0) and
+   `BiRefNet_lite-general-2K-epoch_232.pth` from the
+   [BiRefNet release v1](https://github.com/ZhengPeng7/BiRefNet/releases/tag/v1) into
    `modelle/quellen/`.
 2. `pip install torch` (only needed for this step).
 3. `python werkzeuge/modelle_exportieren.py` – this writes the ONNX models to `modelle/`

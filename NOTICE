@@ -153,6 +153,24 @@ Restormer (model single_image_defocus_deblurring)
   Restormer (LICENSE-Restormer.txt), which Neuro-Enhance also downloads and
   stores next to the model.
 
+BiRefNet (model BiRefNet_lite-general-2K)
+  Copyright (c) 2024 ZhengPeng
+  Licence: MIT License
+  https://github.com/ZhengPeng7/BiRefNet
+  The official weights (release v1 of the repository above) are converted
+  to ONNX with werkzeuge/modelle_exportieren.py. The network architecture is
+  re-implemented in werkzeuge/netz_birefnet.py without einops, timm, kornia
+  and torchvision. Changes to the original, all computing the same result:
+  the deformable convolution (torchvision.ops.deform_conv2d) is expressed
+  with grid_sample; the last 1x1 convolution is swapped with the bilinear
+  upscaling before it and merged with the linear input branch, to save
+  graphics memory; the ImageNet normalisation is part of the network; the
+  input size is fixed to 2560 x 1440 as in training. The weights themselves
+  are unchanged. The converted model file is published as an asset of the
+  release "modelle-4" of this project, together with the MIT licence text of
+  BiRefNet (LICENSE-BiRefNet.txt), which Neuro-Enhance also downloads and
+  stores next to the model.
+
 Only models whose licence permits use and redistribution in an
 open-source project are offered by default.
 

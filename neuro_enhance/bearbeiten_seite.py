@@ -17,6 +17,7 @@ from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -56,6 +57,7 @@ def gruppen_titel(gruppe: str) -> str:
         "lut": _("LUT"),
         "ki_rauschen": _("KI-Entrauschen"),
         "ki_schaerfe": _("KI-Schärfen"),
+        "maske": _("Motiv & Hintergrund"),
     }[gruppe]
 
 
@@ -97,6 +99,13 @@ def regler_titel(name: str) -> str:
         "ki_entrauschen": _("Entrauschen"),
         "ki_rauschen": _("Stärke"),
         "ki_schaerfe": _("Stärke"),
+        "hg_belichtung": _("Belichtung"),
+        "hg_kontrast": _("Kontrast"),
+        "hg_saettigung": _("Sättigung"),
+        "hg_temperatur": _("Temperatur"),
+        "hg_unschaerfe": _("Unschärfe"),
+        "maske_kante": _("Kante weicher"),
+        "maske_verschieben": _("Kante verschieben"),
     }[name] if not name.startswith("hsl_") else farbbereich_titel(int(name[4:]))
 
 
@@ -162,7 +171,7 @@ def wert_anzeige(regler: filter.Regler, wert: float) -> str:
     if regler.minimum < 0 and wert > 0:
         text = "+" + text
     text = text.replace("-", "−")
-    if regler.name == "belichtung":
+    if regler.name in ("belichtung", "hg_belichtung"):
         text += " EV"
     elif regler.name == "schaerfe_radius":
         text += " px"
@@ -336,6 +345,8 @@ class BearbeitenSeite(QWidget):
                     self._geometrie_bedienung(innen)
                 if regler.gruppe in ("ki_rauschen", "ki_schaerfe"):
                     self._ki_bild_bedienung(regler.gruppe, innen)
+                if regler.gruppe == "maske":
+                    self._masken_bedienung(innen)
                 gitter = QGridLayout()
                 gitter.setVerticalSpacing(2)
                 gitter.setColumnStretch(0, 1)
@@ -729,6 +740,7 @@ class BearbeitenSeite(QWidget):
                 self.fenster.beschriften(knopf.setText, beschriftung)
                 knopf.setEnabled(offen or not ki.vorhanden(modell))
             self.zeilen[gruppe].schieber.setEnabled(fertig)
+        self._masken_anzeigen()
 
     def _ki_schaerf_dauer(self) -> str:
         if ki.tensorrt_ordner() is not None:
@@ -786,6 +798,118 @@ class BearbeitenSeite(QWidget):
         self.fenster.melden(art["geschafft"].format(s=f"{ms / 1000:.1f}", weg=weg))
         self.zeilen[gruppe].setzen(100)
         self.wert_geaendert(gruppe, 100.0)
+
+    # ------------------------------------------------------------------
+    # Motiv & Hintergrund: Maske mit KI, eigene Werte fuer den Hintergrund
+    # ------------------------------------------------------------------
+
+    def _masken_bedienung(self, innen: QVBoxLayout):
+        self.masken_hinweis = QLabel(objectName="nebentext")
+        self.masken_hinweis.setWordWrap(True)
+        innen.addWidget(self.masken_hinweis)
+        self.masken_knopf = QPushButton()
+        self.masken_knopf.clicked.connect(self._masken_knopf_gedrueckt)
+        innen.addWidget(self.masken_knopf)
+        self.maske_zeigen_box = QCheckBox()
+        self.fenster.beschriften(self.maske_zeigen_box.setText, _("Maske zeigen"))
+        self.fenster.beschriften(self.maske_zeigen_box.setToolTip, _(
+            "Färbt den Hintergrund in der Vorschau rot ein – nur zur Kontrolle, nicht "
+            "im gespeicherten Bild."))
+        self.maske_zeigen_box.toggled.connect(lambda _an: self.zeichnen_anfordern())
+        self.maske_umkehren_box = QCheckBox()
+        self.fenster.beschriften(self.maske_umkehren_box.setText, _("Umkehren"))
+        self.fenster.beschriften(self.maske_umkehren_box.setToolTip, _(
+            "Die Regler dieser Karte wirken auf das Motiv statt auf den Hintergrund."))
+        self.maske_umkehren_box.toggled.connect(
+            lambda an: self.wert_geaendert("maske_umkehren", an))
+        leiste = QHBoxLayout()
+        leiste.addWidget(self.maske_zeigen_box)
+        leiste.addWidget(self.maske_umkehren_box)
+        leiste.addStretch(1)
+        innen.addLayout(leiste)
+        self.freistellen_box = QCheckBox()
+        self.fenster.beschriften(self.freistellen_box.setText,
+                                 _("Hintergrund durchsichtig speichern"))
+        self.fenster.beschriften(self.freistellen_box.setToolTip, _(
+            "Beim Speichern als PNG oder TIFF wird der Hintergrund transparent."))
+        self.freistellen_box.toggled.connect(lambda an: self.wert_geaendert("freistellen", an))
+        innen.addWidget(self.freistellen_box)
+
+    def _masken_modell(self) -> ki.Modell:
+        return ki.MASKEN_MODELLE["birefnet"]
+
+    def _masken_anzeigen(self):
+        """Hinweis, Knopf, Schalter und Regler der Karte Motiv & Hintergrund."""
+        if not hasattr(self, "masken_knopf"):
+            return
+        modell, stufe = self._masken_modell(), self._ki_stufe()
+        offen = self.sitzung is not None
+        fertig = offen and self.sitzung.ki_maske_da
+        knopf = None
+        if not ki.angeboten(modell, stufe):
+            text = _("Das Freistellen braucht mindestens 6 GB Grafikspeicher.")
+        elif not ki.vorhanden(modell):
+            text = _("Dieses Modell ist noch nicht geladen.")
+            knopf = _("Modell herunterladen ({mb} MB)").format(
+                mb=f"{ki.download_groesse(modell) / 2**20:.0f}")
+        elif fertig:
+            text = _("Motiv erkannt. Die Regler wirken auf den Hintergrund.")
+        else:
+            text = _("Die KI erkennt das Motiv – bei 24 Megapixeln in wenigen Sekunden. "
+                     "Danach lässt sich der Hintergrund getrennt bearbeiten oder "
+                     "durchsichtig speichern.")
+            knopf = _("Motiv erkennen")
+        self.fenster.beschriften(self.masken_hinweis.setText, text)
+        self.masken_knopf.setVisible(knopf is not None)
+        if knopf is not None:
+            self.fenster.beschriften(self.masken_knopf.setText, knopf)
+            self.masken_knopf.setEnabled(offen or not ki.vorhanden(modell))
+        for box in (self.maske_zeigen_box, self.maske_umkehren_box, self.freistellen_box):
+            box.setEnabled(fertig)
+        werte = self.sitzung.werte if offen else filter.Einstellungen()
+        for box, an in ((self.maske_umkehren_box, werte.maske_umkehren),
+                        (self.freistellen_box, werte.freistellen)):
+            if box.isChecked() != an:
+                box.blockSignals(True)
+                box.setChecked(an)
+                box.blockSignals(False)
+        for regler in filter.REGLER:
+            if regler.gruppe == "maske":
+                self.zeilen[regler.name].schieber.setEnabled(fertig)
+
+    def _masken_knopf_gedrueckt(self):
+        modell = self._masken_modell()
+        if not ki.vorhanden(modell):
+            self.ki_modell_laden(modell)
+        else:
+            self.maske_berechnen()
+
+    def maske_berechnen(self):
+        """Die Maske des Motivs einmal mit KI berechnen."""
+        if self.sitzung is None:
+            return
+        modell = self._masken_modell()
+        kachel = modell.kacheln[modell.mindeststufe]
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            netz = self._ki_laden(modell, kachel,
+                                  lambda **weg: ki.Freisteller(modell, **weg))
+            ms = self.sitzung.ki_freistellen(netz)
+            weg = netz.beschleuniger
+            del netz                             # Grafikspeicher fuer die Bearbeitung frei
+        except ki.KiFehler as fehler:
+            self._fehler(_("Das Motiv ließ sich nicht erkennen."), str(fehler))
+            return
+        except cp.cuda.memory.OutOfMemoryError:
+            self._fehler(_("Für dieses Bild reicht der Grafikspeicher nicht."), "")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+            cp.get_default_memory_pool().free_all_blocks()
+            self._masken_anzeigen()
+        self.fenster.melden(_("Motiv erkannt ({s} s, über {weg})").format(
+            s=f"{ms / 1000:.1f}", weg=weg))
+        self.zeichnen_anfordern()
 
     def _hsl_karte(self) -> QFrame:
         karte, innen = self._karte(_("Farbbereiche"))
@@ -943,6 +1067,7 @@ class BearbeitenSeite(QWidget):
             self.fenster.rechenzeit_zeigen(None)
             return
         werte = filter.Einstellungen() if self._vorher else self.sitzung.werte
+        self.sitzung.maske_zeigen = self.maske_zeigen_box.isChecked() and not self._vorher
         if self.leinwand.zuschnitt is not None:
             # Im Zuschnittmodus das ganze Bild zeigen, der Rahmen liegt darueber
             werte = dataclasses.replace(werte, zuschnitt=VOLLER_ZUSCHNITT)
@@ -1076,6 +1201,9 @@ class BearbeitenSeite(QWidget):
             vorauswahl = next(b for b, e, bits in formate
                               if bits == 8 and e == {".jpeg": ".jpg", ".tiff": ".tif"}
                               .get(endung, endung))
+        freistellen = self.sitzung.werte.freistellen and self.sitzung.ki_maske_da
+        if freistellen and endung not in (".png", ".tif"):
+            endung, vorauswahl = ".png", formate[1][0]     # Durchsichtigkeit braucht Alpha
         pfad, gewaehlt = QFileDialog.getSaveFileName(
             self, _("Bild speichern"), f"{stamm}-bearbeitet{endung}",
             ";;".join(b for b, _e, _bits in formate), vorauswahl)
@@ -1119,6 +1247,11 @@ class BearbeitenSeite(QWidget):
         if auftrag is not None:
             self.fenster.melden(_("Gespeichert: {name} ({ms} ms, KI über {weg})").format(
                 name=os.path.basename(pfad), ms=f"{ms:.0f}", weg=auftrag[0].beschleuniger))
+            return
+        if freistellen and not bilddatei.SCHREIBBAR[os.path.splitext(pfad)[1].lower()][1]:
+            self.fenster.melden(_("Gespeichert: {name} – ohne durchsichtigen Hintergrund, "
+                                  "das kann JPEG nicht. Als PNG oder TIFF speichern.")
+                                .format(name=os.path.basename(pfad)), fehler=True)
             return
         self.fenster.melden(_("Gespeichert: {name} ({ms} ms)")
                             .format(name=os.path.basename(pfad), ms=f"{ms:.0f}"))

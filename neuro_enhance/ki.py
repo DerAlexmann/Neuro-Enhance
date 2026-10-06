@@ -1,13 +1,14 @@
 """
-KI-Hochskalieren (Real-ESRGAN), KI-Entrauschen (SCUNet) und KI-Schaerfen
-(Restormer) ueber ONNX Runtime
+KI-Hochskalieren (Real-ESRGAN), KI-Entrauschen (SCUNet), KI-Schaerfen
+(Restormer) und Freistellen (BiRefNet) ueber ONNX Runtime
 
 Die Modelle stammen aus den offiziellen Releases von Real-ESRGAN (BSD-3-Clause),
-SCUNet (Apache-2.0) und Restormer (MIT) und sind mit werkzeuge/modelle_exportieren.py nach ONNX
-gewandelt. Bereit liegen sie als Dateien eigener Releases dieses Projekts, mit
-dem jeweiligen Lizenztext daneben. Heruntergeladen wird nur auf Wunsch
-des Anwenders; jede Datei wird gegen ihre SHA-256-Pruefsumme geprueft, bevor
-sie an ihren Platz kommt und bevor sie geladen wird.
+SCUNet (Apache-2.0), Restormer (MIT) und BiRefNet (MIT) und sind mit
+werkzeuge/modelle_exportieren.py nach ONNX gewandelt. Bereit liegen sie als
+Dateien eigener Releases dieses Projekts, mit dem jeweiligen Lizenztext
+daneben. Heruntergeladen wird nur auf Wunsch des Anwenders; jede Datei wird
+gegen ihre SHA-256-Pruefsumme geprueft, bevor sie an ihren Platz kommt und
+bevor sie geladen wird.
 
 Gesucht wird im Ordner `modelle` neben dem Programm und - falls der
 schreibgeschuetzt ist, etwa unter "Programme" - im Benutzerordner.
@@ -58,15 +59,17 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import einstellungen
+from . import einstellungen, filter
 from .cuda import cupy as cp
 
 QUELLE = "https://github.com/xinntao/Real-ESRGAN"
 QUELLE_SCUNET = "https://github.com/cszn/SCUNet"
 QUELLE_RESTORMER = "https://github.com/swz30/Restormer"
+QUELLE_BIREFNET = "https://github.com/ZhengPeng7/BiRefNet"
 MODELL_RELEASE = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-1/"
 MODELL_RELEASE_2 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-2/"
 MODELL_RELEASE_3 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-3/"
+MODELL_RELEASE_4 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-4/"
 BLOCK = 1 << 20
 
 # Datei -> (SHA-256, Groesse in Bytes)
@@ -89,6 +92,10 @@ DATEIEN = {
         ("8d51ab54539cc0383208a036380a2118df6551b693900380d7ed242032b009b9", 105955794),
     "LICENSE-Restormer.txt":
         ("2b93776512924bc095ec5d97a79d76cf1ab401ae641d1ae1f46e94f1c53a2e59", 1090),
+    "birefnet-lite-2k.onnx":
+        ("c3c8c750ca533f691a12902f28d4712f0331900c32907f2f762352427a415a42", 185559417),
+    "LICENSE-BiRefNet.txt":
+        ("92a7089e0915fc32bc40067560b398f1e6a7a5958abd7d04eda393629a5acefb", 1066),
 }
 LIZENZDATEI = "LICENSE-Real-ESRGAN.txt"
 RAND = 10                    # Ueberlappung je Kachelseite in Eingabepixeln, wie in Real-ESRGAN
@@ -125,6 +132,10 @@ class Modell:
     # Mit CUDA in FP16 rechnen? Restormer normiert ueber alle Pixel einer Kachel; ONNX
     # Runtime summiert dabei in FP16 und laeuft ueber. In FP32 ist es gleich schnell.
     cuda_fp16: bool = True
+    # Netze mit fester Eingabegroesse (Hoehe, Breite) rechnen das ganze Bild auf
+    # einmal, verkleinert, statt in Kacheln
+    feste_groesse: tuple[int, int] | None = None
+    ausgabe_kanaele: int = 3
 
 
 MODELLE = {
@@ -170,7 +181,23 @@ SCHAERF_MODELLE = {
         lizenzdatei="LICENSE-Restormer.txt", release=MODELL_RELEASE_3,
         massstab=1, rand=32, vielfaches=8, nhwc=False, feste_kachel=True, cuda_fp16=False),
 }
-ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE, **SCHAERF_MODELLE}
+# Freistellen: BiRefNet in der leichten Fassung fuer 2560 x 1440 (Swin-T) - die Maske
+# eines 24-MP-Fotos in gut einer Sekunde, mit feinen Kanten und Haaren. Es braucht
+# rund 4 bis 6 GB Grafikspeicher, daher erst ab Stufe M. FP16 rechnet ONNX Runtime
+# hier zehnmal langsamer (grid_sample), daher FP32.
+MASKEN_MODELLE = {
+    "birefnet": Modell(
+        "birefnet", "birefnet-lite-2k.onnx",
+        "c3c8c750ca533f691a12902f28d4712f0331900c32907f2f762352427a415a42",
+        None,
+        "M", {"M": 2560, "L": 2560, "XL": 2560},
+        lizenz="MIT", quelle=QUELLE_BIREFNET,
+        herkunft="BiRefNet (MIT, Copyright 2024 ZhengPeng)",
+        lizenzdatei="LICENSE-BiRefNet.txt", release=MODELL_RELEASE_4,
+        massstab=1, rand=0, vielfaches=32, nhwc=False, cuda_fp16=False,
+        feste_groesse=(1440, 2560), ausgabe_kanaele=1),
+}
+ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE, **SCHAERF_MODELLE, **MASKEN_MODELLE}
 STUFEN = ("S", "M", "L", "XL")
 
 
@@ -436,6 +463,19 @@ def ausgabe_form(form, faktor: int) -> tuple[int, int]:
     return form[0] * faktor, form[1] * faktor
 
 
+def _speichergrenze() -> int:
+    """Hoechstens so viel Grafikspeicher fuer ONNX Runtime, wie gerade frei ist.
+
+    Ohne Grenze waechst sein Speicherpool ueber den Grafikspeicher hinaus, und
+    Windows lagert in den Arbeitsspeicher aus - dann rechnet ein Netz zwanzigmal
+    langsamer, statt mit einem Speicherfehler abzubrechen (auf den die Kacheln
+    reagieren). Was CuPy in seinem Pool bereithaelt, ist ebenfalls frei.
+    """
+    pool = cp.get_default_memory_pool()
+    frei = cp.cuda.runtime.memGetInfo()[0] + pool.free_bytes()
+    return max(1 << 30, frei - (512 << 20))
+
+
 class _Netz:
     """Ein geladenes Modell mit CUDA (FP16, NHWC) oder TensorRT - teuer anzulegen.
 
@@ -489,7 +529,9 @@ class _Netz:
         anbieter = [("CUDAExecutionProvider", {"device_id": 0,
                                                "cudnn_conv_algo_search": "HEURISTIC",
                                                "prefer_nhwc": "1" if halb and self.modell.nhwc
-                                               else "0"})]
+                                               else "0",
+                                               "arena_extend_strategy": "kSameAsRequested",
+                                               "gpu_mem_limit": str(_speichergrenze())})]
         try:
             sitzung = self._ort.InferenceSession(netz, self._optionen(), providers=anbieter)
         except Exception as fehler:               # ORT wirft eigene Fehlerklassen
@@ -520,6 +562,10 @@ class _Netz:
                "trt_profile_min_shapes": f"eingabe:1x3x{klein}x{klein}",
                "trt_profile_opt_shapes": f"eingabe:1x3x{groesse}x{groesse}",
                "trt_profile_max_shapes": f"eingabe:1x3x{groesse}x{groesse}"}
+        if self.modell.feste_groesse:
+            form = "eingabe:1x3x{}x{}".format(*self.modell.feste_groesse)
+            for art in ("min", "opt", "max"):
+                trt[f"trt_profile_{art}_shapes"] = form
         sitzung = self._ort.InferenceSession(
             self._pfad, self._optionen(),
             providers=[("TensorrtExecutionProvider", trt),
@@ -542,7 +588,7 @@ class _Netz:
         """Eine Kachel (1, 3, h, w) float32 auf der GPU -> (1, 3, m*h, m*w)."""
         _n, _k, h, w = eingabe.shape
         m = self.modell.massstab
-        ausgabe = cp.empty((1, 3, m * h, m * w), dtype=cp.float32)
+        ausgabe = cp.empty((1, self.modell.ausgabe_kanaele, m * h, m * w), dtype=cp.float32)
         bindung = self.sitzung.io_binding()
         bindung.bind_input("eingabe", "cuda", 0, np.float32, list(eingabe.shape),
                            eingabe.data.ptr)
@@ -722,3 +768,42 @@ class Schaerfer(_Bildnetz):
 
 class KiAbbruch(Exception):
     """Der Anwender hat eine KI-Berechnung oder einen Download abgebrochen."""
+
+
+class Freisteller(_Netz):
+    """BiRefNet - die Maske des Motivs (1 = Motiv, 0 = Hintergrund) fuer ein ganzes Bild.
+
+    Das Netz kennt nur 2560 x 1440 Pixel im Querformat. Das Bild wird darauf
+    verkleinert - Hochformate vorher um 90 Grad gedreht, damit sie nicht gestaucht
+    werden - und die Maske danach auf die volle Groesse zurueck vergroessert.
+    """
+
+    def __init__(self, modell: Modell | None = None, fp16: bool = True,
+                 tensorrt: bool | None = None):
+        modell = modell or MASKEN_MODELLE["birefnet"]
+        super().__init__(modell, fp16, modell.kacheln[modell.mindeststufe], tensorrt)
+
+    def maske(self, srgb):
+        """sRGB (H, W, 3) float32 0..1 auf der GPU -> Maske (H, W) float32 0..1 auf der GPU."""
+        hoehe, breite = srgb.shape[:2]
+        hochformat = hoehe > breite
+        bild = cp.rot90(srgb) if hochformat else srgb
+        mh, mb = self.modell.feste_groesse
+        faktor = max(1, min(bild.shape[0] // mh, bild.shape[1] // mb))
+        klein = filter.vergroessern(filter.verkleinern_box(bild, faktor).astype(cp.float32),
+                                    mh, mb)
+        eingabe = cp.ascontiguousarray(cp.moveaxis(klein, -1, 0))[None]
+        del klein
+        try:
+            ergebnis = self._kachel(eingabe)
+        except cp.cuda.memory.OutOfMemoryError as fehler:
+            raise KiFehler("Zu wenig Grafikspeicher fuer die Maske.") from fehler
+        except Exception as fehler:              # ORT wirft eigene Fehlerklassen
+            if not self.tensorrt:
+                raise KiFehler(str(fehler)) from fehler
+            self._auf_cuda_wechseln(fehler)      # und mit CUDA noch einmal
+            ergebnis = self._kachel(eingabe)
+        maske = filter.vergroessern(ergebnis[0, 0], bild.shape[0], bild.shape[1])
+        if hochformat:
+            maske = cp.rot90(maske, -1)
+        return cp.ascontiguousarray(cp.clip(maske, 0, 1))

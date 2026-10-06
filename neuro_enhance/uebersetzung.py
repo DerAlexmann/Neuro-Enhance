@@ -176,6 +176,35 @@ TRANSLATIONS = {
         "knapp eine Minute": "just under a minute",
         "etwa drei Minuten": "about three minutes",
         "Schärfen berechnen": "Compute sharpening",
+        "Motiv & Hintergrund": "Subject & background",
+        "Motiv erkennen": "Detect subject",
+        "Maske zeigen": "Show mask",
+        "Umkehren": "Invert",
+        "Hintergrund durchsichtig speichern": "Save background as transparent",
+        "Unschärfe": "Blur",
+        "Kante weicher": "Soften edge",
+        "Kante verschieben": "Shift edge",
+        "Färbt den Hintergrund in der Vorschau rot ein – nur zur Kontrolle, nicht im "
+        "gespeicherten Bild.":
+            "Tints the background red in the preview – only to check, not in the saved image.",
+        "Die Regler dieser Karte wirken auf das Motiv statt auf den Hintergrund.":
+            "The sliders of this card affect the subject instead of the background.",
+        "Beim Speichern als PNG oder TIFF wird der Hintergrund transparent.":
+            "When saving as PNG or TIFF, the background becomes transparent.",
+        "Das Freistellen braucht mindestens 6 GB Grafikspeicher.":
+            "Subject detection needs at least 6 GB of graphics memory.",
+        "Motiv erkannt. Die Regler wirken auf den Hintergrund.":
+            "Subject detected. The sliders affect the background.",
+        "Die KI erkennt das Motiv – bei 24 Megapixeln in wenigen Sekunden. Danach lässt "
+        "sich der Hintergrund getrennt bearbeiten oder durchsichtig speichern.":
+            "The AI detects the subject – in a few seconds for 24 megapixels. After that the "
+            "background can be edited separately or saved as transparent.",
+        "Das Motiv ließ sich nicht erkennen.": "The subject could not be detected.",
+        "Motiv erkannt ({s} s, über {weg})": "Subject detected ({s} s, via {weg})",
+        "Gespeichert: {name} – ohne durchsichtigen Hintergrund, das kann JPEG nicht. Als PNG "
+        "oder TIFF speichern.":
+            "Saved: {name} – without a transparent background, JPEG cannot do that. Save as "
+            "PNG or TIFF.",
         "KI schärft das Bild …": "AI is sharpening the image …",
         "KI-Schärfen abgebrochen.": "AI sharpen cancelled.",
         "Das KI-Schärfen ist fehlgeschlagen.": "AI sharpen failed.",

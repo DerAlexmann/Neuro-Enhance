@@ -16,6 +16,11 @@ Schaerfen als Korrektur, die aufs Ergebnis des Entrauschens gelegt wird. Die
 Staerkeregler mischen nur noch; das kostet je Vorschau Bruchteile einer
 Millisekunde.
 
+Ebenso die Maske des Motivs (KI-Freistellen): einmal berechnet, liegt sie in
+der Geometrie des Originals im Grafikspeicher. Fuer den Hintergrund rechnet die
+Kette das Bild ein zweites Mal mit dessen eigenen Werten; die Maske - mit
+derselben Geometrie wie das Bild verformt - mischt beides.
+
 Dieses Modul importiert CuPy und darf deshalb erst nach der Startprufung
 geladen werden.
 
@@ -39,6 +44,10 @@ from .filter import Einstellungen
 _mischen = cp.ElementwiseKernel("float32 a, float32 b, float32 s", "float32 c",
                                 "c = a + s * (b - a)", "ne_mischen")
 SCHAERFE_GROB = 10.0           # Sigma in Pixeln: groebere Anteile der KI-Schaerfung fallen weg
+MASKE_KANTE = 20.0             # Kante weicher: Sigma bei 100 % in Pixeln des Originals
+MASKE_VERSCHIEBEN = 20.0       # Kante verschieben: Pixel des Originals bei +-100 %
+HG_UNSCHAERFE = 40.0           # Hintergrund weichzeichnen: Sigma bei 100 % in Pixeln
+MASKE_FARBE = (1.0, 0.25, 0.2)  # Maskenansicht: so wird der Hintergrund eingefaerbt
 
 # a + s * d - eine Korrektur mit Staerke auflegen
 _auflegen = cp.ElementwiseKernel("float32 a, float32 d, float32 s", "float32 c",
@@ -65,6 +74,8 @@ class Sitzung:
         self._vollbild = None                 # (Einstellungen, fertiges Bild auf der GPU)
         self._ki_rauschfrei = None            # (voll, Vorschau): KI-entrauschtes Original
         self._ki_schaerfe = None              # (voll, Vorschau): Korrektur des KI-Schaerfens
+        self._ki_maske = None                 # (voll, Vorschau): Maske des Motivs, 0..1
+        self.maske_zeigen = False             # Vorschau faerbt den Hintergrund ein
 
         self.original = daten.linear(cp)
         # Zwischenpuffer des Demosaicing an den Grafikspeicher zurueckgeben
@@ -83,6 +94,74 @@ class Sitzung:
     @property
     def ki_geschaerft(self) -> bool:
         return self._ki_schaerfe is not None
+
+    @property
+    def ki_maske_da(self) -> bool:
+        return self._ki_maske is not None
+
+    def ki_freistellen(self, freisteller) -> float:
+        """Die Maske des Motivs einmal mit KI berechnen; Rueckgabe: Rechenzeit in ms.
+
+        Das Netz sieht das Bild, wie es gerade entrauscht und geschaerft ist.
+        """
+        beginn = time.perf_counter()
+        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True), 0, 1))
+        voll = freisteller.maske(srgb)
+        del srgb
+        self._ki_maske = (voll, self._vorschau_von(voll))
+        return self._ki_fertig(beginn)
+
+    def _maske_fuer(self, werte: Einstellungen, voll: bool):
+        """Gewicht des Motivs (H, W) in der Geometrie des fertigen Bildes: Kante
+        verschoben und weich, wenn gewuenscht umgekehrt. 1 heisst: Werte des ganzen
+        Bildes, 0: die des Hintergrunds."""
+        maske = self._ki_maske[0 if voll else 1]
+        massstab = 1.0 if voll else self.vorschau_massstab
+        if werte.maske_verschieben:
+            from cupyx.scipy import ndimage
+            weite = max(1, round(abs(werte.maske_verschieben) / 100 * MASKE_VERSCHIEBEN
+                                 * massstab))
+            art = ndimage.maximum_filter if werte.maske_verschieben > 0 else ndimage.minimum_filter
+            maske = art(maske, size=2 * weite + 1, mode="nearest")
+        if werte.maske_kante:
+            maske = filter.gauss(maske, werte.maske_kante / 100 * MASKE_KANTE * massstab)
+        if werte.maske_umkehren:
+            maske = 1 - maske
+        geo = geometrie.aus(werte)
+        if not geo.ist_neutral():
+            nur_form = dataclasses.replace(geo, vignette=0.0, ca_rot=0.0, ca_blau=0.0)
+            maske = geometrie.anwenden(cp.repeat(maske[..., None], 3, axis=2), nur_form)[..., 0]
+        return cp.ascontiguousarray(cp.clip(maske, 0, 1), dtype=cp.float32)
+
+    def _rendern(self, werte: Einstellungen, voll: bool, speicher, bits: int = 8,
+                 zeigen: bool = False):
+        """Die ganze Kette bis zum sRGB-Bild - mit eigenem Hintergrund, falls eingestellt."""
+        massstab = 1.0 if voll else self.vorschau_massstab
+        eingang = self._ausgang(werte, voll)
+        bild = filter.anwenden_ausgabe(eingang, werte, massstab, speicher, bits=bits)
+        zeigen = zeigen and self.maske_zeigen
+        if self._ki_maske is None or not (werte.hintergrund_aktiv() or zeigen):
+            return bild
+        maske = self._maske_fuer(werte, voll)[..., None]
+        hoechst = 65535.0 if bits == 16 else 255.0
+        ergebnis = bild.astype(cp.float32)
+        if werte.hintergrund_aktiv():
+            hg = filter.anwenden_ausgabe(eingang, werte.fuer_hintergrund(), massstab, speicher,
+                                         bits=bits).astype(cp.float32)
+            if werte.hg_unschaerfe:
+                # Nur der Hintergrund wird verwischt: das Motiv darf nicht als Schein
+                # in ihn hineinlaufen (normierte Faltung mit dem Hintergrund als Gewicht)
+                sigma = werte.hg_unschaerfe / 100 * HG_UNSCHAERFE * massstab
+                gewicht = 1 - maske[..., 0]
+                nenner = cp.maximum(filter.gauss(gewicht, sigma), 1e-4)
+                for kanal in range(3):
+                    hg[..., kanal] = filter.gauss(hg[..., kanal] * gewicht, sigma) / nenner
+            ergebnis = hg + maske * (ergebnis - hg)
+        if zeigen:
+            farbe = cp.asarray(MASKE_FARBE, dtype=cp.float32) * hoechst
+            ergebnis = maske * ergebnis + (1 - maske) * (0.4 * ergebnis + 0.6 * farbe)
+        typ = cp.uint16 if bits == 16 else cp.uint8
+        return cp.clip(ergebnis + 0.5, 0, hoechst).astype(typ)
 
     def _ki_korrektur(self, netz, bild, kachel: int, fortschritt):
         """Was das Netz an einem Bild in linearem Licht aendert, als Korrektur.
@@ -157,8 +236,7 @@ class Sitzung:
         beginn = time.perf_counter()
         if werte is None:
             werte = Einstellungen() if unbearbeitet else self.werte
-        bild = filter.anwenden_ausgabe(self._ausgang(werte, False), werte,
-                                       self.vorschau_massstab, self._speicher)
+        bild = self._rendern(werte, False, self._speicher, zeigen=not unbearbeitet)
         histogramm = cp.asnumpy(histogramm_von(bild))
         ergebnis = cp.asnumpy(bild)                     # wartet auf die GPU
         return ergebnis, (time.perf_counter() - beginn) * 1000, histogramm
@@ -180,10 +258,11 @@ class Sitzung:
         """
         beginn = time.perf_counter()
         werte = self.werte if werte is None else werte
-        if self._vollbild is None or self._vollbild[0] != werte:
-            bild = filter.anwenden_ausgabe(self._ausgang(werte, True), werte, 1.0,
-                                           self._speicher)
-            self._vollbild = (dataclasses.replace(werte), bild)
+        schluessel = (dataclasses.replace(werte), self.maske_zeigen)
+        if self._vollbild is None or self._vollbild[0] != schluessel:
+            self._vollbild = None                 # das alte Vollbild zuerst freigeben
+            bild = self._rendern(werte, True, self._speicher, zeigen=True)
+            self._vollbild = (schluessel, bild)
         teil = self._vollbild[1][y0:y0 + hoehe, x0:x0 + breite]
         histogramm = cp.asnumpy(histogramm_von(teil))
         ergebnis = cp.asnumpy(teil)
@@ -210,6 +289,20 @@ class Sitzung:
             ebene = filter.vergroessern(ebene, ebene.shape[0] * faktor, ebene.shape[1] * faktor)
         return cp.asnumpy((cp.clip(ebene, 0, 1) * hoechst + 0.5).astype(alpha.dtype))
 
+    def _alpha_gesamt(self, faktor: int = 1):
+        """Alphakanal fuers Speichern - beim Freistellen mit der Maske verrechnet."""
+        alpha = self._alpha(faktor)
+        if not (self.werte.freistellen and self._ki_maske is not None):
+            return alpha
+        maske = self._maske_fuer(self.werte, True)
+        if faktor > 1:
+            maske = filter.vergroessern(maske, maske.shape[0] * faktor, maske.shape[1] * faktor)
+        if alpha is None:
+            return cp.asnumpy((cp.clip(maske, 0, 1) * 65535 + 0.5).astype(cp.uint16))
+        hoechst = 65535.0 if alpha.dtype == np.uint16 else 255.0
+        gesamt = cp.asarray(alpha, dtype=cp.float32) * maske
+        return cp.asnumpy(cp.clip(gesamt + 0.5, 0, hoechst).astype(alpha.dtype))
+
     def exportieren(self, pfad: str, bits: int = 8, ki_auftrag=None, fortschritt=None) -> float:
         """Rechnet das Bild in voller Groesse und speichert es; Rueckgabe in ms.
 
@@ -218,13 +311,12 @@ class Sitzung:
         vergroessert; fortschritt(i, n) meldet jede fertige Kachel.
         """
         beginn = time.perf_counter()
-        ausgang = self._ausgang(self.werte, True)
         if ki_auftrag is None:
-            rgb = cp.asnumpy(filter.anwenden_ausgabe(ausgang, self.werte, 1.0, bits=bits))
+            rgb = cp.asnumpy(self._rendern(self.werte, True, None, bits=bits))
             faktor = 1
         else:
             hochskalierer, faktor, kachel = ki_auftrag
-            fertig = filter.anwenden_ausgabe(ausgang, self.werte, 1.0, bits=16)
+            fertig = self._rendern(self.werte, True, None, bits=16)
             srgb = fertig.astype(cp.float32) / 65535
             del fertig
             cp.get_default_memory_pool().free_all_blocks()
@@ -233,7 +325,7 @@ class Sitzung:
         # Zwischenergebnisse der vollen Groesse sofort zurueckgeben - der
         # Speicherpool von CuPy hielte sie sonst fuer das naechste Mal fest.
         cp.get_default_memory_pool().free_all_blocks()
-        bilddatei.speichern(pfad, rgb, self._alpha(faktor), self.daten.exif)
+        bilddatei.speichern(pfad, rgb, self._alpha_gesamt(faktor), self.daten.exif)
         self.gespeicherte_werte = dataclasses.replace(self.werte)
         return (time.perf_counter() - beginn) * 1000
 
@@ -244,5 +336,6 @@ class Sitzung:
         self._vollbild = None
         self._ki_rauschfrei = None
         self._ki_schaerfe = None
+        self._ki_maske = None
         self._speicher.clear()
         cp.get_default_memory_pool().free_all_blocks()

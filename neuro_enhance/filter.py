@@ -28,7 +28,7 @@ Created with assistance of Claude AI
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 
 import numpy as np
 
@@ -81,6 +81,16 @@ REGLER = (
     # (bearbeitung.Sitzung) - die Filterkette selbst kennt es nicht.
     Regler("ki_rauschen", "ki_rauschen", 0, 100),
     Regler("ki_schaerfe", "ki_schaerfe", 0, 100),
+    # Motiv & Hintergrund: Regler fuer den Hintergrund, die auf die Werte des ganzen
+    # Bildes aufgeschlagen werden, und die Kante der Maske; wirken erst, wenn die
+    # Maske fuer das Bild berechnet ist (bearbeitung.Sitzung)
+    Regler("hg_belichtung", "maske", -3.0, 3.0, schritt=0.05, nachkomma=2),
+    Regler("hg_kontrast", "maske", -100, 100),
+    Regler("hg_saettigung", "maske", -100, 100),
+    Regler("hg_temperatur", "maske", -100, 100),
+    Regler("hg_unschaerfe", "maske", 0, 100),
+    Regler("maske_kante", "maske", 0, 100),
+    Regler("maske_verschieben", "maske", -100, 100),
     Regler("schaerfe", "details", 0, 150),
     Regler("schaerfe_radius", "details", 0.5, 3.0, vorgabe=1.0, schritt=0.1, nachkomma=1),
     Regler("begradigen", "geometrie", -45.0, 45.0, schritt=0.1, nachkomma=1),
@@ -95,6 +105,11 @@ REGLER = (
 
 # Geometriefelder ohne Schieberegler, mit ihren Vorgaben
 GEOMETRIE_FELDER = {"drehung90": 0, "spiegeln": False, "zuschnitt": (0.0, 0.0, 1.0, 1.0)}
+# Schalter der Maske: Wirkung umkehren (Regler wirken aufs Motiv), Hintergrund
+# beim Speichern durchsichtig
+MASKEN_SCHALTER = {"maske_umkehren": False, "freistellen": False}
+HINTERGRUND = ("hg_belichtung", "hg_kontrast", "hg_saettigung", "hg_temperatur",
+               "hg_unschaerfe")
 
 # HSL je Farbbereich: acht Bereiche mit ihrer Mitte als Farbwinkel in OkLCh
 FARBBEREICHE = ("rot", "orange", "gelb", "gruen", "aqua", "blau", "lila", "magenta")
@@ -135,6 +150,16 @@ class Einstellungen:
     ki_rauschen: float = 0.0
     ki_schaerfe: float = 0.0
     lut_staerke: float = 100.0
+    # Motiv & Hintergrund
+    hg_belichtung: float = 0.0
+    hg_kontrast: float = 0.0
+    hg_saettigung: float = 0.0
+    hg_temperatur: float = 0.0
+    hg_unschaerfe: float = 0.0
+    maske_kante: float = 0.0
+    maske_verschieben: float = 0.0
+    maske_umkehren: bool = False
+    freistellen: bool = False
     # Geometrie (geometrie.py)
     drehung90: int = 0
     spiegeln: bool = False
@@ -162,6 +187,9 @@ class Einstellungen:
             elif feld.name in GEOMETRIE_FELDER:
                 if wert != GEOMETRIE_FELDER[feld.name]:
                     return False
+            elif feld.name in MASKEN_SCHALTER:
+                if wert != MASKEN_SCHALTER[feld.name]:
+                    return False
             elif feld.name not in ("schaerfe_radius", "lut_staerke") \
                     and wert != REGLER_NACH_NAME[feld.name].vorgabe:
                 return False
@@ -175,6 +203,18 @@ class Einstellungen:
 
     def rauschen_aktiv(self) -> bool:
         return self.rauschen_luminanz > 0 or self.rauschen_farbe > 0
+
+    def hintergrund_aktiv(self) -> bool:
+        return any(getattr(self, name) != 0 for name in HINTERGRUND)
+
+    def fuer_hintergrund(self) -> Einstellungen:
+        """Die Werte fuer den Hintergrund: die des ganzen Bildes plus die eigenen."""
+        return replace(
+            self,
+            belichtung=self.belichtung + self.hg_belichtung,
+            kontrast=max(-100.0, min(100.0, self.kontrast + self.hg_kontrast)),
+            saettigung=max(-100.0, min(100.0, self.saettigung + self.hg_saettigung)),
+            temperatur=max(-100.0, min(100.0, self.temperatur + self.hg_temperatur)))
 
 
 KURVEN = ("kurve_hell", "kurve_rot", "kurve_gruen", "kurve_blau")

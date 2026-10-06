@@ -7,6 +7,9 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Geändert
 
+- ONNX Runtime bekommt höchstens so viel Grafikspeicher, wie gerade frei ist.
+  Ohne Grenze wuchs sein Speicherpool über die Karte hinaus, und Windows
+  lagerte aus – ein Netz rechnete dann bis zu zwanzigmal langsamer.
 - KI-Kacheln von KI-Entrauschen und KI-Schärfen werden in ihrer Überlappung
   weich ineinander geblendet statt hart aneinandergesetzt; Netze, die über die
   ganze Kachel schauen, liefern sonst sichtbare Nähte.
@@ -34,6 +37,16 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- Neue Karte „Motiv & Hintergrund“: BiRefNet (lite, 2K, MIT) erkennt das Motiv
+  in rund zwei Sekunden (24 MP, RTX 4060). Belichtung, Kontrast, Sättigung,
+  Temperatur und Unschärfe lassen sich für den Hintergrund getrennt einstellen
+  (oder mit „Umkehren“ fürs Motiv); dafür rechnet die Kette das Bild ein
+  zweites Mal und mischt beide über die Maske, die Unschärfe ohne Lichtsaum
+  um das Motiv. Kante weicher und verschieben, Maskenansicht, Hintergrund
+  beim Speichern als PNG oder TIFF durchsichtig. Ab 6 GB Grafikspeicher. Das
+  Modell (177 MB) kommt aus dem neuen Release `modelle-4`; es ist in
+  `werkzeuge/netz_birefnet.py` ohne einops, timm, kornia und torchvision
+  nachgebaut.
 - KI-Schärfen gegen leichte Fokus-Unschärfe mit Restormer
   (single_image_defocus_deblurring, MIT) in einer eigenen Karte: einmal über
   das ganze Bild gerechnet, danach regelt ein Stärkeregler ohne Wartezeit.
