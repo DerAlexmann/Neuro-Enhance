@@ -127,3 +127,20 @@ def test_drehknopf_dreht_sichtbar_in_pfeilrichtung(bild, gespiegelt, richtung):
     sichtbar = g.anwenden(bild, vorher)
     erwartet = np.rot90(sichtbar, -richtung)
     assert np.allclose(g.anwenden(bild, nachher), erwartet, atol=1e-6)
+
+
+@pytest.mark.parametrize("geo", [
+    Geometrie(),
+    Geometrie(drehung90=1, spiegeln=True),
+    Geometrie(drehung90=3, zuschnitt=(0.1, 0.2, 0.9, 0.7)),
+    Geometrie(begradigen=7.0, perspektive_v=30, verzeichnung=20, zuschnitt=(0.1, 0.1, 0.8, 0.9)),
+])
+def test_klick_findet_den_punkt_im_original(geo):
+    """zur_quelle ist die Abbildung, mit der anwenden() liest - ein Klick auf einen
+    Punkt im fertigen Bild trifft ihn im Original."""
+    quelle = np.zeros((60, 90, 3), dtype=np.float32)
+    quelle[34, 51] = 1.0
+    ergebnis = g.anwenden(quelle, geo)
+    y, x = punkt_finden(ergebnis)
+    sx, sy = g.zur_quelle(quelle.shape, geo, x + 0.5, y + 0.5)
+    assert abs(sx - 51.5) < 1.0 and abs(sy - 34.5) < 1.0

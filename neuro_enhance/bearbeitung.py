@@ -16,10 +16,11 @@ Schaerfen als Korrektur, die aufs Ergebnis des Entrauschens gelegt wird. Die
 Staerkeregler mischen nur noch; das kostet je Vorschau Bruchteile einer
 Millisekunde.
 
-Ebenso die Maske des Motivs (KI-Freistellen): einmal berechnet, liegt sie in
-der Geometrie des Originals im Grafikspeicher. Fuer den Hintergrund rechnet die
-Kette das Bild ein zweites Mal mit dessen eigenen Werten; die Maske - mit
-derselben Geometrie wie das Bild verformt - mischt beides.
+Ebenso die Maske des Motivs (KI-Freistellen oder per Klick ausgewaehlt):
+einmal berechnet, liegt sie in der Geometrie des Originals im Grafikspeicher.
+Fuer den Hintergrund rechnet die Kette das Bild ein zweites Mal mit dessen
+eigenen Werten; die Maske - mit derselben Geometrie wie das Bild verformt -
+mischt beides.
 
 Dieses Modul importiert CuPy und darf deshalb erst nach der Startprufung
 geladen werden.
@@ -76,6 +77,10 @@ class Sitzung:
         self._ki_schaerfe = None              # (voll, Vorschau): Korrektur des KI-Schaerfens
         self._ki_maske = None                 # (voll, Vorschau): Maske des Motivs, 0..1
         self.maske_zeigen = False             # Vorschau faerbt den Hintergrund ein
+        self.maske_per_klick = False          # Maske stammt aus der Auswahl per Klick
+        self.klicks: list[tuple[float, float, bool]] = []   # (x, y, dazu) im Original
+        self._klick_logits: list = []         # SAM-Logits nach jedem Klick
+        self._maske_vor_klicks = None         # Maske, bevor geklickt wurde
 
         self.original = daten.linear(cp)
         # Zwischenpuffer des Demosaicing an den Grafikspeicher zurueckgeben
@@ -109,7 +114,66 @@ class Sitzung:
         voll = freisteller.maske(srgb)
         del srgb
         self._ki_maske = (voll, self._vorschau_von(voll))
+        self.maske_per_klick = False
+        self.klicks, self._klick_logits = [], []
         return self._ki_fertig(beginn)
+
+    def ki_auswahl_beginnen(self, auswaehler) -> float:
+        """Das Bild fuer die Auswahl per Klick vorbereiten (SAM-Encoder); Rueckgabe in ms.
+
+        Wie beim Freistellen sieht das Netz das Bild, wie es gerade entrauscht und
+        geschaerft ist. Die Maske von vorher bleibt, bis der erste Klick kommt;
+        stammt sie schon aus Klicks, geht es mit ihnen weiter.
+        """
+        beginn = time.perf_counter()
+        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True), 0, 1))
+        auswaehler.bild_setzen(srgb)
+        del srgb
+        if not self.klicks:
+            self._maske_vor_klicks = (self._ki_maske, self.maske_per_klick)
+        cp.get_default_memory_pool().free_all_blocks()
+        return (time.perf_counter() - beginn) * 1000
+
+    def quelle_von(self, x: float, y: float) -> tuple[float, float] | None:
+        """Punkt im fertigen Bild (Pixel) -> Punkt im Original, oder None ausserhalb."""
+        sx, sy = geometrie.zur_quelle(self.original.shape, geometrie.aus(self.werte), x, y)
+        hoehe, breite = self.original.shape[:2]
+        if not (0 <= sx < breite and 0 <= sy < hoehe):
+            return None
+        return sx, sy
+
+    def ki_klick(self, auswaehler, x: float, y: float, dazu: bool) -> float:
+        """Einen Klick (im Original) dazunehmen und die Maske neu bestimmen; Rueckgabe in ms.
+
+        SAM bekommt alle Klicks und seine letzte Maske als Hinweis - so verfeinert
+        jeder weitere Klick das Bisherige, statt neu zu beginnen.
+        """
+        beginn = time.perf_counter()
+        vorige = self._klick_logits[-1] if self._klick_logits else None
+        logits = auswaehler.roh([*self.klicks, (x, y, dazu)], vorige)
+        self.klicks.append((x, y, dazu))
+        self._klick_logits.append(logits)
+        self._maske_aus_klicks(auswaehler)
+        return (time.perf_counter() - beginn) * 1000
+
+    def ki_klick_zurueck(self, auswaehler) -> bool:
+        """Den letzten Klick zuruecknehmen; ohne Klicks gilt wieder die Maske von vorher."""
+        if not self.klicks:
+            return False
+        self.klicks.pop()
+        self._klick_logits.pop()
+        if self.klicks:
+            self._maske_aus_klicks(auswaehler)
+        else:
+            self._ki_maske, self.maske_per_klick = self._maske_vor_klicks
+            self._vollbild = None
+        return True
+
+    def _maske_aus_klicks(self, auswaehler):
+        voll = auswaehler.maske(self._klick_logits[-1])
+        self._ki_maske = (voll, self._vorschau_von(voll))
+        self.maske_per_klick = True
+        self._vollbild = None                    # das Vollbild zeigte die alte Maske
 
     def _maske_fuer(self, werte: Einstellungen, voll: bool):
         """Gewicht des Motivs (H, W) in der Geometrie des fertigen Bildes: Kante
@@ -337,5 +401,7 @@ class Sitzung:
         self._ki_rauschfrei = None
         self._ki_schaerfe = None
         self._ki_maske = None
+        self._klick_logits = []
+        self._maske_vor_klicks = None
         self._speicher.clear()
         cp.get_default_memory_pool().free_all_blocks()

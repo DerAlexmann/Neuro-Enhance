@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import bilddatei, einstellungen, filter, ki, lut
+from . import bilddatei, einstellungen, filter, geometrie, ki, lut
 from .bearbeitung import Sitzung
 from .cuda import cupy as cp
 from .geometrie import VOLLER_ZUSCHNITT
@@ -252,6 +252,10 @@ class BearbeitenSeite(QWidget):
         self._vorher = False
         self._zeichnen_angefordert = False
         self._zuschnitt_vorher = None         # Zuschnitt beim Betreten des Zuschnittmodus
+        self._auswaehler: ki.Auswaehler | None = None   # SAM, solange der Klickmodus laeuft
+        self._klick_marken: list[tuple[float, float, bool]] = []   # Klicks im fertigen Bild
+        self._klick_geo = None                # Geometrie, in der geklickt wurde
+        self._maske_zeigen_vorher = False
 
         aufbau = QHBoxLayout(self)
         aufbau.setContentsMargins(0, 12, 0, 0)
@@ -266,6 +270,7 @@ class BearbeitenSeite(QWidget):
                             _("Bild hierher ziehen oder „Öffnen …“ wählen."))
         self.leinwand.datei_abgelegt.connect(self.oeffnen)
         self.leinwand.ansicht_geaendert.connect(self._ansicht_geaendert)
+        self.leinwand.bild_geklickt.connect(self._bild_geklickt)
         links.addWidget(self.leinwand, 1)
         aufbau.addLayout(links, 1)
         aufbau.addWidget(self._reglerleiste())
@@ -275,7 +280,8 @@ class BearbeitenSeite(QWidget):
         QShortcut(QKeySequence("Ctrl+0"), self, lambda: self.leinwand.zoom_setzen(None))
         QShortcut(QKeySequence("Ctrl+1"), self, lambda: self.leinwand.zoom_setzen(1.0))
         QShortcut(QKeySequence(Qt.Key.Key_Return), self, lambda: self.zuschneiden(False))
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.zuschnitt_abbrechen)
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self._abbrechen)
+        QShortcut(QKeySequence.StandardKey.Undo, self, self.klick_zuruecknehmen)
         self._knoepfe_freischalten()
 
     # ------------------------------------------------------------------
@@ -445,6 +451,7 @@ class BearbeitenSeite(QWidget):
         if self.sitzung is None or an == (self.leinwand.zuschnitt is not None):
             return
         if an:
+            self.auswahl_beenden()
             self._zuschnitt_vorher = self.sitzung.werte.zuschnitt
             self.leinwand.zoom_setzen(None)
             self.leinwand.zuschnitt = self.sitzung.werte.zuschnitt
@@ -456,6 +463,13 @@ class BearbeitenSeite(QWidget):
         self.zuschneiden_knopf.setChecked(an)
         self.zuschneiden_knopf.blockSignals(False)
         self.zeichnen_anfordern()
+
+    def _abbrechen(self):
+        """Esc: Zuschnitt verwerfen oder den Klickmodus verlassen."""
+        if self.leinwand.zuschnitt is not None:
+            self.zuschnitt_abbrechen()
+        else:
+            self.auswahl_beenden()
 
     def zuschnitt_abbrechen(self):
         if self.leinwand.zuschnitt is None:
@@ -810,6 +824,21 @@ class BearbeitenSeite(QWidget):
         self.masken_knopf = QPushButton()
         self.masken_knopf.clicked.connect(self._masken_knopf_gedrueckt)
         innen.addWidget(self.masken_knopf)
+        leiste = QHBoxLayout()
+        leiste.setSpacing(4)
+        self.auswahl_knopf = QPushButton()
+        self.auswahl_knopf.setCheckable(True)
+        self.auswahl_knopf.toggled.connect(self._auswahl_knopf_gedrueckt)
+        self.fenster.beschriften(self.auswahl_knopf.setToolTip, _(
+            "Ein Objekt im Bild per Klick auswählen – die Regler dieser Karte wirken dann "
+            "auf alles andere."))
+        self.auswahl_zurueck_knopf = self._knopf(_("Klick zurück"), self.klick_zuruecknehmen,
+                                                 "kanal")
+        self.fenster.beschriften(self.auswahl_zurueck_knopf.setToolTip,
+                                 _("Den letzten Klick zurücknehmen (Strg+Z)"))
+        leiste.addWidget(self.auswahl_knopf, 1)
+        leiste.addWidget(self.auswahl_zurueck_knopf)
+        innen.addLayout(leiste)
         self.maske_zeigen_box = QCheckBox()
         self.fenster.beschriften(self.maske_zeigen_box.setText, _("Maske zeigen"))
         self.fenster.beschriften(self.maske_zeigen_box.setToolTip, _(
@@ -838,32 +867,58 @@ class BearbeitenSeite(QWidget):
     def _masken_modell(self) -> ki.Modell:
         return ki.MASKEN_MODELLE["birefnet"]
 
+    def _auswahl_modell(self) -> ki.Modell:
+        return ki.AUSWAHL_MODELLE["sam2"]
+
     def _masken_anzeigen(self):
         """Hinweis, Knopf, Schalter und Regler der Karte Motiv & Hintergrund."""
         if not hasattr(self, "masken_knopf"):
             return
         modell, stufe = self._masken_modell(), self._ki_stufe()
+        sam = self._auswahl_modell()
         offen = self.sitzung is not None
         fertig = offen and self.sitzung.ki_maske_da
+        per_klick = fertig and self.sitzung.maske_per_klick
+        klicken = self._auswaehler is not None
         knopf = None
-        if not ki.angeboten(modell, stufe):
-            text = _("Das Freistellen braucht mindestens 6 GB Grafikspeicher.")
-        elif not ki.vorhanden(modell):
-            text = _("Dieses Modell ist noch nicht geladen.")
-            knopf = _("Modell herunterladen ({mb} MB)").format(
-                mb=f"{ki.download_groesse(modell) / 2**20:.0f}")
+        if klicken:
+            text = _("Linksklick ins Bild nimmt einen Bereich dazu, Rechtsklick nimmt einen "
+                     "weg. Strg+Z nimmt den letzten Klick zurück, Esc beendet.")
+        elif not ki.angeboten(sam, stufe):
+            text = _("KI-Funktionen brauchen mindestens 4 GB Grafikspeicher.")
+        elif per_klick:
+            text = _("Objekt ausgewählt. Die Regler wirken auf alles andere.")
         elif fertig:
             text = _("Motiv erkannt. Die Regler wirken auf den Hintergrund.")
         else:
-            text = _("Die KI erkennt das Motiv – bei 24 Megapixeln in wenigen Sekunden. "
-                     "Danach lässt sich der Hintergrund getrennt bearbeiten oder "
-                     "durchsichtig speichern.")
-            knopf = _("Motiv erkennen")
+            text = _("Die KI erkennt das Motiv – bei 24 Megapixeln in wenigen Sekunden – "
+                     "oder wählt aus, was man anklickt. Danach lässt sich der Hintergrund "
+                     "getrennt bearbeiten oder durchsichtig speichern.")
+            if not ki.angeboten(modell, stufe):
+                text += " " + _("Das Erkennen ohne Klick braucht 6 GB Grafikspeicher.")
+        if not klicken and ki.angeboten(modell, stufe) and (not fertig or per_klick):
+            if not ki.vorhanden(modell):
+                knopf = _("Motiv erkennen – Modell laden ({mb} MB)").format(
+                    mb=f"{ki.download_groesse(modell) / 2**20:.0f}")
+            else:
+                knopf = _("Motiv erkennen")
         self.fenster.beschriften(self.masken_hinweis.setText, text)
         self.masken_knopf.setVisible(knopf is not None)
         if knopf is not None:
             self.fenster.beschriften(self.masken_knopf.setText, knopf)
             self.masken_knopf.setEnabled(offen or not ki.vorhanden(modell))
+        self.auswahl_knopf.setVisible(ki.angeboten(sam, stufe))
+        self.fenster.beschriften(
+            self.auswahl_knopf.setText, _("Objekt anklicken") if ki.vorhanden(sam) else
+            _("Objekt anklicken – Modell laden ({mb} MB)").format(
+                mb=f"{ki.download_groesse(sam) / 2**20:.0f}"))
+        self.auswahl_knopf.setEnabled(offen or not ki.vorhanden(sam))
+        if self.auswahl_knopf.isChecked() != klicken:
+            self.auswahl_knopf.blockSignals(True)
+            self.auswahl_knopf.setChecked(klicken)
+            self.auswahl_knopf.blockSignals(False)
+        self.auswahl_zurueck_knopf.setVisible(klicken)
+        self.auswahl_zurueck_knopf.setEnabled(klicken and bool(self.sitzung.klicks))
         for box in (self.maske_zeigen_box, self.maske_umkehren_box, self.freistellen_box):
             box.setEnabled(fertig)
         werte = self.sitzung.werte if offen else filter.Einstellungen()
@@ -888,6 +943,7 @@ class BearbeitenSeite(QWidget):
         """Die Maske des Motivs einmal mit KI berechnen."""
         if self.sitzung is None:
             return
+        self.auswahl_beenden()
         modell = self._masken_modell()
         kachel = modell.kacheln[modell.mindeststufe]
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -895,6 +951,7 @@ class BearbeitenSeite(QWidget):
             netz = self._ki_laden(modell, kachel,
                                   lambda **weg: ki.Freisteller(modell, **weg))
             ms = self.sitzung.ki_freistellen(netz)
+            self._klick_marken = []
             weg = netz.beschleuniger
             del netz                             # Grafikspeicher fuer die Bearbeitung frei
         except ki.KiFehler as fehler:
@@ -910,6 +967,84 @@ class BearbeitenSeite(QWidget):
         self.fenster.melden(_("Motiv erkannt ({s} s, über {weg})").format(
             s=f"{ms / 1000:.1f}", weg=weg))
         self.zeichnen_anfordern()
+
+    def _auswahl_knopf_gedrueckt(self, an: bool):
+        sam = self._auswahl_modell()
+        if an and not ki.vorhanden(sam):
+            self.auswahl_knopf.blockSignals(True)
+            self.auswahl_knopf.setChecked(False)
+            self.auswahl_knopf.blockSignals(False)
+            self.ki_modell_laden(sam)
+        elif an:
+            self.auswahl_beginnen()
+        else:
+            self.auswahl_beenden()
+
+    def auswahl_beginnen(self):
+        """Klickmodus: SAM sieht das Bild einmal, danach waehlt jeder Klick aus."""
+        if self.sitzung is None:
+            return
+        self.zuschneiden(False)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            if self._auswaehler is None:
+                self._auswaehler = ki.Auswaehler(self._auswahl_modell())
+            ms = self.sitzung.ki_auswahl_beginnen(self._auswaehler)
+        except (ki.KiFehler, cp.cuda.memory.OutOfMemoryError) as fehler:
+            self._auswaehler = None
+            text = str(fehler) if isinstance(fehler, ki.KiFehler) else _(
+                "Für dieses Bild reicht der Grafikspeicher nicht.")
+            self._fehler(_("Die Auswahl per Klick ließ sich nicht starten."), text)
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+            cp.get_default_memory_pool().free_all_blocks()
+            self._masken_anzeigen()
+        if not self.sitzung.klicks:
+            self._klick_marken = []
+        self.leinwand.klickmodus_setzen(True)
+        # Die Maskenansicht zeigt sofort, was ausgewaehlt ist
+        self._maske_zeigen_vorher = self.maske_zeigen_box.isChecked()
+        self.maske_zeigen_box.setChecked(True)
+        self.fenster.melden(_("Bereit zum Klicken ({s} s)").format(s=f"{ms / 1000:.1f}"))
+        self._masken_anzeigen()
+        self.zeichnen_anfordern()
+
+    def auswahl_beenden(self):
+        """Klickmodus verlassen; die Maske bleibt, SAM gibt den Grafikspeicher frei."""
+        if self._auswaehler is None:
+            return
+        self._auswaehler = None
+        cp.get_default_memory_pool().free_all_blocks()
+        self.leinwand.klickmodus_setzen(False)
+        self.maske_zeigen_box.setChecked(self._maske_zeigen_vorher)
+        self._masken_anzeigen()
+        self.zeichnen_anfordern()
+
+    def _bild_geklickt(self, x: float, y: float, dazu: bool):
+        if self._auswaehler is None or self.sitzung is None or self._vorher:
+            return
+        quelle = self.sitzung.quelle_von(x, y)
+        if quelle is None:
+            return
+        try:
+            ms = self.sitzung.ki_klick(self._auswaehler, *quelle, dazu)
+        except (ki.KiFehler, cp.cuda.memory.OutOfMemoryError) as fehler:
+            self._fehler(_("Die Auswahl ist fehlgeschlagen."), str(fehler))
+            return
+        self._klick_marken.append((x, y, dazu))
+        self._klick_geo = geometrie.aus(self.sitzung.werte)
+        self.fenster.rechenzeit_zeigen(ms)
+        self._masken_anzeigen()
+        self.zeichnen_anfordern()
+
+    def klick_zuruecknehmen(self):
+        if self._auswaehler is None or self.sitzung is None:
+            return
+        if self.sitzung.ki_klick_zurueck(self._auswaehler):
+            del self._klick_marken[-1:]
+            self._masken_anzeigen()
+            self.zeichnen_anfordern()
 
     def _hsl_karte(self) -> QFrame:
         karte, innen = self._karte(_("Farbbereiche"))
@@ -1072,6 +1207,9 @@ class BearbeitenSeite(QWidget):
             # Im Zuschnittmodus das ganze Bild zeigen, der Rahmen liegt darueber
             werte = dataclasses.replace(werte, zuschnitt=VOLLER_ZUSCHNITT)
         self.leinwand.voll_form = self.sitzung.ausgabe_form(werte)
+        if self.leinwand.klickmodus:
+            gleich = not self._vorher and self._klick_geo == geometrie.aus(self.sitzung.werte)
+            self.leinwand.klickpunkte = list(self._klick_marken) if gleich else []
         if self.leinwand.zoom is None:
             bild, ms, histogramm = self.sitzung.vorschau(werte=werte)
             self.leinwand.zeigen(bild)
@@ -1158,6 +1296,8 @@ class BearbeitenSeite(QWidget):
             # LibRaw entwickelt auf dem Prozessor; das dauert einige Sekunden.
             self.fenster.melden(_("RAW wird entwickelt …"))
             QApplication.processEvents()
+        self.auswahl_beenden()
+        self._klick_marken = []
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             daten = bilddatei.laden(pfad)

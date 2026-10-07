@@ -180,6 +180,13 @@ def automatischer_zoom(form_quelle, g: Geometrie) -> float:
     return oben
 
 
+def zur_quelle(form_quelle, g: Geometrie, x: float, y: float) -> tuple[float, float]:
+    """Punkt (x, y) im fertigen Bild, in Pixeln - wo liegt er im Original?"""
+    p = _parameter(form_quelle, g, automatischer_zoom(form_quelle, g))
+    cx, cy = _verzeichnet(p, *_rueckwaerts(np, p, x / p.wout, y / p.hout))
+    return float(cx + p.ws / 2), float(cy + p.hs / 2)
+
+
 def _catmull_rom(xp, t):
     """Gewichte der vier Nachbarn fuer den Anteil t (Catmull-Rom, a = -0.5)."""
     t2, t3 = t * t, t * t * t

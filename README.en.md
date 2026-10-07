@@ -86,6 +86,11 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   softened and shifted, and a mask view tints the background for checking. When saving
   as PNG or TIFF, the background can be made transparent. Needs at least 6 GB of graphics
   memory.
+- **Select an object by clicking** with Segment Anything 2 (SAM 2.1), in the same card:
+  left-click in the image adds an object or an area, right-click removes one, Ctrl+Z
+  undoes the last click. Every click shows the selection within a fraction of a second;
+  the sliders, "Invert" and transparent saving work on it like on the detected subject.
+  Works from 4 GB of graphics memory.
 - **Geometry**: rotate by 90°, flip, straighten, vertical and horizontal perspective, crop
   with a frame and fixed aspect ratios. Empty corners after straightening are cropped
   away automatically.
@@ -179,7 +184,7 @@ it is not part of any ready-made executable and is always installed separately.
 
 Neuro-Enhance works entirely on your own computer. No images are uploaded and no usage
 data is sent. The AI also runs locally on the graphics card. The only network access is
-downloading an AI model – and only when you explicitly click it in the "AI upscaling",
+downloading an AI model – and only when you explicitly ask for it in the "AI upscaling",
 "AI denoise", "AI sharpen" or "Subject & background" card and confirm the prompt that names source, size and
 licence.
 
@@ -194,15 +199,19 @@ with 71 MB, in the "AI sharpen" card from
 [modelle-3](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-3) Restormer
 with 101 MB, in the "Subject & background" card from
 [modelle-4](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-4) BiRefNet
-with 177 MB. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
+with 177 MB and for "Click object" from
+[modelle-5](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-5) SAM 2
+with 147 MB. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
 folder next to the program or, if that is read-only, in
 `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
 
 The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)
 (BSD 3-Clause, Copyright 2021 Xintao Wang), [SCUNet](https://github.com/cszn/SCUNet)
-(Apache-2.0, Copyright 2022 Kai Zhang) and [Restormer](https://github.com/swz30/Restormer)
-(MIT, Copyright 2022 Syed Waqas Zamir) and [BiRefNet](https://github.com/ZhengPeng7/BiRefNet)
-(MIT, Copyright 2024 ZhengPeng), converted to ONNX. To reproduce this yourself:
+(Apache-2.0, Copyright 2022 Kai Zhang), [Restormer](https://github.com/swz30/Restormer)
+(MIT, Copyright 2022 Syed Waqas Zamir), [BiRefNet](https://github.com/ZhengPeng7/BiRefNet)
+(MIT, Copyright 2024 ZhengPeng) and [SAM 2](https://github.com/facebookresearch/sam2)
+(Apache-2.0, Copyright Meta Platforms, Inc. and affiliates), converted to ONNX. To
+reproduce this yourself:
 
 1. Download `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` and
    `RealESRGAN_x4plus.pth` from the
@@ -212,8 +221,9 @@ The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/
    weights are published, and `single_image_defocus_deblurring.pth` from the
    [Restormer release v1.0](https://github.com/swz30/Restormer/releases/tag/v1.0) and
    `BiRefNet_lite-general-2K-epoch_232.pth` from the
-   [BiRefNet release v1](https://github.com/ZhengPeng7/BiRefNet/releases/tag/v1) into
-   `modelle/quellen/`.
+   [BiRefNet release v1](https://github.com/ZhengPeng7/BiRefNet/releases/tag/v1) and
+   [`sam2.1_hiera_small.pt`](https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt)
+   from Meta into `modelle/quellen/`.
 2. `pip install torch` (only needed for this step).
 3. `python werkzeuge/modelle_exportieren.py` – this writes the ONNX models to `modelle/`
    and checks them against PyTorch.

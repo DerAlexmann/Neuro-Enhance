@@ -392,7 +392,7 @@ class Restormer(nn.Module):
 
 def gewichte(datei: str) -> dict:
     daten = torch.load(os.path.join(QUELLEN, datei), map_location="cpu", weights_only=True)
-    for schluessel in ("params_ema", "params"):
+    for schluessel in ("params_ema", "params", "model"):
         if schluessel in daten:
             return daten[schluessel]
     return daten
@@ -518,8 +518,53 @@ def birefnet() -> list[str]:
     return [pfad]
 
 
+def sam2() -> list[str]:
+    from netz_sam2 import Dekodierer, Kodierer, Sam2
+    daten = gewichte("sam2.1_hiera_small.pt")
+    sam = Sam2()
+    sam.load_state_dict(Sam2.gewichte(daten), strict=True)
+    sam.eval()
+    kodierer, dekodierer = Kodierer(sam).eval(), Dekodierer(sam).eval()
+    pfad_k = os.path.join(ZIEL, "sam2.1-small-kodierer.onnx")
+    pfad_d = os.path.join(ZIEL, "sam2.1-small-dekodierer.onnx")
+    bild = torch.rand(1, 3, 1024, 1024)
+    torch.onnx.export(kodierer, (bild,), pfad_k, input_names=["eingabe"],
+                      output_names=["merkmale", "s0", "s1"], opset_version=17, dynamo=False,
+                      do_constant_folding=True)
+    with torch.no_grad():
+        merkmale, s0, s1 = kodierer(bild)
+    punkte, etiketten = torch.tensor([[[300.0, 420.0], [700.0, 600.0]]]), torch.tensor([[1.0, 0.0]])
+    maske, mit = torch.randn(1, 1, 256, 256), torch.tensor([1.0])
+    eingaben = (merkmale, s0, s1, punkte, etiketten, maske, mit)
+    namen = ["merkmale", "s0", "s1", "punkte", "etiketten", "maske", "mit_maske"]
+    # Die Zahl der Klicks ist frei
+    torch.onnx.export(dekodierer, eingaben, pfad_d, input_names=namen,
+                      output_names=["masken", "guete"], opset_version=17, dynamo=False,
+                      do_constant_folding=True,
+                      dynamic_axes={"punkte": {1: "klicks"}, "etiketten": {1: "klicks"}})
+
+    import onnxruntime as ort
+    k = ort.InferenceSession(pfad_k, providers=["CPUExecutionProvider"])
+    ist = k.run(None, {"eingabe": bild.numpy()})
+    soll = (merkmale, s0, s1)
+    abweichung = max(np.abs(i - s.numpy()).max() for i, s in zip(ist, soll, strict=True))
+    print(f"{os.path.basename(pfad_k)}: ONNX gegen PyTorch, groesste Abweichung "
+          f"{abweichung:.2e}")
+    d = ort.InferenceSession(pfad_d, providers=["CPUExecutionProvider"])
+    for n in (1, 3):                         # andere Klickzahl als beim Export
+        probe = list(eingaben)
+        probe[3], probe[4] = torch.rand(1, n, 2) * 1024, torch.ones(1, n)
+        with torch.no_grad():
+            soll = dekodierer(*probe)
+        ist = d.run(None, {name: t.numpy() for name, t in zip(namen, probe, strict=True)})
+        abweichung = max(np.abs(i - s.numpy()).max() for i, s in zip(ist, soll, strict=True))
+        print(f"{os.path.basename(pfad_d)} ({n} Klicks): ONNX gegen PyTorch, groesste "
+              f"Abweichung {abweichung:.2e}")
+    return [pfad_k, pfad_d]
+
+
 EXPORTE = {"realesrgan": realesrgan, "scunet": scunet, "restormer": restormer,
-           "birefnet": birefnet}
+           "birefnet": birefnet, "sam2": sam2}
 
 
 def main():

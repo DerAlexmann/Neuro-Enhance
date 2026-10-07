@@ -191,14 +191,34 @@ TRANSLATIONS = {
             "The sliders of this card affect the subject instead of the background.",
         "Beim Speichern als PNG oder TIFF wird der Hintergrund transparent.":
             "When saving as PNG or TIFF, the background becomes transparent.",
-        "Das Freistellen braucht mindestens 6 GB Grafikspeicher.":
-            "Subject detection needs at least 6 GB of graphics memory.",
+        "Das Erkennen ohne Klick braucht 6 GB Grafikspeicher.":
+            "Detection without clicking needs 6 GB of graphics memory.",
         "Motiv erkannt. Die Regler wirken auf den Hintergrund.":
             "Subject detected. The sliders affect the background.",
-        "Die KI erkennt das Motiv – bei 24 Megapixeln in wenigen Sekunden. Danach lässt "
-        "sich der Hintergrund getrennt bearbeiten oder durchsichtig speichern.":
-            "The AI detects the subject – in a few seconds for 24 megapixels. After that the "
-            "background can be edited separately or saved as transparent.",
+        "Die KI erkennt das Motiv – bei 24 Megapixeln in wenigen Sekunden – oder wählt "
+        "aus, was man anklickt. Danach lässt sich der Hintergrund getrennt bearbeiten oder "
+        "durchsichtig speichern.":
+            "The AI detects the subject – in a few seconds for 24 megapixels – or selects what "
+            "you click. After that the background can be edited separately or saved as "
+            "transparent.",
+        "Motiv erkennen – Modell laden ({mb} MB)": "Detect subject – download model ({mb} MB)",
+        "Objekt anklicken": "Click object",
+        "Objekt anklicken – Modell laden ({mb} MB)": "Click object – download model ({mb} MB)",
+        "Ein Objekt im Bild per Klick auswählen – die Regler dieser Karte wirken dann auf "
+        "alles andere.":
+            "Select an object in the image by clicking – the sliders of this card then affect "
+            "everything else.",
+        "Klick zurück": "Undo click",
+        "Den letzten Klick zurücknehmen (Strg+Z)": "Undo the last click (Ctrl+Z)",
+        "Linksklick ins Bild nimmt einen Bereich dazu, Rechtsklick nimmt einen weg. Strg+Z "
+        "nimmt den letzten Klick zurück, Esc beendet.":
+            "Left-click in the image adds an area, right-click removes one. Ctrl+Z undoes the "
+            "last click, Esc finishes.",
+        "Objekt ausgewählt. Die Regler wirken auf alles andere.":
+            "Object selected. The sliders affect everything else.",
+        "Die Auswahl per Klick ließ sich nicht starten.": "Click selection could not be started.",
+        "Die Auswahl ist fehlgeschlagen.": "The selection failed.",
+        "Bereit zum Klicken ({s} s)": "Ready for clicking ({s} s)",
         "Das Motiv ließ sich nicht erkennen.": "The subject could not be detected.",
         "Motiv erkannt ({s} s, über {weg})": "Subject detected ({s} s, via {weg})",
         "Gespeichert: {name} – ohne durchsichtigen Hintergrund, das kann JPEG nicht. Als PNG "

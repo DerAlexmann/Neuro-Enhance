@@ -1,9 +1,10 @@
 """
 KI-Hochskalieren (Real-ESRGAN), KI-Entrauschen (SCUNet), KI-Schaerfen
-(Restormer) und Freistellen (BiRefNet) ueber ONNX Runtime
+(Restormer), Freistellen (BiRefNet) und Auswahl per Klick (SAM 2) ueber
+ONNX Runtime
 
 Die Modelle stammen aus den offiziellen Releases von Real-ESRGAN (BSD-3-Clause),
-SCUNet (Apache-2.0), Restormer (MIT) und BiRefNet (MIT) und sind mit
+SCUNet (Apache-2.0), Restormer (MIT), BiRefNet (MIT) und SAM 2 (Apache-2.0) und sind mit
 werkzeuge/modelle_exportieren.py nach ONNX gewandelt. Bereit liegen sie als
 Dateien eigener Releases dieses Projekts, mit dem jeweiligen Lizenztext
 daneben. Heruntergeladen wird nur auf Wunsch des Anwenders; jede Datei wird
@@ -66,10 +67,12 @@ QUELLE = "https://github.com/xinntao/Real-ESRGAN"
 QUELLE_SCUNET = "https://github.com/cszn/SCUNet"
 QUELLE_RESTORMER = "https://github.com/swz30/Restormer"
 QUELLE_BIREFNET = "https://github.com/ZhengPeng7/BiRefNet"
+QUELLE_SAM2 = "https://github.com/facebookresearch/sam2"
 MODELL_RELEASE = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-1/"
 MODELL_RELEASE_2 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-2/"
 MODELL_RELEASE_3 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-3/"
 MODELL_RELEASE_4 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-4/"
+MODELL_RELEASE_5 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-5/"
 BLOCK = 1 << 20
 
 # Datei -> (SHA-256, Groesse in Bytes)
@@ -96,6 +99,12 @@ DATEIEN = {
         ("c3c8c750ca533f691a12902f28d4712f0331900c32907f2f762352427a415a42", 185559417),
     "LICENSE-BiRefNet.txt":
         ("92a7089e0915fc32bc40067560b398f1e6a7a5958abd7d04eda393629a5acefb", 1066),
+    "sam2.1-small-kodierer.onnx":
+        ("ec764cb857928d5b80ad740a65fbafb54867f8b446b72f02bbeb414bea91a0a8", 137861210),
+    "sam2.1-small-dekodierer.onnx":
+        ("aa6140c678916f505133f8a1cd45f7b84b18dcd2ec058249bdcc16ab6fdeb8fc", 16510918),
+    "LICENSE-SAM2.txt":
+        ("c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4", 11357),
 }
 LIZENZDATEI = "LICENSE-Real-ESRGAN.txt"
 RAND = 10                    # Ueberlappung je Kachelseite in Eingabepixeln, wie in Real-ESRGAN
@@ -136,6 +145,9 @@ class Modell:
     # einmal, verkleinert, statt in Kacheln
     feste_groesse: tuple[int, int] | None = None
     ausgabe_kanaele: int = 3
+    # Weitere ONNX-Dateien (Datei, SHA-256), die zum Modell gehoeren - etwa der
+    # Decoder neben dem Encoder
+    weitere: tuple[tuple[str, str], ...] = ()
 
 
 MODELLE = {
@@ -197,7 +209,25 @@ MASKEN_MODELLE = {
         massstab=1, rand=0, vielfaches=32, nhwc=False, cuda_fp16=False,
         feste_groesse=(1440, 2560), ausgabe_kanaele=1),
 }
-ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE, **SCHAERF_MODELLE, **MASKEN_MODELLE}
+# Auswahl per Klick: SAM 2.1 small. Der Encoder sieht das Bild einmal (1024 x 1024,
+# rund 0,1 s), danach braucht jeder Klick nur noch den kleinen Decoder (unter 10 ms).
+# In FP32: schnell genug, und die FP16-Wandlung des Encoders laedt ONNX Runtime nicht.
+AUSWAHL_MODELLE = {
+    "sam2": Modell(
+        "sam2", "sam2.1-small-kodierer.onnx",
+        "ec764cb857928d5b80ad740a65fbafb54867f8b446b72f02bbeb414bea91a0a8",
+        None,
+        "S", {"S": 1024, "M": 1024, "L": 1024, "XL": 1024},
+        lizenz="Apache-2.0", quelle=QUELLE_SAM2,
+        herkunft="SAM 2 (Apache-2.0, Copyright Meta Platforms, Inc. and affiliates)",
+        lizenzdatei="LICENSE-SAM2.txt", release=MODELL_RELEASE_5,
+        massstab=1, rand=0, vielfaches=32, nhwc=False, cuda_fp16=False,
+        feste_groesse=(1024, 1024),
+        weitere=(("sam2.1-small-dekodierer.onnx",
+                  "aa6140c678916f505133f8a1cd45f7b84b18dcd2ec058249bdcc16ab6fdeb8fc"),)),
+}
+ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE, **SCHAERF_MODELLE, **MASKEN_MODELLE,
+                **AUSWAHL_MODELLE}
 STUFEN = ("S", "M", "L", "XL")
 
 
@@ -243,7 +273,7 @@ def datei_pfad(name: str) -> str | None:
 def dateien(modell: Modell) -> list[str]:
     """Alle Dateien, die ein Modell braucht - samt Lizenztext."""
     namen = [modell.datei] + ([n for n, _s in modell.mischung] if modell.mischung else [])
-    return [*namen, modell.lizenzdatei]
+    return [*namen, *(n for n, _s in modell.weitere), modell.lizenzdatei]
 
 
 def angeboten(modell: Modell, stufe: str) -> bool:
@@ -523,9 +553,10 @@ class _Netz:
         optionen.log_severity_level = 3
         return optionen
 
-    def _cuda_sitzung(self):
+    def _cuda_sitzung(self, pfad: str | None = None):
         halb = self.fp16 and self.modell.cuda_fp16
-        netz = _halbe_genauigkeit(self._pfad) if halb else self._pfad
+        pfad = pfad or self._pfad
+        netz = _halbe_genauigkeit(pfad) if halb else pfad
         anbieter = [("CUDAExecutionProvider", {"device_id": 0,
                                                "cudnn_conv_algo_search": "HEURISTIC",
                                                "prefer_nhwc": "1" if halb and self.modell.nhwc
@@ -807,3 +838,109 @@ class Freisteller(_Netz):
         if hochformat:
             maske = cp.rot90(maske, -1)
         return cp.ascontiguousarray(cp.clip(maske, 0, 1))
+
+
+def _binden(sitzung, eingaben: dict, ausgaben: dict):
+    """Netz mit CuPy-Arrays (float32) als Ein- und Ausgaengen rechnen, alles auf der GPU."""
+    bindung = sitzung.io_binding()
+    for name, wert in eingaben.items():
+        bindung.bind_input(name, "cuda", 0, np.float32, list(wert.shape), wert.data.ptr)
+    for name, wert in ausgaben.items():
+        bindung.bind_output(name, "cuda", 0, np.float32, list(wert.shape), wert.data.ptr)
+    cp.cuda.Device().synchronize()                 # CuPy hat fertig geschrieben
+    sitzung.run_with_iobinding(bindung)
+
+
+class Auswaehler(_Netz):
+    """SAM 2 - waehlt per Klick ein Objekt aus; die Maske (1 = Objekt) in voller Groesse.
+
+    bild_setzen rechnet den Encoder einmal je Bild, danach liefert roh() zu jeder
+    Liste von Klicks in Millisekunden die passende Maske. SAM sieht das Bild
+    gestaucht auf 1024 x 1024 Pixel und gibt eine Maske mit 256 x 256 Punkten
+    zurueck. Ihre Kante legt maske() mit einem gefuehrten Filter an die Kanten
+    des Bildes, bevor sie auf die volle Groesse kommt.
+    """
+
+    ARBEIT = 2048                    # laengste Kante, auf der die Kante verfeinert wird
+    STABIL = 0.98                    # wie SAM2ImagePredictor: Grenze der Stabilitaet
+
+    def __init__(self, modell: Modell | None = None):
+        modell = modell or AUSWAHL_MODELLE["sam2"]
+        super().__init__(modell, fp16=False, kachel=None, tensorrt=False)
+        (name, sha256), = modell.weitere
+        self.dekodierer = self._cuda_sitzung(datei_pruefen(name, sha256))
+        self.form: tuple[int, int] | None = None
+        self._merkmale = None
+        self._fuehrung = None
+
+    def bild_setzen(self, srgb):
+        """sRGB (H, W, 3) float32 0..1 auf der GPU einmal durch den Encoder schicken."""
+        hoehe, breite = srgb.shape[:2]
+        groesse = self.modell.feste_groesse[0]
+        faktor = max(1, min(hoehe, breite) // groesse)
+        klein = filter.vergroessern(filter.verkleinern_box(srgb, faktor).astype(cp.float32),
+                                    groesse, groesse)
+        eingabe = cp.ascontiguousarray(cp.moveaxis(klein, -1, 0))[None]
+        del klein
+        merkmale = {"merkmale": cp.empty((1, 256, 64, 64), dtype=cp.float32),
+                    "s0": cp.empty((1, 32, 256, 256), dtype=cp.float32),
+                    "s1": cp.empty((1, 64, 128, 128), dtype=cp.float32)}
+        try:
+            _binden(self.sitzung, {"eingabe": eingabe}, merkmale)
+        except Exception as fehler:              # ORT wirft eigene Fehlerklassen
+            raise KiFehler(str(fehler)) from fehler
+        faktor = max(1, -(-max(hoehe, breite) // self.ARBEIT))
+        self._fuehrung = filter.luminanz(filter.verkleinern_box(srgb, faktor)).astype(cp.float32)
+        self._merkmale = merkmale
+        self.form = (hoehe, breite)
+
+    def roh(self, klicks, vorige=None):
+        """Klicks [(x, y, dazu), ...] in Pixeln des Bildes -> Logits (256, 256) der besten
+        Maske; vorige: Logits der letzten Maske, die SAM als Hinweis bekommt."""
+        hoehe, breite = self.form
+        groesse = self.modell.feste_groesse[0]
+        punkte = cp.asarray([[[x / breite * groesse - 0.5, y / hoehe * groesse - 0.5]
+                              for x, y, _dazu in klicks]], dtype=cp.float32)
+        etiketten = cp.asarray([[1.0 if dazu else 0.0 for _x, _y, dazu in klicks]],
+                               dtype=cp.float32)
+        mit = vorige is not None
+        maske = vorige if mit else cp.zeros((256, 256), dtype=cp.float32)
+        eingaben = {**self._merkmale, "punkte": punkte, "etiketten": etiketten,
+                    "maske": cp.ascontiguousarray(maske[None, None], dtype=cp.float32),
+                    "mit_maske": cp.asarray([1.0 if mit else 0.0], dtype=cp.float32)}
+        masken = cp.empty((1, 4, 256, 256), dtype=cp.float32)
+        guete = cp.empty((1, 4), dtype=cp.float32)
+        try:
+            _binden(self.dekodierer, eingaben, {"masken": masken, "guete": guete})
+        except Exception as fehler:
+            raise KiFehler(str(fehler)) from fehler
+        return masken[0, self._waehlen(masken[0], guete[0], len(klicks))]
+
+    def _waehlen(self, masken, guete, anzahl: int) -> int:
+        """Welche der vier Masken - wie SAM2ImagePredictor.
+
+        Ein einzelner Klick ist mehrdeutig (Knopf, Hemd oder ganze Person?): dann
+        die der drei Deutungen mit der hoechsten geschaetzten Guete. Bei mehreren
+        Klicks die eigene Maske dafuer, ausser sie ist instabil - aendert sich ihre
+        Flaeche schon bei einer kleinen Verschiebung der Schwelle merklich.
+        """
+        beste = 1 + int(cp.argmax(guete[1:]))
+        if anzahl == 1:
+            return beste
+        innen = int((masken[0] > 0.05).sum())
+        aussen = int((masken[0] > -0.05).sum())
+        stabil = aussen == 0 or innen / aussen >= self.STABIL
+        return 0 if stabil else beste
+
+    def maske(self, logits):
+        """Logits (256, 256) -> Maske (H, W) float32 0..1 auf der GPU, Kante am Bild."""
+        hoehe, breite = self.form
+        fh, fb = self._fuehrung.shape
+        # Wie SAM selbst an der Schwelle 0 entscheiden: Unsicheres (oft Haar) halb
+        # zu nehmen hiesse, die Regler wirkten dort halb
+        hart = (filter.vergroessern(logits, fh, fb) > 0).astype(cp.float32)
+        # Ein Punkt der SAM-Maske deckt einige Pixel der Arbeitsgroesse; so weit darf
+        # die Kante wandern, um sich an eine Kante im Bild zu legen
+        radius = max(2, round(max(fh, fb) / 256))
+        fein = filter.gefuehrter_filter(self._fuehrung, hart, radius, 1e-3)
+        return cp.ascontiguousarray(cp.clip(filter.vergroessern(fein, hoehe, breite), 0, 1))

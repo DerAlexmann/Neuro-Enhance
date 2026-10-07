@@ -209,7 +209,8 @@ def test_katalog_vollstaendig():
         assert modell.release.startswith("https://github.com/DerAlexmann/Neuro-Enhance/")
         assert modell.mindeststufe in ki.STUFEN and set(modell.kacheln) <= set(ki.STUFEN)
     assert set(ki.ALLE_MODELLE) == (set(ki.MODELLE) | set(ki.ENTRAUSCH_MODELLE)
-                                    | set(ki.SCHAERF_MODELLE) | set(ki.MASKEN_MODELLE))
+                                    | set(ki.SCHAERF_MODELLE) | set(ki.MASKEN_MODELLE)
+                                    | set(ki.AUSWAHL_MODELLE))
 
 
 def test_entrauschmodell_aus_eigenem_release():
@@ -219,6 +220,16 @@ def test_entrauschmodell_aus_eigenem_release():
     assert all(m.release == ki.MODELL_RELEASE for m in ki.MODELLE.values())
     assert ki.SCHAERF_MODELLE["restormer"].release == ki.MODELL_RELEASE_3
     assert ki.MASKEN_MODELLE["birefnet"].release == ki.MODELL_RELEASE_4
+    assert ki.AUSWAHL_MODELLE["sam2"].release == ki.MODELL_RELEASE_5
+
+
+def test_weitere_dateien_gehoeren_zum_modell():
+    """SAM besteht aus Encoder und Decoder - beide werden geladen und geprueft."""
+    sam = ki.AUSWAHL_MODELLE["sam2"]
+    assert ki.dateien(sam) == ["sam2.1-small-kodierer.onnx", "sam2.1-small-dekodierer.onnx",
+                               "LICENSE-SAM2.txt"]
+    for name, sha256 in sam.weitere:
+        assert ki.DATEIEN[name][0] == sha256
 
 
 def test_feste_kachel_rueckt_randkacheln_ins_bild():

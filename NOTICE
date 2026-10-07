@@ -171,6 +171,32 @@ BiRefNet (model BiRefNet_lite-general-2K)
   BiRefNet (LICENSE-BiRefNet.txt), which Neuro-Enhance also downloads and
   stores next to the model.
 
+SAM 2 - Segment Anything in Images and Videos (model SAM 2.1 Hiera small)
+  Copyright (c) Meta Platforms, Inc. and affiliates
+  Licence: Apache License 2.0
+  https://github.com/facebookresearch/sam2
+  The official checkpoint sam2.1_hiera_small.pt (published by Meta at
+  https://dl.fbaipublicfiles.com/segment_anything_2/092824/) is converted to
+  ONNX with werkzeuge/modelle_exportieren.py. werkzeuge/netz_sam2.py is
+  derived from the SAM 2 source code (sam2/modeling) and is therefore also
+  under the Apache License 2.0 (full text in LICENSES/Apache-2.0.txt); it
+  contains only the parts needed for a single image - image encoder (Hiera
+  and FPN neck), prompt encoder and mask decoder - without hydra, iopath
+  and torchvision. Changes to the
+  original, all computing the same result: the encoder has a fixed input of
+  1024 x 1024, normalises the image itself and outputs the features as
+  SAM2ImagePredictor.set_image stores them (with no_mem_embed and the
+  high-resolution levels through conv_s0/conv_s1); the decoder takes the
+  click points in pixels of the 1024 image, appends the padding point
+  itself, accepts the previous mask through a 0/1 input instead of None and
+  outputs all four masks with their predicted quality; attention is written
+  out instead of scaled_dot_product_attention; the video parts (memory,
+  object pointers, object score) are left out. The weights themselves are
+  unchanged. The two converted model files (encoder and decoder) are
+  published as assets of the release "modelle-5" of this project, together
+  with the Apache License 2.0 text (LICENSE-SAM2.txt), which Neuro-Enhance
+  also downloads and stores next to the model.
+
 Only models whose licence permits use and redistribution in an
 open-source project are offered by default.
 

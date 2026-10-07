@@ -37,6 +37,17 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- Objekt per Klick auswählen in der Karte „Motiv & Hintergrund“ mit
+  Segment Anything 2 (SAM 2.1 small, Apache-2.0): Linksklick nimmt dazu,
+  Rechtsklick weg, Strg+Z nimmt den letzten Klick zurück, Esc beendet. Der
+  Encoder sieht das Bild einmal (0,1 s), jeder Klick kostet danach rund
+  40 ms bei 24 MP (RTX 4060). Die Maske kommt grob aus SAM (256 × 256) und
+  wird mit einem geführten Filter an die Kanten des Bildes gelegt. Klicks
+  werden durch die Geometrie zurück ins Original gerechnet; bei 100 % lässt
+  sich das Bild im Klickmodus weiter verschieben. Ab 4 GB Grafikspeicher.
+  Das Modell (Encoder und Decoder, 147 MB) kommt aus dem neuen Release
+  `modelle-5`; der Bildteil von SAM 2 ist in `werkzeuge/netz_sam2.py` ohne
+  hydra, iopath und torchvision nachgebaut.
 - Neue Karte „Motiv & Hintergrund“: BiRefNet (lite, 2K, MIT) erkennt das Motiv
   in rund zwei Sekunden (24 MP, RTX 4060). Belichtung, Kontrast, Sättigung,
   Temperatur und Unschärfe lassen sich für den Hintergrund getrennt einstellen

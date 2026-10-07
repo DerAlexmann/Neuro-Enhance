@@ -10,6 +10,11 @@ auf einem Bildschirmpixel.
 Im Zuschnittmodus liegt ueber dem eingepassten Bild ein Rahmen mit Griffen an
 Ecken und Kanten; ein festes Seitenverhaeltnis wird beim Ziehen eingehalten.
 
+Im Klickmodus meldet die Leinwand Klicks ins Bild (`bild_geklickt`: Bildpunkt und
+ob links geklickt wurde) und zeichnet die bisherigen Klicks als Punkte. Ziehen
+verschiebt vergroessert weiterhin das Bild - als Klick zaehlt nur, was kaum bewegt
+wurde.
+
 Licensed under MIT License
 Copyright 2026 Alexander Unverhau
 Created with assistance of Claude AI
@@ -27,6 +32,7 @@ from . import farben
 ZOOMSTUFEN = (None, 1.0, 2.0, 4.0)   # None = eingepasst
 RAND = 8
 GRIFF = 10                           # so nah muss die Maus an Kante oder Ecke sein
+KLICK_WEG = 4                        # weiter bewegt ist es Ziehen, kein Klick
 MIN_ZUSCHNITT = 0.02
 
 
@@ -34,6 +40,7 @@ class Leinwand(QFrame):
     datei_abgelegt = Signal(str)
     ansicht_geaendert = Signal()
     zuschnitt_geaendert = Signal(tuple)
+    bild_geklickt = Signal(float, float, bool)       # x, y im Bild; True = linke Taste
 
     def __init__(self):
         super().__init__(objectName="leinwand")
@@ -50,6 +57,9 @@ class Leinwand(QFrame):
         self.zuschnitt: tuple[float, float, float, float] | None = None
         self.seitenverhaeltnis: float | None = None      # Breite / Hoehe in Pixeln
         self._ziehen = None                   # (Art, Startpunkt, Ausgangswert)
+        self.klickmodus = False
+        self.klickpunkte: list[tuple[float, float, bool]] = []   # im Bild, zum Zeichnen
+        self._klick = None                    # (Fensterpunkt, linke Taste) beim Druecken
 
         aufbau = QVBoxLayout(self)
         aufbau.addStretch(1)
@@ -161,7 +171,7 @@ class Leinwand(QFrame):
             mitte = self._flaeche().center()
             self.mitte = (x - (um.x() - mitte.x()) / s, y - (um.y() - mitte.y()) / s)
             self._mitte_begrenzen()
-        self.setCursor(Qt.CursorShape.OpenHandCursor if zoom else Qt.CursorShape.ArrowCursor)
+        self._zeiger()
         self.ansicht_geaendert.emit()
 
     def zoom_schritt(self, richtung: int, um: QPointF | None = None):
@@ -247,10 +257,30 @@ class Leinwand(QFrame):
     # Maus
     # ------------------------------------------------------------------
 
+    def klickmodus_setzen(self, an: bool):
+        self.klickmodus = an
+        self.klickpunkte = []
+        self._klick = None
+        self._zeiger()
+        self.update()
+
+    def _zeiger(self):
+        if self.klickmodus:
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self.setCursor(Qt.CursorShape.OpenHandCursor if self.zoom
+                           else Qt.CursorShape.ArrowCursor)
+
     def mousePressEvent(self, ereignis):              # noqa: N802 - Qt-Name
-        if ereignis.button() != Qt.MouseButton.LeftButton or self.voll_form is None:
+        knopf = ereignis.button()
+        if self.voll_form is None:
             return
         punkt = ereignis.position()
+        if self.klickmodus and self.zuschnitt is None and knopf in (
+                Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
+            self._klick = (punkt, knopf == Qt.MouseButton.LeftButton)
+        if knopf != Qt.MouseButton.LeftButton:
+            return
         if self.zuschnitt is not None:
             art = self._griff_bei(punkt)
             if art:
@@ -273,6 +303,11 @@ class Leinwand(QFrame):
                 self.setCursor(form)
             return
         art, start, ausgang = self._ziehen
+        if self._klick is not None and art == "schieben":
+            weg = punkt - self._klick[0]
+            if abs(weg.x()) + abs(weg.y()) <= KLICK_WEG:
+                return                            # noch ein Klick, kein Verschieben
+            self._klick = None
         if art == "schieben":
             s = self._massstab()
             self.mitte = (ausgang[0] - (punkt.x() - start[0]) / s,
@@ -285,17 +320,26 @@ class Leinwand(QFrame):
             self.update()
 
     def mouseReleaseEvent(self, ereignis):            # noqa: N802 - Qt-Name
+        if self._klick is not None:
+            start, links = self._klick
+            self._klick = None
+            weg = ereignis.position() - start
+            if abs(weg.x()) + abs(weg.y()) <= KLICK_WEG:
+                x, y = self.zu_bild(start)
+                hoehe, breite = self.voll_form
+                if 0 <= x < breite and 0 <= y < hoehe:
+                    self.bild_geklickt.emit(x, y, links)
         if self._ziehen is None:
             return
         art = self._ziehen[0]
         self._ziehen = None
         if art == "schieben":
-            self.setCursor(Qt.CursorShape.OpenHandCursor)
+            self._zeiger()
         else:
             self.zuschnitt_geaendert.emit(self.zuschnitt)
 
     def mouseDoubleClickEvent(self, ereignis):        # noqa: N802 - Qt-Name
-        if self._bild is None or self.zuschnitt is not None:
+        if self._bild is None or self.zuschnitt is not None or self.klickmodus:
             return
         self.zoom_setzen(None if self.zoom else 1.0, ereignis.position())
 
@@ -320,6 +364,21 @@ class Leinwand(QFrame):
         maler.drawImage(ziel, self._bild)
         if self.zuschnitt is not None:
             self._rahmen_zeichnen(maler, ziel)
+        elif self.klickmodus:
+            self._klicks_zeichnen(maler)
+
+    def _klicks_zeichnen(self, maler: QPainter):
+        """Bisherige Klicks: gruen dazu, rot weg - mit dunklem Rand auf jedem Grund."""
+        maler.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        for x, y, dazu in self.klickpunkte:
+            mitte = self.zu_fenster(x, y)
+            maler.setPen(QPen(QColor(0, 0, 0, 200), 2))
+            maler.setBrush(QColor(60, 200, 90) if dazu else QColor(230, 60, 50))
+            maler.drawEllipse(mitte, 6, 6)
+            maler.setPen(QPen(QColor(255, 255, 255), 2))
+            maler.drawLine(mitte + QPointF(-3, 0), mitte + QPointF(3, 0))
+            if dazu:
+                maler.drawLine(mitte + QPointF(0, -3), mitte + QPointF(0, 3))
 
     def _rahmen_zeichnen(self, maler: QPainter, bild: QRectF):
         rollen = farben.THEMES[farben.CURRENT_THEME]
