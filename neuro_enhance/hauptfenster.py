@@ -198,6 +198,23 @@ class Hauptfenster(QMainWindow):
         self.dunkel.setChecked(farben.CURRENT_THEME == "dark")
         self.dunkel.toggled.connect(self._schema_gewechselt)
         aufbau.addWidget(self.dunkel)
+
+        aufbau.addSpacing(12)
+        aufbau.addWidget(self._label(_("RAW"), "kopfgruppe"))
+        self.raw_wahl = QComboBox()
+        for nummer, (wert, text) in enumerate((("schnell", _("Schnell (GPU)")),
+                                               ("beste", _("Beste Qualität")))):
+            self.raw_wahl.addItem("", wert)
+            self.beschriften(lambda t, i=nummer: self.raw_wahl.setItemText(i, t), text)
+        self.raw_wahl.setCurrentIndex(
+            max(0, self.raw_wahl.findData(einstellungen.raw_qualitaet())))
+        self.beschriften(self.raw_wahl.setToolTip, _(
+            "Schnell: Demosaicing nach Malvar, He und Cutler auf der Grafikkarte, eine "
+            "24-MP-RAW in rund 0,2 s. Beste Qualität: LibRaw mit dem Verfahren DHT auf dem "
+            "Prozessor, etwa 1,5 s, mit weniger Farbsäumen an feinen Mustern. Gilt beim "
+            "nächsten Öffnen einer RAW."))
+        self.raw_wahl.currentIndexChanged.connect(lambda _i: self._einstellungen_sichern())
+        aufbau.addWidget(self.raw_wahl)
         return kopf
 
     def _sprache_gewechselt(self):
@@ -353,6 +370,8 @@ class Hauptfenster(QMainWindow):
         daten = einstellungen.load_config()
         daten["language"] = _.language
         daten["theme"] = farben.CURRENT_THEME
+        if hasattr(self, "raw_wahl"):
+            daten["raw_qualitaet"] = self.raw_wahl.currentData()
         if mit_fenster:
             daten["geometry"] = base64.b64encode(bytes(self.saveGeometry())).decode("ascii")
         einstellungen.save_config(daten)

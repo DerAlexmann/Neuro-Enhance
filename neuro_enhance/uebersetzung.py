@@ -275,6 +275,16 @@ TRANSLATIONS = {
         "Tiefe berechnen": "Estimate depth",
         "Die Tiefe ließ sich nicht schätzen.": "The depth could not be estimated.",
         "Tiefe geschätzt ({s} s)": "Depth estimated ({s} s)",
+        "RAW": "RAW",
+        "Schnell (GPU)": "Fast (GPU)",
+        "Beste Qualität": "Best quality",
+        "Schnell: Demosaicing nach Malvar, He und Cutler auf der Grafikkarte, eine 24-MP-RAW "
+        "in rund 0,2 s. Beste Qualität: LibRaw mit dem Verfahren DHT auf dem Prozessor, etwa "
+        "1,5 s, mit weniger Farbsäumen an feinen Mustern. Gilt beim nächsten Öffnen einer RAW.":
+            "Fast: demosaicing after Malvar, He and Cutler on the graphics card, a 24 MP RAW in "
+            "about 0.2 s. Best quality: LibRaw with the DHT method on the processor, about "
+            "1.5 s, with fewer colour fringes on fine patterns. Applies the next time a RAW "
+            "is opened.",
         "Das Motiv ließ sich nicht erkennen.": "The subject could not be detected.",
         "Motiv erkannt ({s} s, über {weg})": "Subject detected ({s} s, via {weg})",
         "Gespeichert: {name} – ohne durchsichtigen Hintergrund, das kann JPEG nicht. Als PNG "

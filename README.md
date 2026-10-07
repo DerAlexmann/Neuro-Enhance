@@ -145,10 +145,11 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   und weitere) werden linear und ohne automatische Aufhellung entwickelt – der
   volle Umfang des Sensors bleibt erhalten, die Helligkeit regelt die
   Belichtung. Bei Sensoren mit Bayer-Mosaik, also bei fast allen Kameras,
-  läuft das Demosaicing auf der GPU – mit RCD (Ratio Corrected Demosaicing),
-  das an feinen Mustern besonders wenige Farbsäume hinterlässt. Eine
-  24-Megapixel-RAW ist in rund 0,2 s offen statt in knapp einer Sekunde. Fujis X-Trans und
-  andere Sensoren entwickelt weiterhin LibRaw.
+  läuft das Demosaicing auf der GPU – nach Malvar, He und Cutler. Eine
+  24-Megapixel-RAW ist in rund 0,2 s offen statt in gut einer Sekunde. Wer an
+  feinen Mustern noch weniger Farbsäume will, wählt oben „RAW: Beste Qualität“ –
+  dann entwickelt LibRaw mit dem Verfahren DHT auf dem Prozessor (etwa 1,5 s).
+  Fujis X-Trans und andere Sensoren entwickelt immer LibRaw.
 - **Formate**: Öffnen von JPEG, PNG, TIFF, WebP, BMP und RAW (HEIC mit dem
   optionalen Paket `pillow-heif`), Speichern als JPEG und WebP mit 8 Bit, PNG
   und TIFF wahlweise mit 8 oder 16 Bit. Bilder mit mehr als 8 Bit schlägt der
@@ -292,8 +293,15 @@ Sicherheitslücken bitte nicht als Issue, sondern über den Weg in
 [MIT](LICENSE) – Copyright 2026 Alexander Unverhau.
 Erstellt mit Unterstützung von Claude AI.
 
+Ausnahme sind die Nachbauten fremder Netze in `werkzeuge/netz_*.py`, die nur zum
+Wandeln der KI-Modelle dienen und nicht zum Programm gehören: Jede steht unter der
+Lizenz ihres Vorbilds (Apache-2.0, MIT oder BSD-3-Clause), wie im Kopf der Datei
+angegeben; die Lizenztexte liegen in [LICENSES](LICENSES).
+
 Verwendete Fremdkomponenten und ihre Lizenzen stehen in [NOTICE](NOTICE). KI-Modelle
-stehen unter eigenen Lizenzen, die vor dem Herunterladen angezeigt werden.
+stehen unter eigenen Lizenzen, die vor dem Herunterladen angezeigt werden. Die
+NVIDIA-Bibliotheken (CUDA, cuDNN, optional TensorRT) installiert pip aus NVIDIAs
+eigenen Paketen; sie stehen unter NVIDIAs Lizenzen und nicht unter der MIT-Lizenz.
 
 **Marken:** NVIDIA, RTX, GeForce, CUDA und TensorRT sind Marken oder eingetragene Marken
 der NVIDIA Corporation in den USA und anderen Ländern. Qt ist eine Marke der The Qt

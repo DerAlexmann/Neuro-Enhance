@@ -13,8 +13,15 @@ Zwei Abweichungen vom Original, beide rechnen dasselbe:
 - Die Eingabegroesse ist fest (die des Trainings); Masken und Positionsindizes
   der Swin-Fenster entstehen deshalb schon beim Export als Konstanten.
 
+Als Bearbeitung des Codes von BiRefNet und des Swin Transformer
+(https://github.com/microsoft/Swin-Transformer) steht diese Datei unter deren
+MIT-Lizenzen (Texte in LICENSES/MIT-BiRefNet.txt und
+LICENSES/MIT-Swin-Transformer.txt).
+
 Licensed under MIT License
-Copyright 2026 Alexander Unverhau
+Copyright (c) 2024 ZhengPeng (BiRefNet)
+Copyright (c) Microsoft Corporation (Swin Transformer)
+Copyright 2026 Alexander Unverhau (Aenderungen)
 Created with assistance of Claude AI
 """
 

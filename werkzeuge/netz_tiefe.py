@@ -20,11 +20,14 @@ Geaendert gegenueber dem Original, alles rechnet dasselbe:
 
 Als Bearbeitung des Codes von Depth Anything V2 steht diese Datei - anders als
 der Rest des Projekts - unter der Apache License 2.0 (Text in
-LICENSES/Apache-2.0.txt).
+LICENSES/Apache-2.0.txt). Der DPT-Kopf (ResidualConvUnit, FeatureFusionBlock)
+stammt aus MiDaS und steht zusaetzlich unter dessen MIT-Lizenz (Text in
+LICENSES/MIT-MiDaS.txt).
 
 Licensed under Apache License 2.0
 Copyright (c) Meta Platforms, Inc. and affiliates (DINOv2)
 Copyright 2024 Depth Anything V2 (Lihe Yang u. a.)
+Copyright (c) 2019 Intel ISL (Intel Intelligent Systems Lab) (MiDaS)
 Copyright 2026 Alexander Unverhau (Aenderungen)
 Created with assistance of Claude AI
 """

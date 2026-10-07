@@ -3,7 +3,8 @@ Bilder laden und speichern - 8 Bit, 16 Bit und RAW
 
 Woher die Pixel kommen:
   RAW (Bayer)    LibRaw liest das Mosaik, entwickelt wird auf der GPU (demosaik.py)
-  RAW (sonst)    LibRaw entwickelt linear in 16 Bit, sRGB-Primaerfarben
+  RAW (sonst)    LibRaw entwickelt linear in 16 Bit, sRGB-Primaerfarben - so auch
+                 jede RAW, wenn die beste Qualitaet gewaehlt ist (Verfahren DHT)
   TIFF           tifffile - 8 und 16 Bit, auch komprimiert
   PNG mit 16 Bit imagecodecs
   alles andere   Pillow, 8 Bit
@@ -187,19 +188,27 @@ def _profil_oder_fehler(daten: bytes | None) -> icc.Matrixprofil | None:
 # Laden
 # --------------------------------------------------------------------------
 
-def _raw_laden(pfad: str, gpu: bool = True) -> Bilddaten:
+RAW_QUALITAET = ("schnell", "beste")
+
+
+def _raw_laden(pfad: str, gpu: bool = True, qualitaet: str = "schnell") -> Bilddaten:
     import rawpy
+    beste = qualitaet == "beste"
     try:
         with rawpy.imread(pfad) as roh:
-            mosaik = demosaik.aus_rawpy(roh) if gpu else None
+            mosaik = demosaik.aus_rawpy(roh) if gpu and not beste else None
             if mosaik is not None:
                 return Bilddaten(None, icc.LINEAR_SRGB, None, b"", pfad, raw=True, mosaik=mosaik)
             # Linear (Gamma 1), 16 Bit, sRGB-Primaerfarben, Weissabgleich der
             # Kamera - und ohne die automatische Aufhellung von LibRaw. Die
             # liesse 1 % der Pixel ausbrennen; so bleibt der volle Umfang des
             # Sensors erhalten, und die Helligkeit regelt die Belichtung.
+            # Beste Qualitaet: DHT (in LibRaw enthalten) - weniger Farbsaeume und
+            # ruhigere Flaechen als das Standardverfahren AHD, auf dem Prozessor
+            verfahren = {"demosaic_algorithm": rawpy.DemosaicAlgorithm.DHT} if beste else {}
             pixel = roh.postprocess(gamma=(1, 1), output_bps=16, use_camera_wb=True,
-                                    output_color=rawpy.ColorSpace.sRGB, no_auto_bright=True)
+                                    output_color=rawpy.ColorSpace.sRGB, no_auto_bright=True,
+                                    **verfahren)
     except (rawpy.LibRawError, OSError, ValueError) as fehler:
         raise BildFehler(str(fehler)) from fehler
     return Bilddaten(np.ascontiguousarray(pixel), icc.LINEAR_SRGB, None, b"", pfad, raw=True)
@@ -296,11 +305,12 @@ def _pillow_laden(pfad: str) -> Bilddaten:
                      _exif_ohne_ausrichtung(exif), pfad)
 
 
-def laden(pfad: str, raw_auf_gpu: bool = True) -> Bilddaten:
-    """Laedt ein Bild. raw_auf_gpu=False laesst auch Bayer-RAWs von LibRaw entwickeln."""
+def laden(pfad: str, raw_auf_gpu: bool = True, raw_qualitaet: str = "schnell") -> Bilddaten:
+    """Laedt ein Bild. raw_auf_gpu=False laesst auch Bayer-RAWs von LibRaw entwickeln,
+    raw_qualitaet="beste" ebenso, dann mit dem genaueren Verfahren DHT."""
     endung = os.path.splitext(pfad)[1].lower()
     if endung in RAW:
-        return _raw_laden(pfad, raw_auf_gpu)
+        return _raw_laden(pfad, raw_auf_gpu, raw_qualitaet)
     if endung in (".tif", ".tiff"):
         daten = _tiff_laden(pfad)
         if daten is not None:

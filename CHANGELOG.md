@@ -7,6 +7,13 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Geändert
 
+- RAW: Das Demosaicing auf der GPU arbeitet jetzt nach Malvar, He und Cutler.
+  Neu ist die Wahl „RAW: Beste Qualität“ in der Kopfzeile; dann entwickelt
+  LibRaw mit dem Verfahren DHT auf dem Prozessor (etwa 1,5 s bei 26 MP).
+- Die Nachbauten fremder Netze liegen je Herkunft in eigenen Dateien
+  `werkzeuge/netz_*.py` unter der Lizenz ihres Vorbilds; die Lizenztexte der
+  Vorbilder (MIT, BSD-3-Clause, Apache-2.0) liegen in `LICENSES/`. README,
+  NOTICE und `pyproject.toml` nennen die Ausnahmen von der MIT-Lizenz.
 - Gesperrte Hauptknöpfe (etwa „Entfernen“ ohne Markierung) erscheinen grau
   statt in der Akzentfarbe.
 - ONNX Runtime bekommt höchstens so viel Grafikspeicher, wie gerade frei ist.
@@ -23,6 +30,14 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
   großen: 54 s statt 111 s). Die Modelldateien bleiben FP32 und werden beim
   Laden im Speicher gewandelt; neue Abhängigkeit dafür: `onnx`. Die
   Abweichung zu FP32 liegt im Mittel bei 0,0002.
+
+### Entfernt
+
+- RCD-Demosaicing (`neuro_enhance/rcd.py`). Es war eine Übertragung von RCD
+  (Luis Sanz Rodríguez) in der Fassung von RawTherapee und darktable, die unter
+  der GPL-3.0 stehen; als solche durfte es nicht unter der MIT-Lizenz stehen.
+  Die frühere Fassung bleibt in der Git-Historie (ab Commit 75bae17) und ist
+  dort als GPL-3.0-Bearbeitung zu verstehen.
 
 ### Behoben
 

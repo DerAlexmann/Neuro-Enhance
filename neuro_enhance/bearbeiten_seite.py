@@ -1681,7 +1681,7 @@ class BearbeitenSeite(QWidget):
         self.tiefe_zeigen_box.setChecked(False)
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            daten = bilddatei.laden(pfad)
+            daten = bilddatei.laden(pfad, raw_qualitaet=einstellungen.raw_qualitaet())
             if self.sitzung is not None:
                 self.sitzung.schliessen()
                 self.sitzung = None

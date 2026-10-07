@@ -2,7 +2,26 @@ Neuro-Enhance
 Copyright 2026 Alexander Unverhau
 Created with assistance of Claude AI
 
-Licensed under the MIT License (see LICENSE).
+Licensed under the MIT License (see LICENSE), except for the
+re-implementations of third-party networks in werkzeuge/netz_*.py. They are
+development tools for converting the AI models, not part of the program, and
+each is under the licence of its original as stated in its header:
+
+  werkzeuge/netz_realesrgan.py   BSD 3-Clause (Real-ESRGAN)
+  werkzeuge/netz_rrdbnet.py      Apache License 2.0 (BasicSR)
+  werkzeuge/netz_scunet.py       Apache License 2.0 (SCUNet), with parts
+                                 after the Swin Transformer (MIT, Microsoft)
+  werkzeuge/netz_restormer.py    MIT (Restormer)
+  werkzeuge/netz_birefnet.py     MIT (BiRefNet, Swin Transformer)
+  werkzeuge/netz_sam2.py         Apache License 2.0 (SAM 2)
+  werkzeuge/netz_lama.py         Apache License 2.0 (LaMa, FFC)
+  werkzeuge/netz_tiefe.py        Apache License 2.0 (Depth Anything V2,
+                                 DINOv2), DPT head also MIT (MiDaS, Intel)
+
+The licence texts are in the folder LICENSES.
+
+The NVIDIA libraries are not covered by the MIT License of Neuro-Enhance
+and remain under NVIDIA's licence agreements; see below.
 
 ===========================================================================
 Third-party components
@@ -61,7 +80,8 @@ rawpy
   rawpy bundles LibRaw, Copyright LibRaw LLC, licensed under the GNU Lesser
   General Public License v2.1 or the Common Development and Distribution
   License (CDDL) v1.0, at your choice. https://www.libraw.org/
-  Neuro-Enhance uses LibRaw unmodified through rawpy.
+  Neuro-Enhance uses LibRaw unmodified through rawpy (as the separate
+  library raw_r.dll) - including its demosaicing methods AHD and DHT.
 
 NVIDIA CUDA libraries (cuda-toolkit, nvidia-cuda-nvrtc-cu12,
 nvidia-cuda-runtime-cu12 and related packages)
@@ -69,10 +89,14 @@ nvidia-cuda-runtime-cu12 and related packages)
   Licence: NVIDIA Software License Agreement / CUDA Toolkit EULA
   https://docs.nvidia.com/cuda/eula/
   Installed by pip from NVIDIA's own packages on the Python Package Index.
-  This repository does not contain or redistribute them.
+  This repository does not contain or redistribute them, and a binary
+  release of Neuro-Enhance does not bundle them either: they are installed
+  from NVIDIA's packages on the user's computer.
 
 pillow-heif (optional, only for opening HEIC/HEIF files)
   Licence: BSD 3-Clause; bundles libheif (LGPL-3.0) and further codecs.
+  Not part of a binary release of Neuro-Enhance; users install it
+  themselves if they want it.
   https://github.com/bigcat88/pillow_heif
 
 ONNX Runtime (onnxruntime-gpu)
@@ -90,7 +114,8 @@ NVIDIA cuDNN (nvidia-cudnn-cu12)
   Licence: NVIDIA cuDNN Software License Agreement
   https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html
   Installed by pip from NVIDIA's own package on the Python Package Index.
-  This repository does not contain or redistribute it.
+  This repository does not contain or redistribute it, and a binary release
+  of Neuro-Enhance does not bundle it either.
 
 NVIDIA TensorRT (tensorrt-cu12-libs, optional)
   Copyright NVIDIA Corporation

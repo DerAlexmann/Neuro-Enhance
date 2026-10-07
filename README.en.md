@@ -129,9 +129,10 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   from practically every camera (CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG and more) are
   developed in linear light without automatic brightening – the full range of the sensor
   is kept, and exposure controls the brightness. For Bayer sensors, i.e. almost every
-  camera, demosaicing runs on the GPU – with RCD (ratio corrected demosaicing), which
-  leaves particularly few colour fringes in fine patterns. A 24-megapixel RAW opens in
-  about 0.2 s instead of almost a second. Fujifilm X-Trans and other sensors are still
+  camera, demosaicing runs on the GPU – after Malvar, He and Cutler. A 24-megapixel RAW
+  opens in about 0.2 s instead of over a second. For even fewer colour fringes in fine
+  patterns, choose "RAW: Best quality" at the top – then LibRaw develops with the DHT
+  method on the processor (about 1.5 s). Fujifilm X-Trans and other sensors are always
   developed by LibRaw.
 - **Formats**: opens JPEG, PNG, TIFF, WebP, BMP and RAW (HEIC with the optional
   `pillow-heif` package); saves JPEG and WebP with 8 bits, PNG and TIFF with 8 or 16 bits.
@@ -269,8 +270,15 @@ just as welcome). Please report security issues not as an issue but as described
 [MIT](LICENSE) – Copyright 2026 Alexander Unverhau.
 Created with assistance of Claude AI.
 
+The exception are the re-implementations of third-party networks in
+`werkzeuge/netz_*.py`, which only serve to convert the AI models and are not part of the
+program: each is under the licence of its original (Apache-2.0, MIT or BSD-3-Clause), as
+stated in the file header; the licence texts are in [LICENSES](LICENSES).
+
 Third-party components and their licences are listed in [NOTICE](NOTICE). AI models are
-subject to their own licences, which are shown before downloading.
+subject to their own licences, which are shown before downloading. The NVIDIA libraries
+(CUDA, cuDNN, optionally TensorRT) are installed by pip from NVIDIA's own packages; they
+are under NVIDIA's licences, not under the MIT licence.
 
 **Trademarks:** NVIDIA, RTX, GeForce, CUDA and TensorRT are trademarks or registered
 trademarks of NVIDIA Corporation in the U.S. and other countries. Qt is a trademark of The

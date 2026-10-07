@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "An open-source, GPU-accelerated AI image & photo enhancer powered by neural networks."
 readme = "README.en.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Alexander Unverhau" }]
 keywords = [
     "image-enhancer", "upscaler", "ai", "cuda", "gpu-acceleration", "deep-learning",
@@ -15,7 +16,6 @@ classifiers = [
     "Environment :: GPU :: NVIDIA CUDA :: 12",
     "Environment :: Win32 (MS Windows)",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
     "Natural Language :: German",
     "Natural Language :: English",
     "Operating System :: Microsoft :: Windows",

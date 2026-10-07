@@ -85,6 +85,12 @@ def startup_language() -> str:
     return detect_language()
 
 
+def raw_qualitaet() -> str:
+    """Gespeicherte Wahl fuer die RAW-Entwicklung: "schnell" (GPU) oder "beste" (LibRaw)."""
+    wert = load_config().get("raw_qualitaet")
+    return wert if wert in ("schnell", "beste") else "schnell"
+
+
 def startup_theme() -> str:
     """Gespeichertes Farbschema, sonst das helle."""
     gespeichert = load_config().get("theme")
