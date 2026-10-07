@@ -563,8 +563,39 @@ def sam2() -> list[str]:
     return [pfad_k, pfad_d]
 
 
+def lama() -> list[str]:
+    from checkpoint_lesen import gewichte as lightning_gewichte
+    from netz_lama import Lama
+    daten = lightning_gewichte(os.path.join(QUELLEN, "big-lama", "models", "best.ckpt"))
+    netz = Lama()
+    netz.generator.load_state_dict(
+        {k[len("generator."):]: v for k, v in daten.items() if k.startswith("generator.")},
+        strict=True)
+    netz.eval()
+    pfad = os.path.join(ZIEL, "big-lama.onnx")
+    bild, maske = torch.rand(1, 3, 64, 96), torch.zeros(1, 1, 64, 96)
+    maske[..., 16:40, 24:56] = 1
+    achsen = {2: "hoehe", 3: "breite"}
+    torch.onnx.export(netz, (bild, maske), pfad, input_names=["eingabe", "maske"],
+                      output_names=["ausgabe"], opset_version=17, dynamo=False,
+                      do_constant_folding=True,
+                      dynamic_axes={"eingabe": achsen, "maske": achsen, "ausgabe": achsen})
+
+    import onnxruntime as ort
+    sitzung = ort.InferenceSession(pfad, providers=["CPUExecutionProvider"])
+    for h, w in ((128, 200), (256, 256)):                # andere Groessen als beim Export
+        probe, loch = torch.rand(1, 3, h, w), torch.zeros(1, 1, h, w)
+        loch[..., h // 4:h // 2, w // 3:w // 2] = 1
+        with torch.no_grad():
+            soll = netz(probe, loch).numpy()
+        ist = sitzung.run(None, {"eingabe": probe.numpy(), "maske": loch.numpy()})[0]
+        print(f"{os.path.basename(pfad)} ({h} x {w}): ONNX gegen PyTorch, groesste "
+              f"Abweichung {np.abs(ist - soll).max():.2e}")
+    return [pfad]
+
+
 EXPORTE = {"realesrgan": realesrgan, "scunet": scunet, "restormer": restormer,
-           "birefnet": birefnet, "sam2": sam2}
+           "birefnet": birefnet, "sam2": sam2, "lama": lama}
 
 
 def main():

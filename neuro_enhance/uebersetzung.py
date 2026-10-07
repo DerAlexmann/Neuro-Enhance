@@ -219,6 +219,38 @@ TRANSLATIONS = {
         "Die Auswahl per Klick ließ sich nicht starten.": "Click selection could not be started.",
         "Die Auswahl ist fehlgeschlagen.": "The selection failed.",
         "Bereit zum Klicken ({s} s)": "Ready for clicking ({s} s)",
+        "Objekte entfernen": "Remove objects",
+        "Anklicken": "Click",
+        "Anklicken – Modell laden ({mb} MB)": "Click – download model ({mb} MB)",
+        "Ein Objekt per Klick markieren – Rechtsklick nimmt einen Bereich wieder weg.":
+            "Mark an object by clicking – right-click removes an area again.",
+        "Pinsel": "Brush",
+        "Kleinigkeiten übermalen, etwa Flecken oder Leitungen – die rechte Maustaste "
+        "radiert.":
+            "Paint over small things such as spots or wires – the right mouse button erases.",
+        "Pinselgröße": "Brush size",
+        "Entfernen – Modell laden ({mb} MB)": "Remove – download model ({mb} MB)",
+        "Markierung löschen": "Clear marking",
+        "Letzte Entfernung zurücknehmen": "Undo last removal",
+        "Linksklick markiert ein Objekt, Rechtsklick nimmt einen Bereich weg. Strg+Z nimmt "
+        "den letzten Klick zurück, Esc beendet.":
+            "Left-click marks an object, right-click removes an area. Ctrl+Z undoes the last "
+            "click, Esc finishes.",
+        "Mit der linken Maustaste übermalen, was weg soll; die rechte radiert. Die mittlere "
+        "verschiebt das vergrößerte Bild, Esc beendet.":
+            "Paint over what should go with the left mouse button; the right one erases. The "
+            "middle one moves the zoomed image, Esc finishes.",
+        "Blau markiert ist, was verschwindet. „Entfernen“ füllt die Stelle mit passendem "
+        "Hintergrund.":
+            "What is marked in blue will disappear. “Remove” fills the spot with "
+            "matching background.",
+        "Ein Objekt anklicken oder übermalen – die KI füllt die Stelle mit dem, was dahinter "
+        "liegen könnte.":
+            "Click or paint over an object – the AI fills the spot with what could be behind "
+            "it.",
+        "Bisher entfernt: {n}.": "Removed so far: {n}.",
+        "Das Entfernen ist fehlgeschlagen.": "Removing failed.",
+        "Entfernt ({s} s)": "Removed ({s} s)",
         "Das Motiv ließ sich nicht erkennen.": "The subject could not be detected.",
         "Motiv erkannt ({s} s, über {weg})": "Subject detected ({s} s, via {weg})",
         "Gespeichert: {name} – ohne durchsichtigen Hintergrund, das kann JPEG nicht. Als PNG "

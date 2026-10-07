@@ -99,6 +99,11 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   zeigt die Auswahl nach Bruchteilen einer Sekunde; die Regler, „Umkehren“ und
   das Freistellen wirken darauf wie auf das erkannte Motiv. Geht schon ab 4 GB
   Grafikspeicher.
+- **Objekte entfernen** mit LaMa: Ein Objekt anklicken (SAM 2) oder mit dem
+  Pinsel übermalen, etwa Flecken oder Leitungen – „Entfernen“ füllt die Stelle
+  in Bruchteilen einer Sekunde mit dem, was dahinter liegen könnte. Mehrere
+  Entfernungen bauen aufeinander auf, die letzte lässt sich zurücknehmen; die
+  Regler wirken weiter auf das ganze Bild. Ab 4 GB Grafikspeicher.
 - **Geometrie**: um 90° drehen, spiegeln, begradigen, Perspektive senkrecht
   und waagrecht, Zuschneiden mit Rahmen und festen Seitenverhältnissen. Leere
   Ecken nach dem Begradigen werden automatisch weggeschnitten.
@@ -202,7 +207,8 @@ Neuro-Enhance arbeitet vollständig auf dem eigenen Rechner. Es werden keine Bil
 hochgeladen und keine Nutzungsdaten gesendet. Auch die KI rechnet lokal auf der
 Grafikkarte. Die einzige Verbindung ins Netz ist das Laden eines KI-Modells – und
 das nur, wenn man in einer der Karten „KI-Hochskalieren“, „KI-Entrauschen“,
-„KI-Schärfen“ oder „Motiv & Hintergrund“ ausdrücklich auf das Laden klickt und die Rückfrage mit Quelle,
+„KI-Schärfen“, „Motiv & Hintergrund“ oder „Objekte entfernen“ ausdrücklich auf das
+Laden klickt und die Rückfrage mit Quelle,
 Größe und Lizenz bestätigt.
 
 ## KI-Modelle
@@ -219,7 +225,9 @@ Restormer mit 101 MB, in der Karte „Motiv & Hintergrund“ aus
 [modelle-4](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-4)
 BiRefNet mit 177 MB und für „Objekt anklicken“ aus
 [modelle-5](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-5)
-SAM 2 mit 147 MB. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft,
+SAM 2 mit 147 MB, in der Karte „Objekte entfernen“ aus
+[modelle-6](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-6)
+LaMa mit 196 MB. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft,
 bevor sie verwendet wird.
 Abgelegt werden sie im Ordner `modelle` neben dem Programm oder, wenn der
 schreibgeschützt ist, unter `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
@@ -230,7 +238,9 @@ Xintao Wang), [SCUNet](https://github.com/cszn/SCUNet) (Apache-2.0, Copyright
 2022 Kai Zhang), [Restormer](https://github.com/swz30/Restormer) (MIT,
 Copyright 2022 Syed Waqas Zamir), [BiRefNet](https://github.com/ZhengPeng7/BiRefNet)
 (MIT, Copyright 2024 ZhengPeng) und [SAM 2](https://github.com/facebookresearch/sam2)
-(Apache-2.0, Copyright Meta Platforms, Inc. and affiliates), nach ONNX gewandelt.
+(Apache-2.0, Copyright Meta Platforms, Inc. and affiliates) und
+[LaMa](https://github.com/advimman/lama) (Apache-2.0, Copyright 2021 Samsung
+Research), nach ONNX gewandelt.
 Wer das selbst nachvollziehen will:
 
 1. Aus den [Releases von Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/releases)
@@ -241,9 +251,12 @@ Wer das selbst nachvollziehen will:
    [Release v1.0 von Restormer](https://github.com/swz30/Restormer/releases/tag/v1.0)
    `single_image_defocus_deblurring.pth` und aus dem
    [Release v1 von BiRefNet](https://github.com/ZhengPeng7/BiRefNet/releases/tag/v1)
-   `BiRefNet_lite-general-2K-epoch_232.pth` sowie von Meta
+   `BiRefNet_lite-general-2K-epoch_232.pth`, von Meta
    [`sam2.1_hiera_small.pt`](https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt)
-   nach `modelle/quellen/` laden.
+   und `big-lama.zip` von LaMa (der Download, den die
+   [LaMa-Anleitung](https://github.com/advimman/lama) nennt, liegt auf
+   [Hugging Face](https://huggingface.co/smartywu/big-lama)) nach `modelle/quellen/`
+   laden und dort entpacken.
 2. `pip install torch` (nur für diesen Schritt nötig).
 3. `python werkzeuge/modelle_exportieren.py` – das legt die ONNX-Modelle in
    `modelle/` ab und prüft sie gegen PyTorch.

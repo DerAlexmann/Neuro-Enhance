@@ -253,9 +253,12 @@ class BearbeitenSeite(QWidget):
         self._zeichnen_angefordert = False
         self._zuschnitt_vorher = None         # Zuschnitt beim Betreten des Zuschnittmodus
         self._auswaehler: ki.Auswaehler | None = None   # SAM, solange der Klickmodus laeuft
-        self._klick_marken: list[tuple[float, float, bool]] = []   # Klicks im fertigen Bild
-        self._klick_geo = None                # Geometrie, in der geklickt wurde
+        self._klick_ziel: str | None = None   # "maske" oder "entfernen" im Klickmodus
+        self._klick_marken: dict[str, list] = {"maske": [], "entfernen": []}   # im fertigen Bild
+        self._klick_geo: dict = {}            # Geometrie, in der je Ziel geklickt wurde
         self._maske_zeigen_vorher = False
+        self._entferner: ki.Entferner | None = None
+        self._pinsel_letzter = None           # letzter Pinselpunkt im Original
 
         aufbau = QHBoxLayout(self)
         aufbau.setContentsMargins(0, 12, 0, 0)
@@ -271,6 +274,7 @@ class BearbeitenSeite(QWidget):
         self.leinwand.datei_abgelegt.connect(self.oeffnen)
         self.leinwand.ansicht_geaendert.connect(self._ansicht_geaendert)
         self.leinwand.bild_geklickt.connect(self._bild_geklickt)
+        self.leinwand.pinsel_gezogen.connect(self._pinsel_gezogen)
         links.addWidget(self.leinwand, 1)
         aufbau.addLayout(links, 1)
         aufbau.addWidget(self._reglerleiste())
@@ -374,6 +378,7 @@ class BearbeitenSeite(QWidget):
         # Gradationskurve hinter die Tonwerte, Farbbereiche hinter Dynamik und Saettigung
         spalte.insertWidget(spalte.indexOf(karten["licht"]) + 1, self._kurvenkarte())
         spalte.insertWidget(spalte.indexOf(karten["farbe"]) + 1, self._hsl_karte())
+        spalte.insertWidget(spalte.indexOf(karten["maske"]) + 1, self._entfern_karte())
         spalte.addWidget(self._ki_karte())
         spalte.addStretch(1)
         flaeche.setWidget(inhalt)
@@ -452,6 +457,7 @@ class BearbeitenSeite(QWidget):
             return
         if an:
             self.auswahl_beenden()
+            self.pinsel_beenden()
             self._zuschnitt_vorher = self.sitzung.werte.zuschnitt
             self.leinwand.zoom_setzen(None)
             self.leinwand.zuschnitt = self.sitzung.werte.zuschnitt
@@ -465,11 +471,12 @@ class BearbeitenSeite(QWidget):
         self.zeichnen_anfordern()
 
     def _abbrechen(self):
-        """Esc: Zuschnitt verwerfen oder den Klickmodus verlassen."""
+        """Esc: Zuschnitt verwerfen oder Klick- und Pinselmodus verlassen."""
         if self.leinwand.zuschnitt is not None:
             self.zuschnitt_abbrechen()
         else:
             self.auswahl_beenden()
+            self.pinsel_beenden()
 
     def zuschnitt_abbrechen(self):
         if self.leinwand.zuschnitt is None:
@@ -755,6 +762,7 @@ class BearbeitenSeite(QWidget):
                 knopf.setEnabled(offen or not ki.vorhanden(modell))
             self.zeilen[gruppe].schieber.setEnabled(fertig)
         self._masken_anzeigen()
+        self._entfernen_anzeigen()
 
     def _ki_schaerf_dauer(self) -> str:
         if ki.tensorrt_ordner() is not None:
@@ -879,7 +887,7 @@ class BearbeitenSeite(QWidget):
         offen = self.sitzung is not None
         fertig = offen and self.sitzung.ki_maske_da
         per_klick = fertig and self.sitzung.maske_per_klick
-        klicken = self._auswaehler is not None
+        klicken = self._klick_ziel == "maske"
         knopf = None
         if klicken:
             text = _("Linksklick ins Bild nimmt einen Bereich dazu, Rechtsklick nimmt einen "
@@ -951,7 +959,7 @@ class BearbeitenSeite(QWidget):
             netz = self._ki_laden(modell, kachel,
                                   lambda **weg: ki.Freisteller(modell, **weg))
             ms = self.sitzung.ki_freistellen(netz)
-            self._klick_marken = []
+            self._klick_marken["maske"] = []
             weg = netz.beschleuniger
             del netz                             # Grafikspeicher fuer die Bearbeitung frei
         except ki.KiFehler as fehler:
@@ -968,28 +976,36 @@ class BearbeitenSeite(QWidget):
             s=f"{ms / 1000:.1f}", weg=weg))
         self.zeichnen_anfordern()
 
-    def _auswahl_knopf_gedrueckt(self, an: bool):
+    def _klick_knoepfe(self) -> dict:
+        return {"maske": self.auswahl_knopf, "entfernen": self.entfern_klick_knopf}
+
+    def _auswahl_knopf_gedrueckt(self, an: bool, ziel: str = "maske"):
         sam = self._auswahl_modell()
         if an and not ki.vorhanden(sam):
-            self.auswahl_knopf.blockSignals(True)
-            self.auswahl_knopf.setChecked(False)
-            self.auswahl_knopf.blockSignals(False)
+            knopf = self._klick_knoepfe()[ziel]
+            knopf.blockSignals(True)
+            knopf.setChecked(False)
+            knopf.blockSignals(False)
             self.ki_modell_laden(sam)
         elif an:
-            self.auswahl_beginnen()
-        else:
+            self.auswahl_beginnen(ziel)
+        elif self._klick_ziel == ziel:
             self.auswahl_beenden()
 
-    def auswahl_beginnen(self):
-        """Klickmodus: SAM sieht das Bild einmal, danach waehlt jeder Klick aus."""
+    def auswahl_beginnen(self, ziel: str = "maske"):
+        """Klickmodus: SAM sieht das Bild einmal, danach waehlt jeder Klick aus - fuer die
+        Maske des Motivs oder fuer die Markierung zum Entfernen."""
         if self.sitzung is None:
             return
         self.zuschneiden(False)
+        self.pinsel_beenden()
+        if self._klick_ziel is not None and self._klick_ziel != ziel:
+            self.auswahl_beenden()
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             if self._auswaehler is None:
                 self._auswaehler = ki.Auswaehler(self._auswahl_modell())
-            ms = self.sitzung.ki_auswahl_beginnen(self._auswaehler)
+            ms = self.sitzung.ki_auswahl_beginnen(self._auswaehler, ziel)
         except (ki.KiFehler, cp.cuda.memory.OutOfMemoryError) as fehler:
             self._auswaehler = None
             text = str(fehler) if isinstance(fehler, ki.KiFehler) else _(
@@ -1000,51 +1016,268 @@ class BearbeitenSeite(QWidget):
             QApplication.restoreOverrideCursor()
             cp.get_default_memory_pool().free_all_blocks()
             self._masken_anzeigen()
-        if not self.sitzung.klicks:
-            self._klick_marken = []
+            self._entfernen_anzeigen()
+        if not self.sitzung.klicks_von(ziel):
+            self._klick_marken[ziel] = []
+        self._klick_ziel = ziel
         self.leinwand.klickmodus_setzen(True)
-        # Die Maskenansicht zeigt sofort, was ausgewaehlt ist
-        self._maske_zeigen_vorher = self.maske_zeigen_box.isChecked()
-        self.maske_zeigen_box.setChecked(True)
+        if ziel == "maske":
+            # Die Maskenansicht zeigt sofort, was ausgewaehlt ist
+            self._maske_zeigen_vorher = self.maske_zeigen_box.isChecked()
+            self.maske_zeigen_box.setChecked(True)
         self.fenster.melden(_("Bereit zum Klicken ({s} s)").format(s=f"{ms / 1000:.1f}"))
         self._masken_anzeigen()
+        self._entfernen_anzeigen()
         self.zeichnen_anfordern()
 
     def auswahl_beenden(self):
-        """Klickmodus verlassen; die Maske bleibt, SAM gibt den Grafikspeicher frei."""
-        if self._auswaehler is None:
+        """Klickmodus verlassen; die Auswahl bleibt, SAM gibt den Grafikspeicher frei."""
+        if self._klick_ziel is None:
             return
+        ziel, self._klick_ziel = self._klick_ziel, None
         self._auswaehler = None
         cp.get_default_memory_pool().free_all_blocks()
         self.leinwand.klickmodus_setzen(False)
-        self.maske_zeigen_box.setChecked(self._maske_zeigen_vorher)
+        if ziel == "maske":
+            self.maske_zeigen_box.setChecked(self._maske_zeigen_vorher)
         self._masken_anzeigen()
+        self._entfernen_anzeigen()
         self.zeichnen_anfordern()
 
     def _bild_geklickt(self, x: float, y: float, dazu: bool):
-        if self._auswaehler is None or self.sitzung is None or self._vorher:
+        ziel = self._klick_ziel
+        if ziel is None or self.sitzung is None or self._vorher:
             return
         quelle = self.sitzung.quelle_von(x, y)
         if quelle is None:
             return
         try:
-            ms = self.sitzung.ki_klick(self._auswaehler, *quelle, dazu)
+            ms = self.sitzung.ki_klick(self._auswaehler, *quelle, dazu, ziel)
         except (ki.KiFehler, cp.cuda.memory.OutOfMemoryError) as fehler:
             self._fehler(_("Die Auswahl ist fehlgeschlagen."), str(fehler))
             return
-        self._klick_marken.append((x, y, dazu))
-        self._klick_geo = geometrie.aus(self.sitzung.werte)
+        self._klick_marken[ziel].append((x, y, dazu))
+        self._klick_geo[ziel] = geometrie.aus(self.sitzung.werte)
         self.fenster.rechenzeit_zeigen(ms)
         self._masken_anzeigen()
+        self._entfernen_anzeigen()
         self.zeichnen_anfordern()
 
     def klick_zuruecknehmen(self):
-        if self._auswaehler is None or self.sitzung is None:
+        ziel = self._klick_ziel
+        if ziel is None or self.sitzung is None:
             return
-        if self.sitzung.ki_klick_zurueck(self._auswaehler):
-            del self._klick_marken[-1:]
+        if self.sitzung.ki_klick_zurueck(self._auswaehler, ziel):
+            del self._klick_marken[ziel][-1:]
             self._masken_anzeigen()
+            self._entfernen_anzeigen()
             self.zeichnen_anfordern()
+
+    # ------------------------------------------------------------------
+    # Objekte entfernen: markieren per Klick oder Pinsel, fuellen mit LaMa
+    # ------------------------------------------------------------------
+
+    def _entfern_karte(self) -> QFrame:
+        karte, innen = self._karte(_("Objekte entfernen"))
+        self.entfern_hinweis = QLabel(objectName="nebentext")
+        self.entfern_hinweis.setWordWrap(True)
+        innen.addWidget(self.entfern_hinweis)
+        leiste = QHBoxLayout()
+        leiste.setSpacing(4)
+        self.entfern_klick_knopf = QPushButton()
+        self.entfern_klick_knopf.setCheckable(True)
+        self.entfern_klick_knopf.toggled.connect(
+            lambda an: self._auswahl_knopf_gedrueckt(an, "entfernen"))
+        self.fenster.beschriften(self.entfern_klick_knopf.setToolTip, _(
+            "Ein Objekt per Klick markieren – Rechtsklick nimmt einen Bereich wieder weg."))
+        self.pinsel_knopf = QPushButton()
+        self.pinsel_knopf.setCheckable(True)
+        self.fenster.beschriften(self.pinsel_knopf.setText, _("Pinsel"))
+        self.fenster.beschriften(self.pinsel_knopf.setToolTip, _(
+            "Kleinigkeiten übermalen, etwa Flecken oder Leitungen – die rechte Maustaste "
+            "radiert."))
+        self.pinsel_knopf.toggled.connect(self._pinsel_knopf_gedrueckt)
+        self.entfern_klick_zurueck_knopf = self._knopf(_("Klick zurück"),
+                                                       self.klick_zuruecknehmen, "kanal")
+        leiste.addWidget(self.entfern_klick_knopf, 1)
+        leiste.addWidget(self.pinsel_knopf, 1)
+        leiste.addWidget(self.entfern_klick_zurueck_knopf)
+        innen.addLayout(leiste)
+        self.pinsel_zeile = QWidget()
+        zeile = QHBoxLayout(self.pinsel_zeile)
+        zeile.setContentsMargins(0, 0, 0, 0)
+        groesse = QLabel()
+        self.fenster.beschriften(groesse.setText, _("Pinselgröße"))
+        self.pinsel_groesse = QSlider(Qt.Orientation.Horizontal)
+        self.pinsel_groesse.setRange(3, 150)
+        self.pinsel_groesse.setValue(20)
+        self.pinsel_groesse.valueChanged.connect(self._pinsel_groesse_geaendert)
+        zeile.addWidget(groesse)
+        zeile.addWidget(self.pinsel_groesse, 1)
+        innen.addWidget(self.pinsel_zeile)
+        leiste = QHBoxLayout()
+        leiste.setSpacing(4)
+        self.entfernen_knopf = self._knopf("", self.entfernen, "hauptschalter")
+        self.markierung_weg_knopf = self._knopf(_("Markierung löschen"),
+                                                self.markierung_verwerfen)
+        leiste.addWidget(self.entfernen_knopf, 1)
+        leiste.addWidget(self.markierung_weg_knopf)
+        innen.addLayout(leiste)
+        self.entfernung_zurueck_knopf = self._knopf(_("Letzte Entfernung zurücknehmen"),
+                                                    self.entfernung_zuruecknehmen)
+        innen.addWidget(self.entfernung_zurueck_knopf)
+        return karte
+
+    def _entfern_modell(self) -> ki.Modell:
+        return ki.ENTFERN_MODELLE["lama"]
+
+    def _entfernen_anzeigen(self):
+        if not hasattr(self, "entfernen_knopf"):
+            return
+        lama, sam, stufe = self._entfern_modell(), self._auswahl_modell(), self._ki_stufe()
+        offen = self.sitzung is not None
+        klicken = self._klick_ziel == "entfernen"
+        malen = self.leinwand.pinselmodus
+        markiert = offen and self.sitzung.markierung_da
+        entfernt = self.sitzung.entfernt if offen else 0
+        nutzbar = ki.angeboten(lama, stufe)
+        if not nutzbar:
+            text = _("KI-Funktionen brauchen mindestens 4 GB Grafikspeicher.")
+        elif klicken:
+            text = _("Linksklick markiert ein Objekt, Rechtsklick nimmt einen Bereich weg. "
+                     "Strg+Z nimmt den letzten Klick zurück, Esc beendet.")
+        elif malen:
+            text = _("Mit der linken Maustaste übermalen, was weg soll; die rechte radiert. "
+                     "Die mittlere verschiebt das vergrößerte Bild, Esc beendet.")
+        elif markiert:
+            text = _("Blau markiert ist, was verschwindet. „Entfernen“ füllt die Stelle mit "
+                     "passendem Hintergrund.")
+        else:
+            text = _("Ein Objekt anklicken oder übermalen – die KI füllt die Stelle mit dem, "
+                     "was dahinter liegen könnte.")
+        if nutzbar and entfernt and not (klicken or malen):
+            text += " " + _("Bisher entfernt: {n}.").format(n=entfernt)
+        self.fenster.beschriften(self.entfern_hinweis.setText, text)
+        for widget in (self.entfern_klick_knopf, self.pinsel_knopf, self.entfernen_knopf,
+                       self.markierung_weg_knopf, self.entfernung_zurueck_knopf):
+            widget.setVisible(nutzbar)
+        self.entfern_klick_knopf.setVisible(nutzbar and ki.angeboten(sam, stufe))
+        self.fenster.beschriften(
+            self.entfern_klick_knopf.setText, _("Anklicken") if ki.vorhanden(sam) else
+            _("Anklicken – Modell laden ({mb} MB)").format(
+                mb=f"{ki.download_groesse(sam) / 2**20:.0f}"))
+        self.entfern_klick_knopf.setEnabled(offen or not ki.vorhanden(sam))
+        self.pinsel_knopf.setEnabled(offen)
+        for knopf, an in ((self.entfern_klick_knopf, klicken), (self.pinsel_knopf, malen)):
+            if knopf.isChecked() != an:
+                knopf.blockSignals(True)
+                knopf.setChecked(an)
+                knopf.blockSignals(False)
+        self.entfern_klick_zurueck_knopf.setVisible(klicken)
+        self.entfern_klick_zurueck_knopf.setEnabled(
+            klicken and bool(self.sitzung.klicks_von("entfernen")))
+        self.pinsel_zeile.setVisible(nutzbar and malen)
+        if ki.vorhanden(lama):
+            self.fenster.beschriften(self.entfernen_knopf.setText, _("Entfernen"))
+            self.entfernen_knopf.setEnabled(markiert)
+        else:
+            self.fenster.beschriften(
+                self.entfernen_knopf.setText, _("Entfernen – Modell laden ({mb} MB)").format(
+                    mb=f"{ki.download_groesse(lama) / 2**20:.0f}"))
+            self.entfernen_knopf.setEnabled(True)
+        self.markierung_weg_knopf.setEnabled(markiert)
+        self.entfernung_zurueck_knopf.setEnabled(entfernt > 0)
+
+    def _pinsel_knopf_gedrueckt(self, an: bool):
+        if an:
+            self.pinsel_beginnen()
+        else:
+            self.pinsel_beenden()
+
+    def pinsel_beginnen(self):
+        if self.sitzung is None:
+            return
+        self.zuschneiden(False)
+        self.auswahl_beenden()
+        self.leinwand.pinsel_radius = self.pinsel_groesse.value()
+        self.leinwand.pinselmodus_setzen(True)
+        self._entfernen_anzeigen()
+
+    def pinsel_beenden(self):
+        if not self.leinwand.pinselmodus:
+            return
+        self.leinwand.pinselmodus_setzen(False)
+        self._entfernen_anzeigen()
+
+    def _pinsel_groesse_geaendert(self, wert: int):
+        self.leinwand.pinsel_radius = wert
+        self.leinwand.update()
+
+    def _pinsel_gezogen(self, x: float, y: float, dazu: bool, neu: bool):
+        if self.sitzung is None or self._vorher:
+            return
+        quelle = self.sitzung.quelle_von(x, y)
+        if quelle is None:
+            self._pinsel_letzter = None
+            return
+        radius = self.pinsel_groesse.value() / self.leinwand.massstab()
+        punkte = [quelle]
+        if not neu and self._pinsel_letzter is not None:
+            # Zwischen zwei Mausmeldungen lueckenlos stempeln
+            (x0, y0), (x1, y1) = self._pinsel_letzter, quelle
+            schritte = int(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5 / max(radius / 2, 0.5))
+            punkte = [(x0 + (x1 - x0) * i / (schritte + 1), y0 + (y1 - y0) * i / (schritte + 1))
+                      for i in range(1, schritte + 2)]
+        self._pinsel_letzter = quelle
+        self.sitzung.pinseln(punkte, radius, dazu)
+        if neu:
+            self._entfernen_anzeigen()
+        self.zeichnen_anfordern()
+
+    def markierung_verwerfen(self):
+        if self.sitzung is None:
+            return
+        self.sitzung.markierung_verwerfen()
+        self._klick_marken["entfernen"] = []
+        self._entfernen_anzeigen()
+        self.zeichnen_anfordern()
+
+    def entfernen(self):
+        """Das Markierte mit LaMa entfernen."""
+        lama = self._entfern_modell()
+        if not ki.vorhanden(lama):
+            self.ki_modell_laden(lama)
+            return
+        if self.sitzung is None or not self.sitzung.markierung_da:
+            return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            if self._entferner is None:
+                self._entferner = ki.Entferner(lama, ki.kachelgroesse(lama, self._ki_stufe()))
+            ms = self.sitzung.ki_entfernen(self._entferner)
+            self._klick_marken["entfernen"] = []
+            if self._klick_ziel is not None:     # SAM soll das neue Bild sehen
+                self.sitzung.ki_auswahl_beginnen(self._auswaehler, self._klick_ziel)
+        except (ki.KiFehler, cp.cuda.memory.OutOfMemoryError) as fehler:
+            text = str(fehler) if isinstance(fehler, ki.KiFehler) else _(
+                "Für dieses Bild reicht der Grafikspeicher nicht.")
+            self._fehler(_("Das Entfernen ist fehlgeschlagen."), text)
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+            cp.get_default_memory_pool().free_all_blocks()
+            self._entfernen_anzeigen()
+        if ms is not None:
+            self.fenster.melden(_("Entfernt ({s} s)").format(s=f"{ms / 1000:.1f}"))
+        self.zeichnen_anfordern()
+
+    def entfernung_zuruecknehmen(self):
+        if self.sitzung is None or not self.sitzung.entfernen_zurueck():
+            return
+        if self._klick_ziel is not None:
+            self.sitzung.ki_auswahl_beginnen(self._auswaehler, self._klick_ziel)
+        self._entfernen_anzeigen()
+        self.zeichnen_anfordern()
 
     def _hsl_karte(self) -> QFrame:
         karte, innen = self._karte(_("Farbbereiche"))
@@ -1207,9 +1440,11 @@ class BearbeitenSeite(QWidget):
             # Im Zuschnittmodus das ganze Bild zeigen, der Rahmen liegt darueber
             werte = dataclasses.replace(werte, zuschnitt=VOLLER_ZUSCHNITT)
         self.leinwand.voll_form = self.sitzung.ausgabe_form(werte)
-        if self.leinwand.klickmodus:
-            gleich = not self._vorher and self._klick_geo == geometrie.aus(self.sitzung.werte)
-            self.leinwand.klickpunkte = list(self._klick_marken) if gleich else []
+        if self._klick_ziel is not None:
+            ziel = self._klick_ziel
+            gleich = (not self._vorher
+                      and self._klick_geo.get(ziel) == geometrie.aus(self.sitzung.werte))
+            self.leinwand.klickpunkte = list(self._klick_marken[ziel]) if gleich else []
         if self.leinwand.zoom is None:
             bild, ms, histogramm = self.sitzung.vorschau(werte=werte)
             self.leinwand.zeigen(bild)
@@ -1297,7 +1532,9 @@ class BearbeitenSeite(QWidget):
             self.fenster.melden(_("RAW wird entwickelt …"))
             QApplication.processEvents()
         self.auswahl_beenden()
-        self._klick_marken = []
+        self.pinsel_beenden()
+        self._klick_marken = {"maske": [], "entfernen": []}
+        self._entferner = None
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             daten = bilddatei.laden(pfad)

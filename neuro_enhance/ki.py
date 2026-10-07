@@ -1,10 +1,11 @@
 """
 KI-Hochskalieren (Real-ESRGAN), KI-Entrauschen (SCUNet), KI-Schaerfen
-(Restormer), Freistellen (BiRefNet) und Auswahl per Klick (SAM 2) ueber
-ONNX Runtime
+(Restormer), Freistellen (BiRefNet), Auswahl per Klick (SAM 2) und Objekte
+entfernen (LaMa) ueber ONNX Runtime
 
 Die Modelle stammen aus den offiziellen Releases von Real-ESRGAN (BSD-3-Clause),
-SCUNet (Apache-2.0), Restormer (MIT), BiRefNet (MIT) und SAM 2 (Apache-2.0) und sind mit
+SCUNet (Apache-2.0), Restormer (MIT), BiRefNet (MIT), SAM 2 und LaMa (beide
+Apache-2.0) und sind mit
 werkzeuge/modelle_exportieren.py nach ONNX gewandelt. Bereit liegen sie als
 Dateien eigener Releases dieses Projekts, mit dem jeweiligen Lizenztext
 daneben. Heruntergeladen wird nur auf Wunsch des Anwenders; jede Datei wird
@@ -68,11 +69,13 @@ QUELLE_SCUNET = "https://github.com/cszn/SCUNet"
 QUELLE_RESTORMER = "https://github.com/swz30/Restormer"
 QUELLE_BIREFNET = "https://github.com/ZhengPeng7/BiRefNet"
 QUELLE_SAM2 = "https://github.com/facebookresearch/sam2"
+QUELLE_LAMA = "https://github.com/advimman/lama"
 MODELL_RELEASE = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-1/"
 MODELL_RELEASE_2 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-2/"
 MODELL_RELEASE_3 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-3/"
 MODELL_RELEASE_4 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-4/"
 MODELL_RELEASE_5 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-5/"
+MODELL_RELEASE_6 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-6/"
 BLOCK = 1 << 20
 
 # Datei -> (SHA-256, Groesse in Bytes)
@@ -105,6 +108,10 @@ DATEIEN = {
         ("aa6140c678916f505133f8a1cd45f7b84b18dcd2ec058249bdcc16ab6fdeb8fc", 16510918),
     "LICENSE-SAM2.txt":
         ("c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4", 11357),
+    "big-lama.onnx":
+        ("05242ecae18e453d4fc7cf7df015d80c9c1e96f82b7ef7376f2e0579b8444770", 205471670),
+    "LICENSE-LaMa.txt":
+        ("4ceeeac5a802e86c413c22b16cce8e9a22027b0250c97e6f8ac97c14cf0542c0", 11348),
 }
 LIZENZDATEI = "LICENSE-Real-ESRGAN.txt"
 RAND = 10                    # Ueberlappung je Kachelseite in Eingabepixeln, wie in Real-ESRGAN
@@ -226,8 +233,22 @@ AUSWAHL_MODELLE = {
         weitere=(("sam2.1-small-dekodierer.onnx",
                   "aa6140c678916f505133f8a1cd45f7b84b18dcd2ec058249bdcc16ab6fdeb8fc"),)),
 }
+# Objekte entfernen: Big LaMa malt den markierten Bereich aus seiner Umgebung neu.
+# Gerechnet wird ein Ausschnitt um die Markierung, verkleinert auf hoechstens die
+# Kantenlaenge der Stufe. In FP32: in FP16 laeuft die Fourier-Faltung ueber.
+ENTFERN_MODELLE = {
+    "lama": Modell(
+        "lama", "big-lama.onnx",
+        "05242ecae18e453d4fc7cf7df015d80c9c1e96f82b7ef7376f2e0579b8444770",
+        None,
+        "S", {"S": 768, "M": 1024, "L": 1280, "XL": 1536},
+        lizenz="Apache-2.0", quelle=QUELLE_LAMA,
+        herkunft="LaMa (Apache-2.0, Copyright 2021 Samsung Research)",
+        lizenzdatei="LICENSE-LaMa.txt", release=MODELL_RELEASE_6,
+        massstab=1, rand=0, vielfaches=8, nhwc=False, cuda_fp16=False),
+}
 ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE, **SCHAERF_MODELLE, **MASKEN_MODELLE,
-                **AUSWAHL_MODELLE}
+                **AUSWAHL_MODELLE, **ENTFERN_MODELLE}
 STUFEN = ("S", "M", "L", "XL")
 
 
@@ -944,3 +965,89 @@ class Auswaehler(_Netz):
         radius = max(2, round(max(fh, fb) / 256))
         fein = filter.gefuehrter_filter(self._fuehrung, hart, radius, 1e-3)
         return cp.ascontiguousarray(cp.clip(filter.vergroessern(fein, hoehe, breite), 0, 1))
+
+
+class Entferner(_Netz):
+    """LaMa - fuellt einen markierten Bereich mit dem, was dahinter liegen koennte.
+
+    Gerechnet wird nur ein Ausschnitt: die Markierung mit einem Rand, der so breit
+    ist wie ihre halbe Ausdehnung - genug Umgebung, aus der LaMa die Struktur
+    fortsetzt. Ist der Ausschnitt groesser als `kante`, wird er dafuer verkleinert
+    und die Fuellung danach wieder vergroessert. Die Markierung waechst vorher um
+    einige Pixel, damit auch der Saum des Objekts (Schatten, Kantenlicht)
+    verschwindet; eingesetzt wird mit weicher Kante.
+    """
+
+    # Die Markierung waechst um diesen Anteil ihrer Ausdehnung, mindestens um einige
+    # Pixel der Arbeitsgroesse: Unscharfe Objekte strahlen ueber ihre Kante hinaus, und
+    # bleibt ein Rest ihres Umrisses stehen, setzt LaMa ihn fort
+    WACHSEN = 0.05
+    WACHSEN_MIN = 6
+
+    def __init__(self, modell: Modell | None = None, kante: int | None = None):
+        modell = modell or ENTFERN_MODELLE["lama"]
+        super().__init__(modell, fp16=False, kachel=None, tensorrt=False)
+        self.kante = kante or modell.kacheln[modell.mindeststufe]
+
+    def fuellen(self, srgb, maske):
+        """sRGB (H, W, 3) und Markierung (H, W) 0..1 auf der GPU ->
+        (y0, y1, x0, x1, Fuellung (h, w, 3) sRGB, Deckkraft (h, w)) oder None ohne
+        Markierung. Ausserhalb des Ausschnitts bleibt das Bild, wie es ist."""
+        hoehe, breite = srgb.shape[:2]
+        markiert = maske > 0.5
+        zeilen = cp.flatnonzero(markiert.any(axis=1))
+        spalten = cp.flatnonzero(markiert.any(axis=0))
+        if zeilen.size == 0:
+            return None
+        ya, ye = int(zeilen[0]), int(zeilen[-1]) + 1
+        xa, xe = int(spalten[0]), int(spalten[-1]) + 1
+        rand = max(ye - ya, xe - xa) * 2 // 3 + 48
+        y0, y1 = max(0, ya - rand), min(hoehe, ye + rand)
+        x0, x1 = max(0, xa - rand), min(breite, xe + rand)
+        kante = self.kante
+        while True:
+            try:
+                return (y0, y1, x0, x1, *self._ausschnitt(srgb[y0:y1, x0:x1],
+                                                          markiert[y0:y1, x0:x1], kante))
+            except Exception as fehler:          # ORT meldet Speichermangel als eigenen Fehler
+                text = str(fehler).lower()
+                speicher = isinstance(fehler, cp.cuda.memory.OutOfMemoryError) or \
+                    "memory" in text or "alloc" in text
+                if not speicher:
+                    raise KiFehler(str(fehler)) from fehler
+                cp.get_default_memory_pool().free_all_blocks()
+                if kante <= 256:
+                    raise KiFehler("Zu wenig Grafikspeicher zum Entfernen.") from fehler
+                kante //= 2
+
+    def _ausschnitt(self, bild, markiert, kante: int):
+        from cupyx.scipy import ndimage
+        h, w = bild.shape[:2]
+        faktor = max(1, -(-max(h, w) // kante))
+        # Auf ein Vielfaches des Faktors auffuellen, damit am Rand nichts wegfaellt
+        fh, fw = -h % faktor, -w % faktor
+        bild = cp.pad(bild, ((0, fh), (0, fw), (0, 0)), mode="edge")
+        klein = filter.verkleinern_box(bild, faktor).astype(cp.float32)
+        loch = filter.verkleinern_box(cp.pad(markiert, ((0, fh), (0, fw))).astype(cp.float32),
+                                      faktor) > 0
+        kh, kw = loch.shape
+        zeilen, spalten = cp.flatnonzero(loch.any(axis=1)), cp.flatnonzero(loch.any(axis=0))
+        ausdehnung = max(int(zeilen[-1] - zeilen[0]), int(spalten[-1] - spalten[0])) + 1
+        weite = max(self.WACHSEN_MIN, round(self.WACHSEN * ausdehnung))
+        loch = ndimage.maximum_filter(loch.astype(cp.float32), size=2 * weite + 1,
+                                      mode="constant")
+        v = self.modell.vielfaches
+        ph, pw = -kh % v, -kw % v
+        eingabe = cp.pad(klein, ((0, ph), (0, pw), (0, 0)), mode="symmetric")
+        lochrand = cp.pad(loch, ((0, ph), (0, pw)), mode="symmetric")
+        eingabe = cp.ascontiguousarray(cp.moveaxis(eingabe, -1, 0))[None]
+        lochrand = cp.ascontiguousarray(lochrand)[None, None]
+        ausgabe = cp.empty_like(eingabe)
+        _binden(self.sitzung, {"eingabe": eingabe, "maske": lochrand}, {"ausgabe": ausgabe})
+        fuellung = cp.moveaxis(ausgabe[0, :, :kh, :kw], 0, -1)
+        # Deckkraft: die gewachsene Markierung mit weicher Kante, auf voller Groesse
+        weich = filter.gauss(loch, 1.0)
+        deckkraft = cp.clip(filter.vergroessern(weich, h + fh, w + fw)[:h, :w], 0, 1)
+        deckkraft = cp.maximum(deckkraft, markiert.astype(cp.float32))
+        fuellung = filter.vergroessern(cp.ascontiguousarray(fuellung), h + fh, w + fw)[:h, :w]
+        return cp.clip(fuellung, 0, 1), cp.ascontiguousarray(deckkraft)

@@ -197,6 +197,28 @@ SAM 2 - Segment Anything in Images and Videos (model SAM 2.1 Hiera small)
   with the Apache License 2.0 text (LICENSE-SAM2.txt), which Neuro-Enhance
   also downloads and stores next to the model.
 
+LaMa - Resolution-robust Large Mask Inpainting with Fourier Convolutions
+(model Big LaMa)
+  Copyright 2021 Samsung Research
+  Licence: Apache License 2.0
+  https://github.com/advimman/lama
+  The official checkpoint big-lama (best.ckpt in big-lama.zip, the download
+  named in the README of the repository above) is converted to ONNX with
+  werkzeuge/modelle_exportieren.py; werkzeuge/checkpoint_lesen.py reads it
+  without executing code from the pickle. werkzeuge/netz_lama.py is derived
+  from the LaMa source code (saicinpainting/training/modules/ffc.py, itself
+  based on the Fast Fourier Convolution, https://github.com/pkumivision/FFC)
+  and is therefore also under the Apache License 2.0 (full text in
+  LICENSES/Apache-2.0.txt). It contains only the generator and only the
+  branches Big LaMa uses. Changes to the original, all computing the same
+  result: the Fourier transform (torch.fft.rfftn/irfftn) is written as
+  multiplication with DFT matrices built inside the network; the network
+  takes image and mask separately and blanks the masked area itself. The
+  weights themselves are unchanged. The converted model file is published
+  as an asset of the release "modelle-6" of this project, together with the
+  Apache License 2.0 text of LaMa (LICENSE-LaMa.txt), which Neuro-Enhance
+  also downloads and stores next to the model.
+
 Only models whose licence permits use and redistribution in an
 open-source project are offered by default.
 

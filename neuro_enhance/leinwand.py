@@ -15,6 +15,10 @@ ob links geklickt wurde) und zeichnet die bisherigen Klicks als Punkte. Ziehen
 verschiebt vergroessert weiterhin das Bild - als Klick zaehlt nur, was kaum bewegt
 wurde.
 
+Im Pinselmodus zeigt ein Kreis die Pinselgroesse; Ziehen mit der linken Taste
+meldet Punkte zum Markieren, mit der rechten zum Wegnehmen (`pinsel_gezogen`).
+Die mittlere Taste verschiebt das vergroesserte Bild in jedem Modus.
+
 Licensed under MIT License
 Copyright 2026 Alexander Unverhau
 Created with assistance of Claude AI
@@ -41,6 +45,7 @@ class Leinwand(QFrame):
     ansicht_geaendert = Signal()
     zuschnitt_geaendert = Signal(tuple)
     bild_geklickt = Signal(float, float, bool)       # x, y im Bild; True = linke Taste
+    pinsel_gezogen = Signal(float, float, bool, bool)   # x, y, dazu, neuer Strich
 
     def __init__(self):
         super().__init__(objectName="leinwand")
@@ -60,6 +65,10 @@ class Leinwand(QFrame):
         self.klickmodus = False
         self.klickpunkte: list[tuple[float, float, bool]] = []   # im Bild, zum Zeichnen
         self._klick = None                    # (Fensterpunkt, linke Taste) beim Druecken
+        self.pinselmodus = False
+        self.pinsel_radius = 20.0             # in Fensterpunkten
+        self._pinsel_dazu: bool | None = None  # waehrend eines Strichs: linke Taste?
+        self._maus: QPointF | None = None     # fuer den Pinselkreis
 
         aufbau = QVBoxLayout(self)
         aufbau.addStretch(1)
@@ -264,8 +273,18 @@ class Leinwand(QFrame):
         self._zeiger()
         self.update()
 
+    def pinselmodus_setzen(self, an: bool):
+        self.pinselmodus = an
+        self._pinsel_dazu = None
+        self._zeiger()
+        self.update()
+
+    def massstab(self) -> float:
+        """Fensterpunkte je Bildpixel."""
+        return self._massstab()
+
     def _zeiger(self):
-        if self.klickmodus:
+        if self.klickmodus or self.pinselmodus:
             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
             self.setCursor(Qt.CursorShape.OpenHandCursor if self.zoom
@@ -276,6 +295,15 @@ class Leinwand(QFrame):
         if self.voll_form is None:
             return
         punkt = ereignis.position()
+        if knopf == Qt.MouseButton.MiddleButton and self.zoom is not None:
+            self._ziehen = ("schieben", (punkt.x(), punkt.y()), self.mitte)
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            return
+        if self.pinselmodus and self.zuschnitt is None and knopf in (
+                Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
+            self._pinsel_dazu = knopf == Qt.MouseButton.LeftButton
+            self.pinsel_gezogen.emit(*self.zu_bild(punkt), self._pinsel_dazu, True)
+            return
         if self.klickmodus and self.zuschnitt is None and knopf in (
                 Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
             self._klick = (punkt, knopf == Qt.MouseButton.LeftButton)
@@ -291,6 +319,12 @@ class Leinwand(QFrame):
 
     def mouseMoveEvent(self, ereignis):               # noqa: N802 - Qt-Name
         punkt = ereignis.position()
+        if self.pinselmodus:
+            self._maus = punkt
+            self.update()
+            if self._pinsel_dazu is not None:
+                self.pinsel_gezogen.emit(*self.zu_bild(punkt), self._pinsel_dazu, False)
+                return
         if self._ziehen is None:
             if self.zuschnitt is not None and self.voll_form is not None:
                 art = self._griff_bei(punkt)
@@ -320,6 +354,10 @@ class Leinwand(QFrame):
             self.update()
 
     def mouseReleaseEvent(self, ereignis):            # noqa: N802 - Qt-Name
+        if self._pinsel_dazu is not None and ereignis.button() in (
+                Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
+            self._pinsel_dazu = None
+            return
         if self._klick is not None:
             start, links = self._klick
             self._klick = None
@@ -366,6 +404,17 @@ class Leinwand(QFrame):
             self._rahmen_zeichnen(maler, ziel)
         elif self.klickmodus:
             self._klicks_zeichnen(maler)
+        if self.pinselmodus and self._maus is not None and self.zuschnitt is None:
+            maler.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            maler.setBrush(Qt.BrushStyle.NoBrush)
+            for farbe, breite in ((QColor(0, 0, 0, 160), 3), (QColor(255, 255, 255), 1)):
+                maler.setPen(QPen(farbe, breite))
+                maler.drawEllipse(self._maus, self.pinsel_radius, self.pinsel_radius)
+
+    def leaveEvent(self, ereignis):                   # noqa: N802 - Qt-Name
+        super().leaveEvent(ereignis)
+        self._maus = None
+        self.update()
 
     def _klicks_zeichnen(self, maler: QPainter):
         """Bisherige Klicks: gruen dazu, rot weg - mit dunklem Rand auf jedem Grund."""

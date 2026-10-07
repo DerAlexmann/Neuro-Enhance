@@ -210,7 +210,7 @@ def test_katalog_vollstaendig():
         assert modell.mindeststufe in ki.STUFEN and set(modell.kacheln) <= set(ki.STUFEN)
     assert set(ki.ALLE_MODELLE) == (set(ki.MODELLE) | set(ki.ENTRAUSCH_MODELLE)
                                     | set(ki.SCHAERF_MODELLE) | set(ki.MASKEN_MODELLE)
-                                    | set(ki.AUSWAHL_MODELLE))
+                                    | set(ki.AUSWAHL_MODELLE) | set(ki.ENTFERN_MODELLE))
 
 
 def test_entrauschmodell_aus_eigenem_release():
@@ -221,6 +221,7 @@ def test_entrauschmodell_aus_eigenem_release():
     assert ki.SCHAERF_MODELLE["restormer"].release == ki.MODELL_RELEASE_3
     assert ki.MASKEN_MODELLE["birefnet"].release == ki.MODELL_RELEASE_4
     assert ki.AUSWAHL_MODELLE["sam2"].release == ki.MODELL_RELEASE_5
+    assert ki.ENTFERN_MODELLE["lama"].release == ki.MODELL_RELEASE_6
 
 
 def test_weitere_dateien_gehoeren_zum_modell():

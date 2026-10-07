@@ -37,6 +37,19 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- Neue Karte „Objekte entfernen“ mit LaMa (Big LaMa, Apache-2.0): Objekte per
+  Klick (SAM 2) oder mit dem Pinsel markieren, „Entfernen“ füllt die Stelle.
+  Gerechnet wird ein Ausschnitt um die Markierung, höchstens 768 bis 1536 Pixel
+  je nach Grafikspeicher, in 0,1 bis 0,4 s (RTX 4060). Die Markierung wächst
+  vorher um 5 % ihrer Ausdehnung, damit kein Umriss stehen bleibt. Entfernte
+  Objekte liegen als Flicken über dem entrauschten und geschärften Bild,
+  stapeln sich und lassen sich einzeln zurücknehmen; ungespeicherte
+  Entfernungen zählen als Änderung. Die mittlere Maustaste verschiebt das
+  vergrößerte Bild jetzt in jedem Modus. Das Modell (196 MB) kommt aus dem
+  neuen Release `modelle-6`; es ist in `werkzeuge/netz_lama.py` mit der
+  Fouriertransformation als DFT-Matrizen nachgebaut, der Checkpoint wird mit
+  `werkzeuge/checkpoint_lesen.py` gelesen, ohne Code aus dem Pickle
+  auszuführen.
 - Objekt per Klick auswählen in der Karte „Motiv & Hintergrund“ mit
   Segment Anything 2 (SAM 2.1 small, Apache-2.0): Linksklick nimmt dazu,
   Rechtsklick weg, Strg+Z nimmt den letzten Klick zurück, Esc beendet. Der
