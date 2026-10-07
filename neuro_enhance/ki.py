@@ -1,11 +1,11 @@
 """
 KI-Hochskalieren (Real-ESRGAN), KI-Entrauschen (SCUNet), KI-Schaerfen
-(Restormer), Freistellen (BiRefNet), Auswahl per Klick (SAM 2) und Objekte
-entfernen (LaMa) ueber ONNX Runtime
+(Restormer), Freistellen (BiRefNet), Auswahl per Klick (SAM 2), Objekte
+entfernen (LaMa) und Tiefe schaetzen (Depth Anything V2) ueber ONNX Runtime
 
 Die Modelle stammen aus den offiziellen Releases von Real-ESRGAN (BSD-3-Clause),
-SCUNet (Apache-2.0), Restormer (MIT), BiRefNet (MIT), SAM 2 und LaMa (beide
-Apache-2.0) und sind mit
+SCUNet (Apache-2.0), Restormer (MIT), BiRefNet (MIT), SAM 2, LaMa und Depth
+Anything V2 Small (alle drei Apache-2.0) und sind mit
 werkzeuge/modelle_exportieren.py nach ONNX gewandelt. Bereit liegen sie als
 Dateien eigener Releases dieses Projekts, mit dem jeweiligen Lizenztext
 daneben. Heruntergeladen wird nur auf Wunsch des Anwenders; jede Datei wird
@@ -70,12 +70,14 @@ QUELLE_RESTORMER = "https://github.com/swz30/Restormer"
 QUELLE_BIREFNET = "https://github.com/ZhengPeng7/BiRefNet"
 QUELLE_SAM2 = "https://github.com/facebookresearch/sam2"
 QUELLE_LAMA = "https://github.com/advimman/lama"
+QUELLE_TIEFE = "https://github.com/DepthAnything/Depth-Anything-V2"
 MODELL_RELEASE = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-1/"
 MODELL_RELEASE_2 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-2/"
 MODELL_RELEASE_3 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-3/"
 MODELL_RELEASE_4 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-4/"
 MODELL_RELEASE_5 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-5/"
 MODELL_RELEASE_6 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-6/"
+MODELL_RELEASE_7 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-7/"
 BLOCK = 1 << 20
 
 # Datei -> (SHA-256, Groesse in Bytes)
@@ -112,6 +114,10 @@ DATEIEN = {
         ("05242ecae18e453d4fc7cf7df015d80c9c1e96f82b7ef7376f2e0579b8444770", 205471670),
     "LICENSE-LaMa.txt":
         ("4ceeeac5a802e86c413c22b16cce8e9a22027b0250c97e6f8ac97c14cf0542c0", 11348),
+    "depth-anything-v2-small.onnx":
+        ("2b7c680369d243ed48c240d98f6263e1ca1a03e8c1035445b8614c0e4a909f6a", 102597798),
+    "LICENSE-DepthAnythingV2.txt":
+        ("c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4", 11357),
 }
 LIZENZDATEI = "LICENSE-Real-ESRGAN.txt"
 RAND = 10                    # Ueberlappung je Kachelseite in Eingabepixeln, wie in Real-ESRGAN
@@ -247,8 +253,23 @@ ENTFERN_MODELLE = {
         lizenzdatei="LICENSE-LaMa.txt", release=MODELL_RELEASE_6,
         massstab=1, rand=0, vielfaches=8, nhwc=False, cuda_fp16=False),
 }
+# Tiefe: Depth Anything V2 Small - nur dieses Modell der Familie steht unter
+# Apache-2.0. Es sieht das Bild auf 1050 x 700 verkleinert (0,13 s); die Tiefe
+# legt ein gefuehrter Filter an die Kanten des Bildes.
+TIEFEN_MODELLE = {
+    "tiefe": Modell(
+        "tiefe", "depth-anything-v2-small.onnx",
+        "2b7c680369d243ed48c240d98f6263e1ca1a03e8c1035445b8614c0e4a909f6a",
+        None,
+        "S", {"S": 1050, "M": 1050, "L": 1050, "XL": 1050},
+        lizenz="Apache-2.0", quelle=QUELLE_TIEFE,
+        herkunft="Depth Anything V2 Small (Apache-2.0, Lihe Yang u. a.)",
+        lizenzdatei="LICENSE-DepthAnythingV2.txt", release=MODELL_RELEASE_7,
+        massstab=1, rand=0, vielfaches=14, nhwc=False, cuda_fp16=False,
+        feste_groesse=(700, 1050), ausgabe_kanaele=1),
+}
 ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE, **SCHAERF_MODELLE, **MASKEN_MODELLE,
-                **AUSWAHL_MODELLE, **ENTFERN_MODELLE}
+                **AUSWAHL_MODELLE, **ENTFERN_MODELLE, **TIEFEN_MODELLE}
 STUFEN = ("S", "M", "L", "XL")
 
 
@@ -1051,3 +1072,49 @@ class Entferner(_Netz):
         deckkraft = cp.maximum(deckkraft, markiert.astype(cp.float32))
         fuellung = filter.vergroessern(cp.ascontiguousarray(fuellung), h + fh, w + fw)[:h, :w]
         return cp.clip(fuellung, 0, 1), cp.ascontiguousarray(deckkraft)
+
+
+class Tiefenschaetzer(_Netz):
+    """Depth Anything V2 - die relative Tiefe eines ganzen Bildes, 1 = am naechsten.
+
+    Wie beim Freistellen wird das Bild auf die feste Groesse des Netzes gebracht,
+    Hochformate vorher gedreht. Die Tiefe kommt auf hoechstens ARBEIT Pixel
+    Kantenlaenge zurueck, an die Kanten des Bildes gelegt, und wird auf 0..1
+    gestreckt (1. bis 99. Perzentil) - mehr Aufloesung braucht eine Unschaerfe nach
+    Tiefe nicht.
+    """
+
+    ARBEIT = 2048
+
+    def __init__(self, modell: Modell | None = None):
+        modell = modell or TIEFEN_MODELLE["tiefe"]
+        super().__init__(modell, fp16=False, kachel=None, tensorrt=False)
+
+    def tiefe(self, srgb):
+        """sRGB (H, W, 3) float32 0..1 auf der GPU -> Tiefe (h, w) 0..1 auf der GPU,
+        in der Lage des Bildes, h und w hoechstens ARBEIT."""
+        hoehe, breite = srgb.shape[:2]
+        hochformat = hoehe > breite
+        bild = cp.rot90(srgb) if hochformat else srgb
+        mh, mb = self.modell.feste_groesse
+        faktor = max(1, min(bild.shape[0] // mh, bild.shape[1] // mb))
+        klein = filter.vergroessern(filter.verkleinern_box(bild, faktor).astype(cp.float32),
+                                    mh, mb)
+        eingabe = cp.ascontiguousarray(cp.moveaxis(klein, -1, 0))[None]
+        del klein
+        ausgabe = cp.empty((1, 1, mh, mb), dtype=cp.float32)
+        try:
+            _binden(self.sitzung, {"eingabe": eingabe}, {"ausgabe": ausgabe})
+        except Exception as fehler:              # ORT wirft eigene Fehlerklassen
+            raise KiFehler(str(fehler)) from fehler
+        roh = cp.rot90(ausgabe[0, 0], -1) if hochformat else ausgabe[0, 0]
+        unten, oben = (float(v) for v in cp.percentile(roh, cp.asarray([1.0, 99.0])))
+        roh = cp.clip((roh - unten) / max(oben - unten, 1e-6), 0, 1)
+        # Fuehrung: das Bild selbst, verkleinert auf die Arbeitsgroesse
+        faktor = max(1, -(-max(hoehe, breite) // self.ARBEIT))
+        fuehrung = filter.luminanz(filter.verkleinern_box(srgb, faktor)).astype(cp.float32)
+        fh, fb = fuehrung.shape
+        grob = filter.vergroessern(cp.ascontiguousarray(roh, dtype=cp.float32), fh, fb)
+        radius = max(2, round(max(fh, fb) / max(mh, mb)))
+        fein = filter.gefuehrter_filter(fuehrung, grob, radius, 1e-4)
+        return cp.ascontiguousarray(cp.clip(fein, 0, 1))

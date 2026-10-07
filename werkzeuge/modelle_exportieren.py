@@ -594,8 +594,36 @@ def lama() -> list[str]:
     return [pfad]
 
 
+def tiefe() -> list[str]:
+    from netz_tiefe import BREITE, HOEHE, DepthAnythingV2
+    netz = DepthAnythingV2()
+    netz.load_state_dict(gewichte("depth_anything_v2_vits.pth"), strict=True)
+    netz.eval()
+    with torch.no_grad():
+        frei = netz(torch.rand(1, 3, HOEHE, BREITE) * 0 + 0.5).numpy()
+    netz.festlegen()
+    pfad = os.path.join(ZIEL, "depth-anything-v2-small.onnx")
+    # Feste Groesse: die interpolierte Positionseinbettung wird zur Konstante
+    torch.onnx.export(netz, (torch.rand(1, 3, HOEHE, BREITE),), pfad, input_names=["eingabe"],
+                      output_names=["ausgabe"], opset_version=17, dynamo=False,
+                      do_constant_folding=True)
+
+    import onnxruntime as ort
+    probe = torch.rand(1, 3, HOEHE, BREITE)
+    with torch.no_grad():
+        soll = netz(probe).numpy()
+    sitzung = ort.InferenceSession(pfad, providers=["CPUExecutionProvider"])
+    ist = sitzung.run(None, {"eingabe": probe.numpy()})[0]
+    with torch.no_grad():
+        fest = netz(torch.rand(1, 3, HOEHE, BREITE) * 0 + 0.5).numpy()
+    print(f"{os.path.basename(pfad)}: vorab festgelegte Positionen gegen interpolierte "
+          f"{np.abs(fest - frei).max():.2e}; ONNX gegen PyTorch, groesste Abweichung "
+          f"{np.abs(ist - soll).max():.2e} (Werte bis {np.abs(soll).max():.1f})")
+    return [pfad]
+
+
 EXPORTE = {"realesrgan": realesrgan, "scunet": scunet, "restormer": restormer,
-           "birefnet": birefnet, "sam2": sam2, "lama": lama}
+           "birefnet": birefnet, "sam2": sam2, "lama": lama, "tiefe": tiefe}
 
 
 def main():

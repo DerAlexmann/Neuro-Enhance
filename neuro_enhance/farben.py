@@ -175,6 +175,7 @@ def stylesheet() -> str:
         background: {t["ACCENT"]}; color: {t["ON_ACCENT"]};
     }}
     QPushButton#hauptschalter:hover {{ background: {t["ACCENT_DARK"]}; }}
+    QPushButton#hauptschalter:disabled {{ background: {t["BTN_BG"]}; }}
 
     QSlider::groove:horizontal {{
         background: {t["TROUGH"]}; height: 4px; border-radius: 2px;

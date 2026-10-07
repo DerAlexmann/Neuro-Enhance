@@ -91,6 +91,12 @@ REGLER = (
     Regler("hg_unschaerfe", "maske", 0, 100),
     Regler("maske_kante", "maske", 0, 100),
     Regler("maske_verschieben", "maske", -100, 100),
+    # Tiefe & Bokeh: Unschaerfe nach Abstand zur Fokusebene; wirkt erst, wenn die
+    # Tiefe fuer das Bild berechnet ist (bearbeitung.Sitzung). Fokus 0 ist das
+    # Fernste, 100 das Naechste im Bild.
+    Regler("bokeh", "tiefe", 0, 100),
+    Regler("fokus", "tiefe", 0, 100, vorgabe=50),
+    Regler("schaerfentiefe", "tiefe", 0, 100, vorgabe=20),
     Regler("schaerfe", "details", 0, 150),
     Regler("schaerfe_radius", "details", 0.5, 3.0, vorgabe=1.0, schritt=0.1, nachkomma=1),
     Regler("begradigen", "geometrie", -45.0, 45.0, schritt=0.1, nachkomma=1),
@@ -106,8 +112,8 @@ REGLER = (
 # Geometriefelder ohne Schieberegler, mit ihren Vorgaben
 GEOMETRIE_FELDER = {"drehung90": 0, "spiegeln": False, "zuschnitt": (0.0, 0.0, 1.0, 1.0)}
 # Schalter der Maske: Wirkung umkehren (Regler wirken aufs Motiv), Hintergrund
-# beim Speichern durchsichtig
-MASKEN_SCHALTER = {"maske_umkehren": False, "freistellen": False}
+# beim Speichern durchsichtig, Motiv beim Bokeh scharf halten
+MASKEN_SCHALTER = {"maske_umkehren": False, "freistellen": False, "bokeh_motiv": True}
 HINTERGRUND = ("hg_belichtung", "hg_kontrast", "hg_saettigung", "hg_temperatur",
                "hg_unschaerfe")
 
@@ -160,6 +166,11 @@ class Einstellungen:
     maske_verschieben: float = 0.0
     maske_umkehren: bool = False
     freistellen: bool = False
+    # Tiefe & Bokeh
+    bokeh: float = 0.0
+    fokus: float = 50.0
+    schaerfentiefe: float = 20.0
+    bokeh_motiv: bool = True
     # Geometrie (geometrie.py)
     drehung90: int = 0
     spiegeln: bool = False
@@ -190,7 +201,7 @@ class Einstellungen:
             elif feld.name in MASKEN_SCHALTER:
                 if wert != MASKEN_SCHALTER[feld.name]:
                     return False
-            elif feld.name not in ("schaerfe_radius", "lut_staerke") \
+            elif feld.name not in ("schaerfe_radius", "lut_staerke", "fokus", "schaerfentiefe") \
                     and wert != REGLER_NACH_NAME[feld.name].vorgabe:
                 return False
         return True

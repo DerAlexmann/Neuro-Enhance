@@ -95,6 +95,13 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   for example spots or wires – "Remove" fills the spot within a fraction of a second with
   what could be behind it. Several removals build on each other, the last one can be
   undone; the sliders keep working on the whole image. From 4 GB of graphics memory.
+- **Depth & bokeh** with Depth Anything V2: the AI estimates in a fraction of a second how
+  far away everything in the image is. After that, "Blur" softens the image like a fast
+  lens – the more, the further something lies in front of or behind the focal plane. The
+  focus is set by a click in the image or a slider, "Depth of field" decides how much
+  stays sharp, and a detected subject can be kept fully sharp. The blur is computed in
+  linear light so that highlights bloom, and sharp areas do not bleed into blurred ones.
+  From 4 GB of graphics memory.
 - **Geometry**: rotate by 90°, flip, straighten, vertical and horizontal perspective, crop
   with a frame and fixed aspect ratios. Empty corners after straightening are cropped
   away automatically.
@@ -189,7 +196,8 @@ it is not part of any ready-made executable and is always installed separately.
 Neuro-Enhance works entirely on your own computer. No images are uploaded and no usage
 data is sent. The AI also runs locally on the graphics card. The only network access is
 downloading an AI model – and only when you explicitly ask for it in the "AI upscaling",
-"AI denoise", "AI sharpen", "Subject & background" or "Remove objects" card and confirm the prompt that names source, size and
+"AI denoise", "AI sharpen", "Subject & background", "Remove objects" or "Depth & bokeh"
+card and confirm the prompt that names source, size and
 licence.
 
 ## AI models
@@ -207,7 +215,9 @@ with 177 MB and for "Click object" from
 [modelle-5](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-5) SAM 2
 with 147 MB, in the "Remove objects" card from
 [modelle-6](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-6) LaMa
-with 196 MB. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
+with 196 MB, in the "Depth & bokeh" card from
+[modelle-7](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-7) Depth
+Anything V2 Small with 98 MB. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
 folder next to the program or, if that is read-only, in
 `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
 
@@ -217,8 +227,9 @@ The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/
 (MIT, Copyright 2022 Syed Waqas Zamir), [BiRefNet](https://github.com/ZhengPeng7/BiRefNet)
 (MIT, Copyright 2024 ZhengPeng) and [SAM 2](https://github.com/facebookresearch/sam2)
 (Apache-2.0, Copyright Meta Platforms, Inc. and affiliates) and
-[LaMa](https://github.com/advimman/lama) (Apache-2.0, Copyright 2021 Samsung Research),
-converted to ONNX. To reproduce this yourself:
+[LaMa](https://github.com/advimman/lama) (Apache-2.0, Copyright 2021 Samsung Research)
+and [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2) Small
+(Apache-2.0), converted to ONNX. To reproduce this yourself:
 
 1. Download `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` and
    `RealESRGAN_x4plus.pth` from the
@@ -232,8 +243,10 @@ converted to ONNX. To reproduce this yourself:
    [`sam2.1_hiera_small.pt`](https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt)
    from Meta and `big-lama.zip` of LaMa (the download named in the
    [LaMa instructions](https://github.com/advimman/lama), hosted on
-   [Hugging Face](https://huggingface.co/smartywu/big-lama)) into `modelle/quellen/`
-   and unpack it there.
+   [Hugging Face](https://huggingface.co/smartywu/big-lama)) and
+   `depth_anything_v2_vits.pth` from
+   [Depth-Anything-V2-Small](https://huggingface.co/depth-anything/Depth-Anything-V2-Small)
+   into `modelle/quellen/`, and unpack `big-lama.zip` there.
 2. `pip install torch` (only needed for this step).
 3. `python werkzeuge/modelle_exportieren.py` – this writes the ONNX models to `modelle/`
    and checks them against PyTorch.

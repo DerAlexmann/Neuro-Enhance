@@ -251,6 +251,30 @@ TRANSLATIONS = {
         "Bisher entfernt: {n}.": "Removed so far: {n}.",
         "Das Entfernen ist fehlgeschlagen.": "Removing failed.",
         "Entfernt ({s} s)": "Removed ({s} s)",
+        "Tiefe & Bokeh": "Depth & bokeh",
+        "Fokus (fern – nah)": "Focus (far – near)",
+        "Schärfentiefe": "Depth of field",
+        "Fokus ins Bild klicken": "Click focus in image",
+        "Ein Klick ins Bild stellt auf diese Entfernung scharf.":
+            "A click in the image focuses at that distance.",
+        "Tiefenkarte zeigen": "Show depth map",
+        "Zeigt in der Vorschau die geschätzte Tiefe: hell ist nah, dunkel fern.":
+            "Shows the estimated depth in the preview: bright is near, dark is far.",
+        "Motiv scharf halten": "Keep subject sharp",
+        "Ist das Motiv erkannt oder angeklickt, bleibt es scharf, gleich wie tief es liegt.":
+            "If the subject is detected or clicked, it stays sharp, whatever its depth.",
+        "Tiefe geschätzt. Die Unschärfe wächst mit dem Abstand zur Fokusebene, nach vorn "
+        "wie nach hinten.":
+            "Depth estimated. The blur grows with the distance from the focal plane, towards "
+            "the front as well as the back.",
+        "Die KI schätzt, wie weit alles im Bild entfernt ist – in Sekundenbruchteilen. "
+        "Danach lässt sich der Hintergrund wie mit einem lichtstarken Objektiv "
+        "weichzeichnen.":
+            "The AI estimates how far away everything in the image is – in a fraction of a "
+            "second. After that the background can be blurred as with a fast lens.",
+        "Tiefe berechnen": "Estimate depth",
+        "Die Tiefe ließ sich nicht schätzen.": "The depth could not be estimated.",
+        "Tiefe geschätzt ({s} s)": "Depth estimated ({s} s)",
         "Das Motiv ließ sich nicht erkennen.": "The subject could not be detected.",
         "Motiv erkannt ({s} s, über {weg})": "Subject detected ({s} s, via {weg})",
         "Gespeichert: {name} – ohne durchsichtigen Hintergrund, das kann JPEG nicht. Als PNG "

@@ -58,6 +58,7 @@ def gruppen_titel(gruppe: str) -> str:
         "ki_rauschen": _("KI-Entrauschen"),
         "ki_schaerfe": _("KI-Schärfen"),
         "maske": _("Motiv & Hintergrund"),
+        "tiefe": _("Tiefe & Bokeh"),
     }[gruppe]
 
 
@@ -106,6 +107,9 @@ def regler_titel(name: str) -> str:
         "hg_unschaerfe": _("Unschärfe"),
         "maske_kante": _("Kante weicher"),
         "maske_verschieben": _("Kante verschieben"),
+        "bokeh": _("Unschärfe"),
+        "fokus": _("Fokus (fern – nah)"),
+        "schaerfentiefe": _("Schärfentiefe"),
     }[name] if not name.startswith("hsl_") else farbbereich_titel(int(name[4:]))
 
 
@@ -357,6 +361,8 @@ class BearbeitenSeite(QWidget):
                     self._ki_bild_bedienung(regler.gruppe, innen)
                 if regler.gruppe == "maske":
                     self._masken_bedienung(innen)
+                if regler.gruppe == "tiefe":
+                    self._tiefe_bedienung(innen)
                 gitter = QGridLayout()
                 gitter.setVerticalSpacing(2)
                 gitter.setColumnStretch(0, 1)
@@ -763,6 +769,7 @@ class BearbeitenSeite(QWidget):
             self.zeilen[gruppe].schieber.setEnabled(fertig)
         self._masken_anzeigen()
         self._entfernen_anzeigen()
+        self._tiefe_anzeigen()
 
     def _ki_schaerf_dauer(self) -> str:
         if ki.tensorrt_ordner() is not None:
@@ -1042,6 +1049,7 @@ class BearbeitenSeite(QWidget):
             self.maske_zeigen_box.setChecked(self._maske_zeigen_vorher)
         self._masken_anzeigen()
         self._entfernen_anzeigen()
+        self._tiefe_anzeigen()
         self.zeichnen_anfordern()
 
     def _bild_geklickt(self, x: float, y: float, dazu: bool):
@@ -1050,6 +1058,12 @@ class BearbeitenSeite(QWidget):
             return
         quelle = self.sitzung.quelle_von(x, y)
         if quelle is None:
+            return
+        if ziel == "fokus":
+            wert = round(self.sitzung.tiefe_an(*quelle))
+            self.zeilen["fokus"].setzen(wert)
+            self.wert_geaendert("fokus", float(wert))
+            self.auswahl_beenden()               # ein Klick genuegt
             return
         try:
             ms = self.sitzung.ki_klick(self._auswaehler, *quelle, dazu, ziel)
@@ -1065,7 +1079,7 @@ class BearbeitenSeite(QWidget):
 
     def klick_zuruecknehmen(self):
         ziel = self._klick_ziel
-        if ziel is None or self.sitzung is None:
+        if ziel in (None, "fokus") or self.sitzung is None:
             return
         if self.sitzung.ki_klick_zurueck(self._auswaehler, ziel):
             del self._klick_marken[ziel][-1:]
@@ -1279,6 +1293,134 @@ class BearbeitenSeite(QWidget):
         self._entfernen_anzeigen()
         self.zeichnen_anfordern()
 
+    # ------------------------------------------------------------------
+    # Tiefe & Bokeh
+    # ------------------------------------------------------------------
+
+    def _tiefe_bedienung(self, innen: QVBoxLayout):
+        self.tiefe_hinweis = QLabel(objectName="nebentext")
+        self.tiefe_hinweis.setWordWrap(True)
+        innen.addWidget(self.tiefe_hinweis)
+        self.tiefe_knopf = QPushButton()
+        self.tiefe_knopf.clicked.connect(self._tiefe_knopf_gedrueckt)
+        innen.addWidget(self.tiefe_knopf)
+        self.fokus_knopf = QPushButton()
+        self.fokus_knopf.setCheckable(True)
+        self.fenster.beschriften(self.fokus_knopf.setText, _("Fokus ins Bild klicken"))
+        self.fenster.beschriften(self.fokus_knopf.setToolTip, _(
+            "Ein Klick ins Bild stellt auf diese Entfernung scharf."))
+        self.fokus_knopf.toggled.connect(self._fokus_knopf_gedrueckt)
+        innen.addWidget(self.fokus_knopf)
+        self.tiefe_zeigen_box = QCheckBox()
+        self.fenster.beschriften(self.tiefe_zeigen_box.setText, _("Tiefenkarte zeigen"))
+        self.fenster.beschriften(self.tiefe_zeigen_box.setToolTip, _(
+            "Zeigt in der Vorschau die geschätzte Tiefe: hell ist nah, dunkel fern."))
+        self.tiefe_zeigen_box.toggled.connect(lambda _an: self.zeichnen_anfordern())
+        self.bokeh_motiv_box = QCheckBox()
+        self.fenster.beschriften(self.bokeh_motiv_box.setText, _("Motiv scharf halten"))
+        self.fenster.beschriften(self.bokeh_motiv_box.setToolTip, _(
+            "Ist das Motiv erkannt oder angeklickt, bleibt es scharf, gleich wie tief es "
+            "liegt."))
+        self.bokeh_motiv_box.toggled.connect(lambda an: self.wert_geaendert("bokeh_motiv", an))
+        leiste = QHBoxLayout()
+        leiste.addWidget(self.tiefe_zeigen_box)
+        leiste.addWidget(self.bokeh_motiv_box)
+        leiste.addStretch(1)
+        innen.addLayout(leiste)
+
+    def _tiefe_modell(self) -> ki.Modell:
+        return ki.TIEFEN_MODELLE["tiefe"]
+
+    def _tiefe_anzeigen(self):
+        if not hasattr(self, "tiefe_knopf"):
+            return
+        modell, stufe = self._tiefe_modell(), self._ki_stufe()
+        offen = self.sitzung is not None
+        fertig = offen and self.sitzung.ki_tiefe_da
+        knopf = None
+        if not ki.angeboten(modell, stufe):
+            text = _("KI-Funktionen brauchen mindestens 4 GB Grafikspeicher.")
+        elif not ki.vorhanden(modell):
+            text = _("Dieses Modell ist noch nicht geladen.")
+            knopf = _("Modell herunterladen ({mb} MB)").format(
+                mb=f"{ki.download_groesse(modell) / 2**20:.0f}")
+        elif fertig:
+            text = _("Tiefe geschätzt. Die Unschärfe wächst mit dem Abstand zur "
+                     "Fokusebene, nach vorn wie nach hinten.")
+        else:
+            text = _("Die KI schätzt, wie weit alles im Bild entfernt ist – in "
+                     "Sekundenbruchteilen. Danach lässt sich der Hintergrund wie mit "
+                     "einem lichtstarken Objektiv weichzeichnen.")
+            knopf = _("Tiefe berechnen")
+        self.fenster.beschriften(self.tiefe_hinweis.setText, text)
+        self.tiefe_knopf.setVisible(knopf is not None)
+        if knopf is not None:
+            self.fenster.beschriften(self.tiefe_knopf.setText, knopf)
+            self.tiefe_knopf.setEnabled(offen or not ki.vorhanden(modell))
+        fokussieren = self._klick_ziel == "fokus"
+        self.fokus_knopf.setVisible(fertig)
+        if self.fokus_knopf.isChecked() != fokussieren:
+            self.fokus_knopf.blockSignals(True)
+            self.fokus_knopf.setChecked(fokussieren)
+            self.fokus_knopf.blockSignals(False)
+        self.tiefe_zeigen_box.setEnabled(fertig)
+        self.bokeh_motiv_box.setEnabled(fertig and self.sitzung.ki_maske_da)
+        werte = self.sitzung.werte if offen else filter.Einstellungen()
+        if self.bokeh_motiv_box.isChecked() != werte.bokeh_motiv:
+            self.bokeh_motiv_box.blockSignals(True)
+            self.bokeh_motiv_box.setChecked(werte.bokeh_motiv)
+            self.bokeh_motiv_box.blockSignals(False)
+        for regler in filter.REGLER:
+            if regler.gruppe == "tiefe":
+                self.zeilen[regler.name].schieber.setEnabled(fertig)
+
+    def _tiefe_knopf_gedrueckt(self):
+        modell = self._tiefe_modell()
+        if not ki.vorhanden(modell):
+            self.ki_modell_laden(modell)
+        else:
+            self.tiefe_berechnen()
+
+    def tiefe_berechnen(self):
+        """Die Tiefe einmal mit KI schaetzen, danach auf das Motiv scharf stellen."""
+        if self.sitzung is None:
+            return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            netz = ki.Tiefenschaetzer(self._tiefe_modell())
+            ms = self.sitzung.ki_tiefe(netz)
+            del netz                             # Grafikspeicher fuer die Bearbeitung frei
+        except (ki.KiFehler, cp.cuda.memory.OutOfMemoryError) as fehler:
+            text = str(fehler) if isinstance(fehler, ki.KiFehler) else _(
+                "Für dieses Bild reicht der Grafikspeicher nicht.")
+            self._fehler(_("Die Tiefe ließ sich nicht schätzen."), text)
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+            cp.get_default_memory_pool().free_all_blocks()
+            self._tiefe_anzeigen()
+        fokus = round(self.sitzung.fokus_vorschlag())
+        self.zeilen["fokus"].setzen(fokus)
+        self.wert_geaendert("fokus", float(fokus))
+        if self.sitzung.werte.bokeh == 0:
+            self.zeilen["bokeh"].setzen(50)
+            self.wert_geaendert("bokeh", 50.0)
+        self.fenster.melden(_("Tiefe geschätzt ({s} s)").format(s=f"{ms / 1000:.1f}"))
+
+    def _fokus_knopf_gedrueckt(self, an: bool):
+        if not an:
+            if self._klick_ziel == "fokus":
+                self.auswahl_beenden()
+            return
+        if self.sitzung is None or not self.sitzung.ki_tiefe_da:
+            return
+        self.zuschneiden(False)
+        self.pinsel_beenden()
+        self.auswahl_beenden()
+        self._klick_ziel = "fokus"
+        self.leinwand.klickmodus_setzen(True)
+        self._tiefe_anzeigen()
+
     def _hsl_karte(self) -> QFrame:
         karte, innen = self._karte(_("Farbbereiche"))
         leiste = QHBoxLayout()
@@ -1444,7 +1586,8 @@ class BearbeitenSeite(QWidget):
             ziel = self._klick_ziel
             gleich = (not self._vorher
                       and self._klick_geo.get(ziel) == geometrie.aus(self.sitzung.werte))
-            self.leinwand.klickpunkte = list(self._klick_marken[ziel]) if gleich else []
+            self.leinwand.klickpunkte = list(self._klick_marken.get(ziel, [])) if gleich else []
+        self.sitzung.tiefe_zeigen = self.tiefe_zeigen_box.isChecked() and not self._vorher
         if self.leinwand.zoom is None:
             bild, ms, histogramm = self.sitzung.vorschau(werte=werte)
             self.leinwand.zeigen(bild)
@@ -1535,6 +1678,7 @@ class BearbeitenSeite(QWidget):
         self.pinsel_beenden()
         self._klick_marken = {"maske": [], "entfernen": []}
         self._entferner = None
+        self.tiefe_zeigen_box.setChecked(False)
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             daten = bilddatei.laden(pfad)

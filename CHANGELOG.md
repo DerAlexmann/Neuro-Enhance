@@ -7,6 +7,8 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Geändert
 
+- Gesperrte Hauptknöpfe (etwa „Entfernen“ ohne Markierung) erscheinen grau
+  statt in der Akzentfarbe.
 - ONNX Runtime bekommt höchstens so viel Grafikspeicher, wie gerade frei ist.
   Ohne Grenze wuchs sein Speicherpool über die Karte hinaus, und Windows
   lagerte aus – ein Netz rechnete dann bis zu zwanzigmal langsamer.
@@ -37,6 +39,17 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- Neue Karte „Tiefe & Bokeh“ mit Depth Anything V2 Small (Apache-2.0): Die
+  Tiefe wird einmal geschätzt (0,16 s bei 26 MP, RTX 4060) und mit einem
+  geführten Filter an die Kanten des Bildes gelegt. „Unschärfe“ zeichnet nach
+  dem Abstand zur Fokusebene weich, „Fokus“ und „Schärfentiefe“ stellen ein,
+  ein Klick ins Bild setzt den Fokus, eine Tiefenkarte zeigt die Schätzung.
+  Das Bokeh mischt vier unterschiedlich stark weichgezeichnete Fassungen in
+  linearem Licht; nur ähnlich Unscharfes trägt zu ihnen bei, damit Scharfes
+  nicht ausblutet. Ein erkanntes Motiv bleibt auf Wunsch scharf. Nach dem
+  Schätzen wird auf das Motiv bzw. das Nächste im Bild scharf gestellt. Das
+  Modell (98 MB) kommt aus dem neuen Release `modelle-7`; es ist in
+  `werkzeuge/netz_tiefe.py` ohne xFormers, OpenCV und torchvision nachgebaut.
 - Neue Karte „Objekte entfernen“ mit LaMa (Big LaMa, Apache-2.0): Objekte per
   Klick (SAM 2) oder mit dem Pinsel markieren, „Entfernen“ füllt die Stelle.
   Gerechnet wird ein Ausschnitt um die Markierung, höchstens 768 bis 1536 Pixel

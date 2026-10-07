@@ -219,6 +219,28 @@ LaMa - Resolution-robust Large Mask Inpainting with Fourier Convolutions
   Apache License 2.0 text of LaMa (LICENSE-LaMa.txt), which Neuro-Enhance
   also downloads and stores next to the model.
 
+Depth Anything V2 (model Depth-Anything-V2-Small)
+  Lihe Yang et al., 2024 - the Small model and the code are under the
+  Apache License 2.0 (the larger models are not and are not used)
+  Licence: Apache License 2.0
+  https://github.com/DepthAnything/Depth-Anything-V2
+  https://huggingface.co/depth-anything/Depth-Anything-V2-Small
+  Contains DINOv2 (Copyright (c) Meta Platforms, Inc. and affiliates,
+  Apache License 2.0) and the DPT head from MiDaS/DPT (Intel ISL).
+  The official weights depth_anything_v2_vits.pth are converted to ONNX
+  with werkzeuge/modelle_exportieren.py. werkzeuge/netz_tiefe.py is derived
+  from the Depth Anything V2 source code and is therefore also under the
+  Apache License 2.0 (full text in LICENSES/Apache-2.0.txt). Changes to the
+  original, all computing the same result: the input size is fixed to
+  700 x 1050 and the positional embedding is interpolated for it in
+  advance, exactly as the original does at run time; the network takes
+  sRGB in 0..1 and normalises it itself; xFormers, the mask token path and
+  training-only branches are left out. The weights themselves are
+  unchanged. The converted model file is published as an asset of the
+  release "modelle-7" of this project, together with the Apache License 2.0
+  text (LICENSE-DepthAnythingV2.txt), which Neuro-Enhance also downloads and
+  stores next to the model.
+
 Only models whose licence permits use and redistribution in an
 open-source project are offered by default.
 

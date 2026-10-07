@@ -28,6 +28,12 @@ Jeder laesst sich einzeln zuruecknehmen. Was entfernt werden soll, markieren
 Klicks (SAM) und ein Pinsel; die Markierung liegt wie die Maske in der
 Geometrie des Originals.
 
+Die Tiefe (Depth Anything) liegt verkleinert in der Geometrie des Originals.
+Aus ihr und dem Fokus folgt fuer jeden Pixel ein Unschaerferadius; das Bokeh
+mischt dafuer einige unterschiedlich stark weichgezeichnete Fassungen des
+fertigen Bildes, in linearem Licht, damit Lichter wie bei einem Objektiv
+aufbluehen. Scharfe Bereiche fliessen dabei nicht in unscharfe hinein.
+
 Dieses Modul importiert CuPy und darf deshalb erst nach der Startprufung
 geladen werden.
 
@@ -58,6 +64,10 @@ HG_UNSCHAERFE = 40.0           # Hintergrund weichzeichnen: Sigma bei 100 % in P
 MASKE_FARBE = (1.0, 0.25, 0.2)  # Maskenansicht: so wird der Hintergrund eingefaerbt
 MARKIERUNG_FARBE = (0.2, 0.55, 1.0)   # was entfernt werden soll
 MARKIERUNG_DECKUNG = 0.55
+BOKEH_MAX = 0.012              # Bokeh 100 %: Sigma als Anteil der laengsten Bildkante
+BOKEH_STUFEN = (0.125, 0.25, 0.5, 1.0)   # weichgezeichnete Fassungen, Anteile davon
+TIEFE_BEREICH = 0.35           # Schaerfentiefe 100 %: so viel der Tiefe bleibt scharf
+TIEFE_UEBERGANG = 0.4          # danach waechst die Unschaerfe ueber so viel Tiefe auf voll
 
 # a + s * d - eine Korrektur mit Staerke auflegen
 _auflegen = cp.ElementwiseKernel("float32 a, float32 d, float32 s", "float32 c",
@@ -108,6 +118,8 @@ class Sitzung:
         self._flicken: list[_Flicken] = []    # entfernte Objekte, in Reihenfolge
         self._flicken_stand = 0               # zaehlt jede Aenderung an den Flicken
         self._flicken_gespeichert = 0
+        self._ki_tiefe = None                 # Tiefe 0..1 (1 = nah), verkleinert, im Original
+        self.tiefe_zeigen = False             # Vorschau zeigt die Tiefenkarte
 
         self.original = daten.linear(cp)
         # Zwischenpuffer des Demosaicing an den Grafikspeicher zurueckgeben
@@ -131,6 +143,10 @@ class Sitzung:
     @property
     def markierung_da(self) -> bool:
         return self._entfern_klick is not None or self._pinsel is not None
+
+    @property
+    def ki_tiefe_da(self) -> bool:
+        return self._ki_tiefe is not None
 
     @property
     def entfernt(self) -> int:
@@ -334,6 +350,82 @@ class Sitzung:
             teil += gefuellt
         return bild
 
+    # ------------------------------------------------------------------
+    # Tiefe & Bokeh
+    # ------------------------------------------------------------------
+
+    def ki_tiefe(self, schaetzer) -> float:
+        """Die Tiefe einmal mit KI schaetzen; Rueckgabe: Rechenzeit in ms."""
+        beginn = time.perf_counter()
+        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True), 0, 1))
+        self._ki_tiefe = schaetzer.tiefe(srgb)
+        del srgb
+        self._vollbild = None
+        cp.get_default_memory_pool().free_all_blocks()
+        return (time.perf_counter() - beginn) * 1000
+
+    def tiefe_an(self, x: float, y: float) -> float:
+        """Tiefe 0..100 am Punkt (x, y) im Original - Median ueber eine kleine Umgebung."""
+        hoehe, breite = self.original.shape[:2]
+        th, tb = self._ki_tiefe.shape
+        ty, tx = int(y / hoehe * th), int(x / breite * tb)
+        teil = self._ki_tiefe[max(0, ty - 3):ty + 4, max(0, tx - 3):tx + 4]
+        return float(cp.median(teil)) * 100
+
+    def fokus_vorschlag(self) -> float:
+        """Wohin scharf stellen: aufs Motiv, wenn eine Maske da ist, sonst aufs Naechste."""
+        if self._ki_maske is not None:
+            th, tb = self._ki_tiefe.shape
+            motiv = filter.vergroessern(self._ki_maske[0], th, tb) > 0.5
+            if bool(motiv.any()):
+                return float(cp.median(self._ki_tiefe[motiv])) * 100
+        # Ohne Maske: das Mittel des naechsten Fuenftels - meist das Motiv
+        nah = self._ki_tiefe[self._ki_tiefe >= cp.percentile(self._ki_tiefe, 80.0)]
+        return float(cp.median(nah)) * 100
+
+    def _tiefe_fuer(self, werte: Einstellungen, voll: bool):
+        """Tiefe in der Groesse des Originals bzw. der Vorschau und in der Geometrie
+        des fertigen Bildes."""
+        quelle = self.original if voll else self.vorschau_original
+        tiefe = filter.vergroessern(self._ki_tiefe, *quelle.shape[:2])
+        return self._in_geometrie(tiefe, werte)
+
+    def _bokeh(self, ergebnis, werte: Einstellungen, voll: bool, hoechst: float):
+        """Unschaerfe nach Abstand zur Fokusebene auf das fertige Bild (0..hoechst)."""
+        tiefe = self._tiefe_fuer(werte, voll)
+        rand = werte.schaerfentiefe / 100 * TIEFE_BEREICH
+        abstand = cp.clip((cp.abs(tiefe - werte.fokus / 100) - rand) / TIEFE_UEBERGANG, 0, 1)
+        if werte.bokeh_motiv and self._ki_maske is not None:
+            motiv = self._in_geometrie(self._ki_maske[0 if voll else 1], werte)
+            abstand *= 1 - motiv
+        sigma = werte.bokeh / 100 * BOKEH_MAX * max(ergebnis.shape[:2])
+        radius = abstand * sigma                  # Sigma je Pixel
+        linear = filter.srgb_zu_linear(cp.clip(ergebnis / hoechst, 0, 1))
+        stufen = [s * sigma for s in BOKEH_STUFEN]
+        fassungen = [linear]
+        for stufe in stufen:
+            # Normierte Faltung: Es tragen nur Pixel bei, die selbst mindestens etwa so
+            # unscharf sind - ein scharfes Motiv laeuft nicht als Schein in den Hintergrund
+            gewicht = cp.clip(radius / stufe, 0, 1)
+            nenner = filter.grob_weichzeichnen(gewicht, stufe)
+            zaehler = filter.grob_weichzeichnen(linear * gewicht[..., None], stufe)
+            gueltig = (nenner > 1e-3)[..., None]
+            fassungen.append(cp.where(gueltig, zaehler / cp.maximum(nenner, 1e-3)[..., None],
+                                      linear))
+        # Zwischen den Fassungen nach dem Radius des Pixels ueberblenden
+        knoten = [0.0, *stufen]
+        gemischt = cp.zeros_like(linear)
+        for k, fassung in enumerate(fassungen):
+            anteil = cp.ones_like(radius)
+            if k > 0:
+                anteil = cp.minimum(anteil, cp.clip((radius - knoten[k - 1])
+                                                    / (knoten[k] - knoten[k - 1]), 0, 1))
+            if k < len(knoten) - 1:
+                anteil = cp.minimum(anteil, cp.clip((knoten[k + 1] - radius)
+                                                    / (knoten[k + 1] - knoten[k]), 0, 1))
+            gemischt += fassung * anteil[..., None]
+        return filter.linear_zu_srgb(gemischt) * hoechst
+
     @staticmethod
     def _in_geometrie(maske, werte: Einstellungen):
         """Eine Maske im Original (H, W) in die Geometrie des fertigen Bildes bringen."""
@@ -368,21 +460,17 @@ class Sitzung:
         eingang = self._ausgang(werte, voll)
         bild = filter.anwenden_ausgabe(eingang, werte, massstab, speicher, bits=bits)
         markierung = self._markierung(voll) if zeigen else None
+        tiefe_zeigen = zeigen and self.tiefe_zeigen and self._ki_tiefe is not None
         zeigen = zeigen and self.maske_zeigen
         hintergrund = self._ki_maske is not None and (werte.hintergrund_aktiv() or zeigen)
-        if not hintergrund and markierung is None:
+        bokeh = self._ki_tiefe is not None and werte.bokeh > 0
+        if not (hintergrund or bokeh or tiefe_zeigen or markierung is not None):
             return bild
         hoechst = 65535.0 if bits == 16 else 255.0
-        ergebnis = bild.astype(cp.float32)
-        if markierung is not None:
-            m = self._in_geometrie(markierung, werte)[..., None] * MARKIERUNG_DECKUNG
-            farbe = cp.asarray(MARKIERUNG_FARBE, dtype=cp.float32) * hoechst
-            ergebnis = ergebnis * (1 - m) + m * farbe
         typ = cp.uint16 if bits == 16 else cp.uint8
-        if not hintergrund:
-            return cp.clip(ergebnis + 0.5, 0, hoechst).astype(typ)
-        maske = self._maske_fuer(werte, voll)[..., None]
-        if werte.hintergrund_aktiv():
+        ergebnis = bild.astype(cp.float32)
+        maske = self._maske_fuer(werte, voll)[..., None] if hintergrund else None
+        if hintergrund and werte.hintergrund_aktiv():
             hg = filter.anwenden_ausgabe(eingang, werte.fuer_hintergrund(), massstab, speicher,
                                          bits=bits).astype(cp.float32)
             if werte.hg_unschaerfe:
@@ -394,9 +482,17 @@ class Sitzung:
                 for kanal in range(3):
                     hg[..., kanal] = filter.gauss(hg[..., kanal] * gewicht, sigma) / nenner
             ergebnis = hg + maske * (ergebnis - hg)
-        if zeigen:
+        if bokeh:
+            ergebnis = self._bokeh(ergebnis, werte, voll, hoechst)
+        if tiefe_zeigen:
+            ergebnis = cp.repeat(self._tiefe_fuer(werte, voll)[..., None], 3, axis=2) * hoechst
+        if zeigen and maske is not None:
             farbe = cp.asarray(MASKE_FARBE, dtype=cp.float32) * hoechst
             ergebnis = maske * ergebnis + (1 - maske) * (0.4 * ergebnis + 0.6 * farbe)
+        if markierung is not None:
+            m = self._in_geometrie(markierung, werte)[..., None] * MARKIERUNG_DECKUNG
+            farbe = cp.asarray(MARKIERUNG_FARBE, dtype=cp.float32) * hoechst
+            ergebnis = ergebnis * (1 - m) + m * farbe
         return cp.clip(ergebnis + 0.5, 0, hoechst).astype(typ)
 
     def _ki_korrektur(self, netz, bild, kachel: int, fortschritt):
@@ -496,7 +592,7 @@ class Sitzung:
         """
         beginn = time.perf_counter()
         werte = self.werte if werte is None else werte
-        schluessel = (dataclasses.replace(werte), self.maske_zeigen)
+        schluessel = (dataclasses.replace(werte), self.maske_zeigen, self.tiefe_zeigen)
         if self._vollbild is None or self._vollbild[0] != schluessel:
             self._vollbild = None                 # das alte Vollbild zuerst freigeben
             bild = self._rendern(werte, True, self._speicher, zeigen=True)
@@ -580,6 +676,7 @@ class Sitzung:
         self._entfern_klick = None
         self._pinsel = None
         self._flicken = []
+        self._ki_tiefe = None
         self._speicher.clear()
         cp.get_default_memory_pool().free_all_blocks()
 
