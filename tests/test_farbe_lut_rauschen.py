@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from neuro_enhance import filter as f
-from neuro_enhance import lut
+from silberkorn import filter as f
+from silberkorn import lut
 
 N = len(f.FARBBEREICHE)
 

@@ -7,6 +7,10 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Geändert
 
+- Das Programm heißt jetzt **Silberkorn** (bisher Arbeitstitel Neuro-Enhance):
+  Paket `silberkorn`, Startdatei `Silberkorn.pyw`, Einstellungen in
+  `silberkorn.json`, Modelle bei schreibgeschütztem Programmordner unter
+  `%LOCALAPPDATA%\Silberkorn\modelle`.
 - RAW: Das Demosaicing auf der GPU arbeitet jetzt nach Malvar, He und Cutler.
   Neu ist die Wahl „RAW: Beste Qualität“ in der Kopfzeile; dann entwickelt
   LibRaw mit dem Verfahren DHT auf dem Prozessor (etwa 1,5 s bei 26 MP).
@@ -33,7 +37,7 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Entfernt
 
-- RCD-Demosaicing (`neuro_enhance/rcd.py`). Es war eine Übertragung von RCD
+- RCD-Demosaicing (`silberkorn/rcd.py`). Es war eine Übertragung von RCD
   (Luis Sanz Rodríguez) in der Fassung von RawTherapee und darktable, die unter
   der GPL-3.0 stehen; als solche durfte es nicht unter der MIT-Lizenz stehen.
   Die frühere Fassung bleibt in der Git-Historie (ab Commit 75bae17) und ist
@@ -41,7 +45,7 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Behoben
 
-- `python -m neuro_enhance` startete das Programm auch in jedem Hilfsprozess
+- `python -m silberkorn` startete das Programm auch in jedem Hilfsprozess
   erneut; der Start steht jetzt hinter `if __name__ == "__main__"`.
 - Ein Bild mit Alphakanal ließ sich nach Zuschnitt oder Drehung nicht
   speichern: Der Alphakanal behielt seine alte Größe. Er bekommt jetzt
@@ -136,7 +140,7 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
   aus dem Release `modelle-1` dieses Projekts. Jede Datei wird zuerst unter
   `.teil` gespeichert und erst nach bestandener SHA-256-Prüfung umbenannt;
   Abbrechen hinterlässt nichts. Ist der Programmordner schreibgeschützt,
-  landen die Modelle unter `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
+  landen die Modelle unter `%LOCALAPPDATA%\Silberkorn\modelle`.
 - KI-Hochskalieren um 2 × oder 4 × beim Speichern mit Real-ESRGAN über ONNX
   Runtime (CUDA): schnelles Modell (realesr-general-x4v3) mit Regler für die
   Entrauschstärke, für den die Gewichte zweier Modelle auf der GPU gemischt

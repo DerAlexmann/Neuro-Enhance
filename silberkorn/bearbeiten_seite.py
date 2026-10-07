@@ -608,7 +608,7 @@ class BearbeitenSeite(QWidget):
         groesse = ki.download_groesse(modell)
         ziel = ki.modell_ordner()
         frage = _(
-            "Neuro-Enhance lädt {mb} MB von:\n{quelle}\n\n"
+            "Silberkorn lädt {mb} MB von:\n{quelle}\n\n"
             "Das Modell stammt von {herkunft} und wird nach dem Laden gegen seine "
             "Prüfsumme geprüft.\n\n"
             "Ablage: {ordner}\n\nJetzt herunterladen?").format(

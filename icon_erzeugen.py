@@ -1,4 +1,4 @@
-"""Erzeugt das Programmsymbol neuro_enhance.ico.
+"""Erzeugt das Programmsymbol silberkorn.ico.
 
 Gezeichnet wird ein Foto - Rahmen mit Berg und Sonne - in Weiss auf einer
 abgerundeten Flaeche im Akzentblau des Farbschemas, oben rechts ein
@@ -19,7 +19,7 @@ import os
 
 from PIL import Image, ImageDraw
 
-ZIEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "neuro_enhance.ico")
+ZIEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "silberkorn.ico")
 KANTE = 1024                                  # Vorlage, wird heruntergerechnet
 GROESSEN = [16, 24, 32, 48, 64, 128, 256]
 

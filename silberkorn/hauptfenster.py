@@ -39,7 +39,7 @@ from . import PROGRAMM, VERSION, einstellungen, farben
 from .gpu_pruefung import STUFE_OHNE_KI, Befund
 from .uebersetzung import SOURCE_LANGUAGE, _
 
-SYMBOL_NAME = "neuro_enhance.ico"
+SYMBOL_NAME = "silberkorn.ico"
 
 
 def symbol_pfad() -> str:
@@ -294,7 +294,7 @@ class Hauptfenster(QMainWindow):
         karte, innen = self._karte(_("Marken & Hinweise"))
         for text in (
             _("NVIDIA, RTX, GeForce, CUDA und TensorRT sind Marken oder eingetragene Marken "
-              "der NVIDIA Corporation in den USA und anderen Ländern. Neuro-Enhance ist ein "
+              "der NVIDIA Corporation in den USA und anderen Ländern. Silberkorn ist ein "
               "unabhängiges Projekt und steht in keiner Verbindung zur NVIDIA Corporation; "
               "es wird von ihr weder unterstützt noch gesponsert."),
             _("Qt ist eine Marke der The Qt Company Ltd., Python eine Marke der Python "

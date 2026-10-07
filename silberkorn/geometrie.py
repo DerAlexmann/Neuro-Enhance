@@ -285,7 +285,7 @@ def _kernel():
                 ziel[3 * i + k] = summe * vignette;
             }
             """,
-            "neuro_enhance_geometrie",
+            "silberkorn_geometrie",
             preamble=r"""
             __device__ __forceinline__ void gewichte(float t, float* g) {
                 float t2 = t * t, t3 = t2 * t;

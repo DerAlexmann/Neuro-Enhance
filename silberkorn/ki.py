@@ -71,13 +71,13 @@ QUELLE_BIREFNET = "https://github.com/ZhengPeng7/BiRefNet"
 QUELLE_SAM2 = "https://github.com/facebookresearch/sam2"
 QUELLE_LAMA = "https://github.com/advimman/lama"
 QUELLE_TIEFE = "https://github.com/DepthAnything/Depth-Anything-V2"
-MODELL_RELEASE = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-1/"
-MODELL_RELEASE_2 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-2/"
-MODELL_RELEASE_3 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-3/"
-MODELL_RELEASE_4 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-4/"
-MODELL_RELEASE_5 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-5/"
-MODELL_RELEASE_6 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-6/"
-MODELL_RELEASE_7 = "https://github.com/DerAlexmann/Neuro-Enhance/releases/download/modelle-7/"
+MODELL_RELEASE = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-1/"
+MODELL_RELEASE_2 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-2/"
+MODELL_RELEASE_3 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-3/"
+MODELL_RELEASE_4 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-4/"
+MODELL_RELEASE_5 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-5/"
+MODELL_RELEASE_6 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-6/"
+MODELL_RELEASE_7 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-7/"
 BLOCK = 1 << 20
 
 # Datei -> (SHA-256, Groesse in Bytes)
@@ -281,7 +281,7 @@ def ordner_kandidaten() -> list[str]:
     """Wo Modelle liegen duerfen: neben dem Programm, sonst im Benutzerordner."""
     benutzer = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
     return [os.path.join(einstellungen.programm_ordner(), "modelle"),
-            os.path.join(benutzer, "Neuro-Enhance", "modelle")]
+            os.path.join(benutzer, "Silberkorn", "modelle")]
 
 
 def _beschreibbar(ordner: str) -> bool:
@@ -384,7 +384,7 @@ def herunterladen(modell: Modell, fortschritt=None, quelle: str | None = None) -
         pruef = hashlib.sha256()
         try:
             anfrage = urllib.request.Request(quelle + name,
-                                             headers={"User-Agent": "Neuro-Enhance"})
+                                             headers={"User-Agent": "Silberkorn"})
             with urllib.request.urlopen(anfrage, timeout=30) as antwort, \
                     open(teil, "wb") as datei:
                 while True:

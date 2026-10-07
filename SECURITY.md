@@ -29,5 +29,5 @@ Gepflegt wird jeweils die neueste veröffentlichte Version.
   laden KI-Modelle nur auf ausdrücklichen Wunsch und nur von der angezeigten
   Quelle; jede Modelldatei wird dabei gegen eine im Programm hinterlegte
   SHA-256-Prüfsumme geprüft.
-- **Gespeichert** werden in `neuro-enhance.json` neben dem Programm nur
+- **Gespeichert** werden in `silberkorn.json` neben dem Programm nur
   Sprache, Farbschema und Fensterlage.

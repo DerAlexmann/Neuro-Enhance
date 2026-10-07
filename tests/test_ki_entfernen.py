@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from neuro_enhance import ki
+from silberkorn import ki
 
 cp = pytest.importorskip("cupy")
 
@@ -48,15 +48,15 @@ class LinksVomKlick:
         return cp.broadcast_to(cp.where(spalte < x, 10.0, -10.0), (256, 256)).astype(cp.float32)
 
     def maske(self, logits):
-        from neuro_enhance import filter
+        from silberkorn import filter
         return (filter.vergroessern(logits, *self.form) > 0).astype(cp.float32)
 
 
 @pytest.fixture
 def sitzung():
     grafikkarte()
-    from neuro_enhance import bilddatei
-    from neuro_enhance.bearbeitung import Sitzung
+    from silberkorn import bilddatei
+    from silberkorn.bearbeitung import Sitzung
     pixel = np.full((120, 160, 3), 64, dtype=np.uint8)
     daten = bilddatei.Bilddaten(pixel=pixel, profil=None, alpha=None, exif=b"", pfad="t.png")
     s = Sitzung(daten, vorschau_kante=80)

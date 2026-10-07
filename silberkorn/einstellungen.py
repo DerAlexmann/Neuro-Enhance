@@ -16,7 +16,7 @@ import sys
 from . import farben
 from .uebersetzung import LANGUAGE_NAMES, SOURCE_LANGUAGE, TRANSLATIONS
 
-CONFIG_NAME = "neuro-enhance.json"
+CONFIG_NAME = "silberkorn.json"
 
 
 def ist_eingefroren() -> bool:
@@ -30,7 +30,7 @@ def programm_ordner() -> str:
     Als PyInstaller-EXE zeigt __file__ in den Entpackordner, der den
     Programmlauf nicht ueberdauert. Alles Bleibende gehoert deshalb neben die
     EXE. Als Skript ist es der Ordner ueber dem Paket, also der, in dem
-    Neuro-Enhance.pyw liegt.
+    Silberkorn.pyw liegt.
     """
     if ist_eingefroren():
         return os.path.dirname(os.path.abspath(sys.executable))

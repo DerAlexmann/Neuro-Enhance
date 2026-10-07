@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 from PIL import Image, ImageCms, ImageOps
 
-from neuro_enhance import bilddatei as b
-from neuro_enhance import icc
+from silberkorn import bilddatei as b
+from silberkorn import icc
 
 
 def muster(breite=40, hoehe=24, bits=8):

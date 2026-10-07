@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip("PySide6")
 pytest.importorskip("cupy")
 
-from neuro_enhance.bearbeiten_seite import speicherformate, ziel_bestimmen  # noqa: E402
+from silberkorn.bearbeiten_seite import speicherformate, ziel_bestimmen  # noqa: E402
 
 
 def filter_mit(endung, bits):

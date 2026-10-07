@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from neuro_enhance.uebersetzung import TRANSLATIONS
+from silberkorn.uebersetzung import TRANSLATIONS
 
-PAKET = Path(__file__).resolve().parent.parent / "neuro_enhance"
+PAKET = Path(__file__).resolve().parent.parent / "silberkorn"
 
 
 def texte_im_quelltext() -> set[str]:

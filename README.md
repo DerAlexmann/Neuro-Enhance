@@ -1,9 +1,9 @@
-# Neuro-Enhance
+# Silberkorn
 
-**Neuro-Enhance - An open-source, GPU-accelerated AI image & photo enhancer powered by neural networks.**<br>
-**Neuro-Enhance - ein quelloffener, GPU-beschleunigter KI-Bild- und Fotoverbesserer auf Basis neuronaler Netze.**
+**Silberkorn - An open-source, GPU-accelerated AI image & photo enhancer powered by neural networks.**<br>
+**Silberkorn - ein quelloffener, GPU-beschleunigter KI-Bild- und Fotoverbesserer auf Basis neuronaler Netze.**
 
-[![CI](https://github.com/DerAlexmann/Neuro-Enhance/actions/workflows/ci.yml/badge.svg)](https://github.com/DerAlexmann/Neuro-Enhance/actions/workflows/ci.yml)
+[![CI](https://github.com/DerAlexmann/Silberkorn/actions/workflows/ci.yml/badge.svg)](https://github.com/DerAlexmann/Silberkorn/actions/workflows/ci.yml)
 
 Supports hardware acceleration via NVIDIA CUDA / RTX series GPUs.<br>
 Unterstützt Hardwarebeschleunigung über NVIDIA CUDA und Grafikkarten der RTX-Serie.
@@ -18,7 +18,7 @@ NVIDIA Corporation.*
 
 ## Systemvoraussetzungen
 
-Neuro-Enhance rechnet ausschließlich auf der Grafikkarte. **Ohne NVIDIA-RTX-Grafikkarte
+Silberkorn rechnet ausschließlich auf der Grafikkarte. **Ohne NVIDIA-RTX-Grafikkarte
 startet das Programm nicht**, sondern meldet beim Start, was gefunden wurde und was fehlt.
 Einen Notbetrieb auf dem Prozessor gibt es bewusst nicht.
 
@@ -36,7 +36,7 @@ anderer Hersteller.
 
 ### Funktionsstufen
 
-Was verfügbar ist, hängt vor allem vom Grafikspeicher ab. Neuro-Enhance erkennt die
+Was verfügbar ist, hängt vor allem vom Grafikspeicher ab. Silberkorn erkennt die
 Stufe beim Start; Funktionen einer höheren Stufe erscheinen ausgegraut mit Hinweis.
 
 | Stufe | Grafikspeicher | Beispiele | Umfang |
@@ -178,7 +178,7 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 
 ```bash
 pip install -r requirements.txt
-python Neuro-Enhance.pyw
+python Silberkorn.pyw
 ```
 
 Die Pakete bringen CuPy und die nötigen CUDA-Bibliotheken von NVIDIA mit
@@ -199,20 +199,20 @@ pip install -r requirements-tensorrt.txt
 ```
 
 Das sind rund 1,8 GB Download (installiert 2,8 GB) vom Paketindex von NVIDIA.
-Neuro-Enhance erkennt TensorRT von selbst; unter „Info & Copyright“ steht die
+Silberkorn erkennt TensorRT von selbst; unter „Info & Copyright“ steht die
 Fassung. Beim ersten Vergrößern mit einem Modell baut TensorRT einmalig eine für
 die Grafikkarte passende Engine – das dauert ein bis drei Minuten (beim
 KI-Schärfen und Freistellen bis zu zehn), ein Fenster weist darauf hin. Die Engines liegen danach im Ordner `modelle/tensorrt`. Klappt
 TensorRT nicht, rechnet das Programm wie ohne mit CUDA.
 
 TensorRT steht unter einer proprietären Lizenz von NVIDIA, die mit der
-Installation gilt. Sie erlaubt nicht, TensorRT mit Neuro-Enhance weiterzugeben –
+Installation gilt. Sie erlaubt nicht, TensorRT mit Silberkorn weiterzugeben –
 deshalb gehört es auch zu keiner fertigen EXE, sondern wird immer selbst
 installiert.
 
 ## Datenschutz
 
-Neuro-Enhance arbeitet vollständig auf dem eigenen Rechner. Es werden keine Bilder
+Silberkorn arbeitet vollständig auf dem eigenen Rechner. Es werden keine Bilder
 hochgeladen und keine Nutzungsdaten gesendet. Auch die KI rechnet lokal auf der
 Grafikkarte. Die einzige Verbindung ins Netz ist das Laden eines KI-Modells – und
 das nur, wenn man in einer der Karten „KI-Hochskalieren“, „KI-Entrauschen“,
@@ -224,24 +224,24 @@ Größe und Lizenz bestätigt.
 
 Die Modelle gehören nicht zum Programm. „Modell herunterladen“ lädt sie aus
 Releases dieses Projekts: in der Karte „KI-Hochskalieren“ aus
-[modelle-1](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-1)
+[modelle-1](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-1)
 das schnelle Modell mit knapp 10 MB und das große mit 64 MB, in der Karte
 „KI-Entrauschen“ aus
-[modelle-2](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-2)
+[modelle-2](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-2)
 SCUNet mit 71 MB, in der Karte „KI-Schärfen“ aus
-[modelle-3](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-3)
+[modelle-3](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-3)
 Restormer mit 101 MB, in der Karte „Motiv & Hintergrund“ aus
-[modelle-4](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-4)
+[modelle-4](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-4)
 BiRefNet mit 177 MB und für „Objekt anklicken“ aus
-[modelle-5](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-5)
+[modelle-5](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-5)
 SAM 2 mit 147 MB, in der Karte „Objekte entfernen“ aus
-[modelle-6](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-6)
+[modelle-6](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-6)
 LaMa mit 196 MB, in der Karte „Tiefe & Bokeh“ aus
-[modelle-7](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-7)
+[modelle-7](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-7)
 Depth Anything V2 Small mit 98 MB. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft,
 bevor sie verwendet wird.
 Abgelegt werden sie im Ordner `modelle` neben dem Programm oder, wenn der
-schreibgeschützt ist, unter `%LOCALAPPDATA%\Neuro-Enhance\modelle`.
+schreibgeschützt ist, unter `%LOCALAPPDATA%\Silberkorn\modelle`.
 
 Die Modelle sind die offiziellen Gewichte von
 [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (BSD 3-Clause, Copyright 2021
@@ -308,5 +308,5 @@ der NVIDIA Corporation in den USA und anderen Ländern. Qt ist eine Marke der Th
 Company Ltd., Python eine Marke der Python Software Foundation, Windows eine Marke der
 Microsoft Corporation. Alle weiteren Marken gehören ihren jeweiligen Inhabern.
 
-Neuro-Enhance ist ein unabhängiges Projekt und steht in keiner Verbindung zur NVIDIA
+Silberkorn ist ein unabhängiges Projekt und steht in keiner Verbindung zur NVIDIA
 Corporation; es wird von ihr weder unterstützt noch gesponsert.

@@ -17,29 +17,28 @@ Meldung – siehe [SECURITY.md](SECURITY.md).
 
 | Datei | Inhalt |
 |---|---|
-| `Neuro-Enhance.pyw` | Startdatei für den Doppelklick |
-| `neuro_enhance/start.py` | Programmstart, Startprüfung, Startmeldungen |
-| `neuro_enhance/gpu_pruefung.py` | Grafikkarte über NVML erkennen und bewerten |
-| `neuro_enhance/hauptfenster.py` | Hauptfenster mit Kopfzeile, Reitern und Statuszeile |
-| `neuro_enhance/bearbeiten_seite.py` | Reiter „Bearbeiten“: Werkzeugleiste, Regler, Öffnen und Speichern |
-| `neuro_enhance/leinwand.py` | Anzeige, Zoom und Verschieben, Zuschnittrahmen, Ziehen und Ablegen |
-| `neuro_enhance/bearbeitung.py` | Sitzung: Original und Vorschau im Grafikspeicher |
-| `neuro_enhance/filter.py` | Filterformeln mit NumPy/CuPy – die Referenz |
-| `neuro_enhance/filter_gpu.py` | dieselben Formeln als zusammengefasste CUDA-Kernel |
-| `neuro_enhance/geometrie.py` | Zuschnitt, Drehen, Begradigen, Perspektive, Objektiv |
-| `neuro_enhance/lut.py` | `.cube`-LUTs lesen, tetraedrisch anwenden |
-| `neuro_enhance/kurven.py` | Gradationskurven: Punkte bearbeiten, Tabellen bilden |
-| `neuro_enhance/kurveneditor.py` | Kurvenfeld mit Histogramm |
-| `neuro_enhance/bilddatei.py` | Laden und Speichern: 8 Bit, 16 Bit, RAW, EXIF |
-| `neuro_enhance/demosaik.py` | RAW-Entwicklung auf der GPU (Bayer-Mosaik), Malvar-He-Cutler |
-| `neuro_enhance/rcd.py` | Demosaicing nach RCD: Referenz und CUDA-Kernel |
-| `neuro_enhance/icc.py` | ICC-Matrixprofile lesen und nach linearem sRGB umrechnen |
-| `neuro_enhance/ki.py` | KI-Hochskalieren: Modellkatalog, ONNX Runtime, Kacheln |
+| `Silberkorn.pyw` | Startdatei für den Doppelklick |
+| `silberkorn/start.py` | Programmstart, Startprüfung, Startmeldungen |
+| `silberkorn/gpu_pruefung.py` | Grafikkarte über NVML erkennen und bewerten |
+| `silberkorn/hauptfenster.py` | Hauptfenster mit Kopfzeile, Reitern und Statuszeile |
+| `silberkorn/bearbeiten_seite.py` | Reiter „Bearbeiten“: Werkzeugleiste, Regler, Öffnen und Speichern |
+| `silberkorn/leinwand.py` | Anzeige, Zoom und Verschieben, Zuschnittrahmen, Ziehen und Ablegen |
+| `silberkorn/bearbeitung.py` | Sitzung: Original und Vorschau im Grafikspeicher |
+| `silberkorn/filter.py` | Filterformeln mit NumPy/CuPy – die Referenz |
+| `silberkorn/filter_gpu.py` | dieselben Formeln als zusammengefasste CUDA-Kernel |
+| `silberkorn/geometrie.py` | Zuschnitt, Drehen, Begradigen, Perspektive, Objektiv |
+| `silberkorn/lut.py` | `.cube`-LUTs lesen, tetraedrisch anwenden |
+| `silberkorn/kurven.py` | Gradationskurven: Punkte bearbeiten, Tabellen bilden |
+| `silberkorn/kurveneditor.py` | Kurvenfeld mit Histogramm |
+| `silberkorn/bilddatei.py` | Laden und Speichern: 8 Bit, 16 Bit, RAW, EXIF |
+| `silberkorn/demosaik.py` | RAW-Entwicklung auf der GPU (Bayer-Mosaik), Malvar-He-Cutler |
+| `silberkorn/icc.py` | ICC-Matrixprofile lesen und nach linearem sRGB umrechnen |
+| `silberkorn/ki.py` | KI-Hochskalieren: Modellkatalog, ONNX Runtime, Kacheln |
 | `werkzeuge/modelle_exportieren.py` | Real-ESRGAN-Gewichte nach ONNX wandeln (braucht PyTorch) |
-| `neuro_enhance/cuda.py` | lädt CuPy an einer Stelle |
-| `neuro_enhance/farben.py` | Farbschemata, Schriften, Qt-Stylesheet |
-| `neuro_enhance/uebersetzung.py` | Sprachumschaltung und Sprachtabelle |
-| `neuro_enhance/einstellungen.py` | Einstellungsdatei neben dem Programm |
+| `silberkorn/cuda.py` | lädt CuPy an einer Stelle |
+| `silberkorn/farben.py` | Farbschemata, Schriften, Qt-Stylesheet |
+| `silberkorn/uebersetzung.py` | Sprachumschaltung und Sprachtabelle |
+| `silberkorn/einstellungen.py` | Einstellungsdatei neben dem Programm |
 | `tests/` | Tests für Kartenbewertung, Startmeldungen, Sprachtabelle, Filter und Dateien |
 | `icon_erzeugen.py` | Programmsymbol erzeugen |
 
@@ -59,7 +58,7 @@ Minuten. Die Startmeldungen lassen
 sich ohne passende Hardware ansehen:
 
 ```bash
-python Neuro-Enhance.pyw --simulieren=keine_rtx
+python Silberkorn.pyw --simulieren=keine_rtx
 ```
 
 Ebenso `kein_treiber`, `keine_nvidia`, `treiber_alt` und `wenig_vram`.

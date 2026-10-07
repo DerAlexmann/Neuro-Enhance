@@ -1,5 +1,5 @@
 [project]
-name = "neuro-enhance"
+name = "silberkorn"
 version = "0.1.0"
 description = "An open-source, GPU-accelerated AI image & photo enhancer powered by neural networks."
 readme = "README.en.md"
@@ -45,8 +45,8 @@ heif = ["pillow-heif"]
 tensorrt = ["tensorrt-cu12-libs==10.14.*"]
 
 [project.urls]
-Homepage = "https://github.com/DerAlexmann/Neuro-Enhance"
-Issues = "https://github.com/DerAlexmann/Neuro-Enhance/issues"
+Homepage = "https://github.com/DerAlexmann/Silberkorn"
+Issues = "https://github.com/DerAlexmann/Silberkorn/issues"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

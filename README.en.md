@@ -1,9 +1,9 @@
-# Neuro-Enhance
+# Silberkorn
 
-**Neuro-Enhance - An open-source, GPU-accelerated AI image & photo enhancer powered by neural networks.**<br>
-**Neuro-Enhance - ein quelloffener, GPU-beschleunigter KI-Bild- und Fotoverbesserer auf Basis neuronaler Netze.**
+**Silberkorn - An open-source, GPU-accelerated AI image & photo enhancer powered by neural networks.**<br>
+**Silberkorn - ein quelloffener, GPU-beschleunigter KI-Bild- und Fotoverbesserer auf Basis neuronaler Netze.**
 
-[![CI](https://github.com/DerAlexmann/Neuro-Enhance/actions/workflows/ci.yml/badge.svg)](https://github.com/DerAlexmann/Neuro-Enhance/actions/workflows/ci.yml)
+[![CI](https://github.com/DerAlexmann/Silberkorn/actions/workflows/ci.yml/badge.svg)](https://github.com/DerAlexmann/Silberkorn/actions/workflows/ci.yml)
 
 Supports hardware acceleration via NVIDIA CUDA / RTX series GPUs.
 
@@ -16,7 +16,7 @@ Supports hardware acceleration via NVIDIA CUDA / RTX series GPUs.
 
 ## System requirements
 
-Neuro-Enhance computes on the graphics card only. **Without an NVIDIA RTX graphics card
+Silberkorn computes on the graphics card only. **Without an NVIDIA RTX graphics card
 the program does not start**; instead it reports what was found and what is missing.
 There is deliberately no fallback mode on the CPU.
 
@@ -34,7 +34,7 @@ vendors.
 
 ### Feature tiers
 
-What is available depends mainly on the video memory. Neuro-Enhance detects the tier at
+What is available depends mainly on the video memory. Silberkorn detects the tier at
 start-up; features of a higher tier are shown greyed out with a note.
 
 | Tier | Video memory | Examples | Scope |
@@ -161,7 +161,7 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 
 ```bash
 pip install -r requirements.txt
-python Neuro-Enhance.pyw
+python Silberkorn.pyw
 ```
 
 The packages bring CuPy and the required CUDA libraries from NVIDIA (just over 1 GB in
@@ -181,7 +181,7 @@ pip install -r requirements-tensorrt.txt
 ```
 
 That is about 1.8 GB to download (2.8 GB installed) from NVIDIA's package index.
-Neuro-Enhance detects TensorRT by itself; "Info & Copyright" shows the version. The
+Silberkorn detects TensorRT by itself; "Info & Copyright" shows the version. The
 first time a model is used, TensorRT builds an engine for the graphics card once – this
 takes one to three minutes (up to ten for AI sharpen and subject detection), and a
 window says so. The engines are then kept in the
@@ -189,12 +189,12 @@ window says so. The engines are then kept in the
 it does without it.
 
 TensorRT is licensed under a proprietary NVIDIA licence that applies on installation.
-It does not allow TensorRT to be passed on together with Neuro-Enhance – which is why
+It does not allow TensorRT to be passed on together with Silberkorn – which is why
 it is not part of any ready-made executable and is always installed separately.
 
 ## Privacy
 
-Neuro-Enhance works entirely on your own computer. No images are uploaded and no usage
+Silberkorn works entirely on your own computer. No images are uploaded and no usage
 data is sent. The AI also runs locally on the graphics card. The only network access is
 downloading an AI model – and only when you explicitly ask for it in the "AI upscaling",
 "AI denoise", "AI sharpen", "Subject & background", "Remove objects" or "Depth & bokeh"
@@ -205,22 +205,22 @@ licence.
 
 The models are not part of the program. "Download model" fetches them from releases of
 this project: in the "AI upscaling" card from
-[modelle-1](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-1) the fast
+[modelle-1](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-1) the fast
 model with just under 10 MB and the large one with 64 MB, in the "AI denoise" card from
-[modelle-2](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-2) SCUNet
+[modelle-2](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-2) SCUNet
 with 71 MB, in the "AI sharpen" card from
-[modelle-3](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-3) Restormer
+[modelle-3](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-3) Restormer
 with 101 MB, in the "Subject & background" card from
-[modelle-4](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-4) BiRefNet
+[modelle-4](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-4) BiRefNet
 with 177 MB and for "Click object" from
-[modelle-5](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-5) SAM 2
+[modelle-5](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-5) SAM 2
 with 147 MB, in the "Remove objects" card from
-[modelle-6](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-6) LaMa
+[modelle-6](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-6) LaMa
 with 196 MB, in the "Depth & bokeh" card from
-[modelle-7](https://github.com/DerAlexmann/Neuro-Enhance/releases/tag/modelle-7) Depth
+[modelle-7](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-7) Depth
 Anything V2 Small with 98 MB. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
 folder next to the program or, if that is read-only, in
-`%LOCALAPPDATA%\Neuro-Enhance\modelle`.
+`%LOCALAPPDATA%\Silberkorn\modelle`.
 
 The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)
 (BSD 3-Clause, Copyright 2021 Xintao Wang), [SCUNet](https://github.com/cszn/SCUNet)
@@ -286,5 +286,5 @@ Qt Company Ltd., Python a trademark of the Python Software Foundation, Windows a
 of Microsoft Corporation. All other trademarks are the property of their respective
 owners.
 
-Neuro-Enhance is an independent project and is not affiliated with, endorsed or sponsored
+Silberkorn is an independent project and is not affiliated with, endorsed or sponsored
 by NVIDIA Corporation.

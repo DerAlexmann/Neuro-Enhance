@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from neuro_enhance import ki
+from silberkorn import ki
 
 cp = pytest.importorskip("cupy")
 
@@ -51,8 +51,8 @@ class Heller(Muster):
 @pytest.fixture
 def sitzung():
     grafikkarte()
-    from neuro_enhance import bilddatei
-    from neuro_enhance.bearbeitung import Sitzung
+    from silberkorn import bilddatei
+    from silberkorn.bearbeitung import Sitzung
     zufall = np.random.default_rng(5)
     pixel = (zufall.random((120, 160, 3)) * 200).astype(np.uint8)
     daten = bilddatei.Bilddaten(pixel=pixel, profil=None, alpha=None, exif=b"", pfad="t.png")
@@ -107,7 +107,7 @@ def test_geschaerft_wird_das_entrauschte_bild(sitzung):
 
 
 def test_ohne_entrauschen_wird_das_original_geschaerft(sitzung):
-    from neuro_enhance import filter
+    from silberkorn import filter
     muster = Muster()
     sitzung.ki_schaerfen(muster, 64)
     soll = filter.linear_zu_srgb(cp.clip(sitzung.original, 0, 1))

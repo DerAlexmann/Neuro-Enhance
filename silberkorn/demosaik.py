@@ -247,7 +247,7 @@ def _kernel():
             ziel[3 * i + 1] = matrix[3] * r + matrix[4] * g + matrix[5] * b;
             ziel[3 * i + 2] = matrix[6] * r + matrix[7] * g + matrix[8] * b;
             """,
-            "neuro_enhance_demosaik",
+            "silberkorn_demosaik",
             preamble=r"""
             __device__ __forceinline__ float wert(const unsigned short* roh, int hoehe, int breite,
                                                   const int* muster, const float* schwarz,

@@ -1,4 +1,4 @@
-Neuro-Enhance
+Silberkorn
 Copyright 2026 Alexander Unverhau
 Created with assistance of Claude AI
 
@@ -20,14 +20,14 @@ each is under the licence of its original as stated in its header:
 
 The licence texts are in the folder LICENSES.
 
-The NVIDIA libraries are not covered by the MIT License of Neuro-Enhance
+The NVIDIA libraries are not covered by the MIT License of Silberkorn
 and remain under NVIDIA's licence agreements; see below.
 
 ===========================================================================
 Third-party components
 ===========================================================================
 
-Neuro-Enhance uses the following components. They are not part of this
+Silberkorn uses the following components. They are not part of this
 repository; pip installs them from the Python Package Index. A released
 executable bundles them together with their licence texts.
 
@@ -35,7 +35,7 @@ PySide6 / Qt for Python
   Copyright The Qt Company Ltd. and other contributors
   Licence: GNU Lesser General Public License v3.0 (LGPL-3.0)
   https://www.qt.io/qt-for-python
-  Neuro-Enhance uses PySide6 and Qt unmodified and links them dynamically.
+  Silberkorn uses PySide6 and Qt unmodified and links them dynamically.
   You may replace the Qt and PySide6 libraries with your own build. The
   source code of Qt is available from https://download.qt.io/ and
   https://code.qt.io/.
@@ -80,7 +80,7 @@ rawpy
   rawpy bundles LibRaw, Copyright LibRaw LLC, licensed under the GNU Lesser
   General Public License v2.1 or the Common Development and Distribution
   License (CDDL) v1.0, at your choice. https://www.libraw.org/
-  Neuro-Enhance uses LibRaw unmodified through rawpy (as the separate
+  Silberkorn uses LibRaw unmodified through rawpy (as the separate
   library raw_r.dll) - including its demosaicing methods AHD and DHT.
 
 NVIDIA CUDA libraries (cuda-toolkit, nvidia-cuda-nvrtc-cu12,
@@ -90,12 +90,12 @@ nvidia-cuda-runtime-cu12 and related packages)
   https://docs.nvidia.com/cuda/eula/
   Installed by pip from NVIDIA's own packages on the Python Package Index.
   This repository does not contain or redistribute them, and a binary
-  release of Neuro-Enhance does not bundle them either: they are installed
+  release of Silberkorn does not bundle them either: they are installed
   from NVIDIA's packages on the user's computer.
 
 pillow-heif (optional, only for opening HEIC/HEIF files)
   Licence: BSD 3-Clause; bundles libheif (LGPL-3.0) and further codecs.
-  Not part of a binary release of Neuro-Enhance; users install it
+  Not part of a binary release of Silberkorn; users install it
   themselves if they want it.
   https://github.com/bigcat88/pillow_heif
 
@@ -115,7 +115,7 @@ NVIDIA cuDNN (nvidia-cudnn-cu12)
   https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html
   Installed by pip from NVIDIA's own package on the Python Package Index.
   This repository does not contain or redistribute it, and a binary release
-  of Neuro-Enhance does not bundle it either.
+  of Silberkorn does not bundle it either.
 
 NVIDIA TensorRT (tensorrt-cu12-libs, optional)
   Copyright NVIDIA Corporation
@@ -124,7 +124,7 @@ NVIDIA TensorRT (tensorrt-cu12-libs, optional)
   Only used if the user installs it with requirements-tensorrt.txt from
   NVIDIA's package index. The licence does not permit redistributing all
   libraries ONNX Runtime needs (it excludes the ONNX parser); this repository
-  and any binary release of Neuro-Enhance therefore neither contain nor
+  and any binary release of Silberkorn therefore neither contain nor
   redistribute TensorRT.
 
 ===========================================================================
@@ -132,7 +132,7 @@ AI models
 ===========================================================================
 
 AI models are not part of this repository. Each model is subject to its own
-licence, which Neuro-Enhance shows together with its source before
+licence, which Silberkorn shows together with its source before
 downloading.
 
 Real-ESRGAN (models realesr-general-x4v3, realesr-general-wdn-x4v3,
@@ -144,7 +144,7 @@ RealESRGAN_x4plus)
   werkzeuge/modelle_exportieren.py; the network architectures are
   re-implemented there. The converted model files are published as assets
   of the release "modelle-1" of this project, together with the BSD 3-Clause
-  licence text of Real-ESRGAN (LICENSE-Real-ESRGAN.txt), which Neuro-Enhance
+  licence text of Real-ESRGAN (LICENSE-Real-ESRGAN.txt), which Silberkorn
   also downloads and stores next to the models.
 
 SCUNet (model scunet_color_real_psnr)
@@ -160,7 +160,7 @@ SCUNet (model scunet_color_real_psnr)
   model accepts any image size. The weights themselves are unchanged. The
   converted model file is published as an asset of the release "modelle-2"
   of this project, together with the Apache 2.0 licence text of SCUNet
-  (LICENSE-SCUNet.txt), which Neuro-Enhance also downloads and stores next to
+  (LICENSE-SCUNet.txt), which Silberkorn also downloads and stores next to
   the model.
 
 Restormer (model single_image_defocus_deblurring)
@@ -175,7 +175,7 @@ Restormer (model single_image_defocus_deblurring)
   not overflow in half precision (FP16). The weights themselves are
   unchanged. The converted model file is published as an asset of the
   release "modelle-3" of this project, together with the MIT licence text of
-  Restormer (LICENSE-Restormer.txt), which Neuro-Enhance also downloads and
+  Restormer (LICENSE-Restormer.txt), which Silberkorn also downloads and
   stores next to the model.
 
 BiRefNet (model BiRefNet_lite-general-2K)
@@ -193,7 +193,7 @@ BiRefNet (model BiRefNet_lite-general-2K)
   input size is fixed to 2560 x 1440 as in training. The weights themselves
   are unchanged. The converted model file is published as an asset of the
   release "modelle-4" of this project, together with the MIT licence text of
-  BiRefNet (LICENSE-BiRefNet.txt), which Neuro-Enhance also downloads and
+  BiRefNet (LICENSE-BiRefNet.txt), which Silberkorn also downloads and
   stores next to the model.
 
 SAM 2 - Segment Anything in Images and Videos (model SAM 2.1 Hiera small)
@@ -219,7 +219,7 @@ SAM 2 - Segment Anything in Images and Videos (model SAM 2.1 Hiera small)
   object pointers, object score) are left out. The weights themselves are
   unchanged. The two converted model files (encoder and decoder) are
   published as assets of the release "modelle-5" of this project, together
-  with the Apache License 2.0 text (LICENSE-SAM2.txt), which Neuro-Enhance
+  with the Apache License 2.0 text (LICENSE-SAM2.txt), which Silberkorn
   also downloads and stores next to the model.
 
 LaMa - Resolution-robust Large Mask Inpainting with Fourier Convolutions
@@ -241,7 +241,7 @@ LaMa - Resolution-robust Large Mask Inpainting with Fourier Convolutions
   takes image and mask separately and blanks the masked area itself. The
   weights themselves are unchanged. The converted model file is published
   as an asset of the release "modelle-6" of this project, together with the
-  Apache License 2.0 text of LaMa (LICENSE-LaMa.txt), which Neuro-Enhance
+  Apache License 2.0 text of LaMa (LICENSE-LaMa.txt), which Silberkorn
   also downloads and stores next to the model.
 
 Depth Anything V2 (model Depth-Anything-V2-Small)
@@ -263,7 +263,7 @@ Depth Anything V2 (model Depth-Anything-V2-Small)
   training-only branches are left out. The weights themselves are
   unchanged. The converted model file is published as an asset of the
   release "modelle-7" of this project, together with the Apache License 2.0
-  text (LICENSE-DepthAnythingV2.txt), which Neuro-Enhance also downloads and
+  text (LICENSE-DepthAnythingV2.txt), which Silberkorn also downloads and
   stores next to the model.
 
 Only models whose licence permits use and redistribution in an
@@ -280,7 +280,7 @@ Python is a trademark of the Python Software Foundation.
 Windows is a trademark of Microsoft Corporation.
 All other trademarks are the property of their respective owners.
 
-Neuro-Enhance is an independent project and is not affiliated with,
+Silberkorn is an independent project and is not affiliated with,
 endorsed or sponsored by NVIDIA Corporation or any other trademark owner
 named above. Trademarks are used only to describe hardware and software
 compatibility.

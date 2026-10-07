@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from neuro_enhance import kurven as k
+from silberkorn import kurven as k
 
 
 def test_identitaet_ist_gerade():

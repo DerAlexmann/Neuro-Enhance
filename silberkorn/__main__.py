@@ -1,4 +1,4 @@
-"""Start ueber  python -m neuro_enhance"""
+"""Start ueber  python -m silberkorn"""
 
 import multiprocessing
 import sys

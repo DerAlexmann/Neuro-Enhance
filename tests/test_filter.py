@@ -11,8 +11,8 @@ import dataclasses
 import numpy as np
 import pytest
 
-from neuro_enhance import filter as f
-from neuro_enhance import kurven
+from silberkorn import filter as f
+from silberkorn import kurven
 
 
 @pytest.fixture

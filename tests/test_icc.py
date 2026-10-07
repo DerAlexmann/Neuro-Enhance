@@ -7,8 +7,8 @@ import struct
 import numpy as np
 from PIL import ImageCms
 
-from neuro_enhance import filter as f
-from neuro_enhance import icc
+from silberkorn import filter as f
+from silberkorn import icc
 
 # Adobe RGB (1998) nach XYZ, an D50 angepasst - wie im Profil von Adobe
 ADOBE_NACH_XYZ_D50 = np.array([

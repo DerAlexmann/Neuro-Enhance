@@ -9,8 +9,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from neuro_enhance import bilddatei as b
-from neuro_enhance import demosaik as d
+from silberkorn import bilddatei as b
+from silberkorn import demosaik as d
 
 SRGB_NACH_XYZ = np.array([[0.4124564, 0.3575761, 0.1804375],
                           [0.2126729, 0.7151522, 0.0721750],
@@ -183,7 +183,7 @@ def test_malvar_kernel_wie_referenz(muster, drehung):
 
 def test_beste_qualitaet_laesst_libraw_mit_dht_entwickeln(monkeypatch):
     rawpy = pytest.importorskip("rawpy")
-    from neuro_enhance import bilddatei
+    from silberkorn import bilddatei
     aufrufe = []
 
     class Roh:

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from neuro_enhance import gpu_pruefung as g
-from neuro_enhance import start
-from neuro_enhance.uebersetzung import _
+from silberkorn import gpu_pruefung as g
+from silberkorn import start
+from silberkorn.uebersetzung import _
 
 
 @pytest.fixture(params=["de", "en"])

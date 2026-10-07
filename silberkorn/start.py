@@ -5,7 +5,7 @@ Ohne geeignete NVIDIA-RTX-Karte gibt es keinen Notbetrieb: Die App meldet
 klar, was gefunden wurde und was fehlt, und beendet sich.
 
 Zum Ansehen der Startmeldungen ohne passende Hardware:
-    python Neuro-Enhance.pyw --simulieren=keine_rtx
+    python Silberkorn.pyw --simulieren=keine_rtx
 (ebenso kein_treiber, keine_nvidia, treiber_alt, wenig_vram)
 
 Licensed under MIT License
@@ -35,21 +35,21 @@ def meldungstext(befund: Befund) -> tuple[str, str]:
     karte = befund.karte.name if befund.karte else ""
     if befund.grund == gpu_pruefung.KEIN_TREIBER:
         return (_("Keine NVIDIA-Grafikkarte gefunden"),
-                _("Neuro-Enhance benötigt eine NVIDIA-RTX-Grafikkarte (ab der RTX-2000-Serie) "
+                _("Silberkorn benötigt eine NVIDIA-RTX-Grafikkarte (ab der RTX-2000-Serie) "
                   "mit installiertem NVIDIA-Treiber. Auf diesem Rechner wurde weder eine "
                   "NVIDIA-Grafikkarte noch ein NVIDIA-Treiber gefunden."))
     if befund.grund == gpu_pruefung.KEINE_NVIDIA:
         return (_("Keine NVIDIA-Grafikkarte gefunden"),
                 _("Der NVIDIA-Treiber ist installiert, meldet aber keine Grafikkarte. "
-                  "Neuro-Enhance benötigt eine NVIDIA-RTX-Grafikkarte (ab der RTX-2000-Serie)."))
+                  "Silberkorn benötigt eine NVIDIA-RTX-Grafikkarte (ab der RTX-2000-Serie)."))
     if befund.grund == gpu_pruefung.KEINE_RTX:
         return (_("Keine RTX-Grafikkarte gefunden"),
-                _("Gefunden: {karte}. Neuro-Enhance benötigt eine RTX-Grafikkarte mit "
+                _("Gefunden: {karte}. Silberkorn benötigt eine RTX-Grafikkarte mit "
                   "Tensor Cores (ab der RTX-2000-Serie). GTX-Karten und ältere Modelle "
                   "werden nicht unterstützt.").format(karte=karte))
     if befund.grund == gpu_pruefung.TREIBER_ALT:
         return (_("Grafiktreiber zu alt"),
-                _("Gefunden: {karte} mit Treiber {treiber}. Neuro-Enhance benötigt den "
+                _("Gefunden: {karte} mit Treiber {treiber}. Silberkorn benötigt den "
                   "NVIDIA-Treiber {mindestens} oder neuer. Bitte den Grafiktreiber "
                   "aktualisieren und das Programm danach erneut starten.")
                 .format(karte=karte, treiber=befund.treiber,

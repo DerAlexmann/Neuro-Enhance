@@ -144,11 +144,11 @@ TRANSLATIONS = {
             "This model needs at least feature tier {stufe}.",
         "Dieses Modell ist noch nicht geladen.": "This model has not been downloaded yet.",
         "Modell herunterladen ({mb} MB)": "Download model ({mb} MB)",
-        "Neuro-Enhance lädt {mb} MB von:\n{quelle}\n\n"
+        "Silberkorn lädt {mb} MB von:\n{quelle}\n\n"
         "Das Modell stammt von {herkunft} und wird nach dem Laden gegen seine "
         "Prüfsumme geprüft.\n\n"
         "Ablage: {ordner}\n\nJetzt herunterladen?":
-            "Neuro-Enhance downloads {mb} MB from:\n{quelle}\n\n"
+            "Silberkorn downloads {mb} MB from:\n{quelle}\n\n"
             "The model comes from {herkunft} and is checked against its checksum "
             "after downloading.\n\n"
             "Location: {ordner}\n\nDownload now?",
@@ -416,12 +416,12 @@ TRANSLATIONS = {
         "Einstellungen": "Settings",
         "Marken & Hinweise": "Trademarks & notices",
         "NVIDIA, RTX, GeForce, CUDA und TensorRT sind Marken oder eingetragene Marken "
-        "der NVIDIA Corporation in den USA und anderen Ländern. Neuro-Enhance ist ein "
+        "der NVIDIA Corporation in den USA und anderen Ländern. Silberkorn ist ein "
         "unabhängiges Projekt und steht in keiner Verbindung zur NVIDIA Corporation; "
         "es wird von ihr weder unterstützt noch gesponsert.":
             "NVIDIA, RTX, GeForce, CUDA and TensorRT are trademarks or registered "
             "trademarks of NVIDIA Corporation in the U.S. and other countries. "
-            "Neuro-Enhance is an independent project and is not affiliated with, "
+            "Silberkorn is an independent project and is not affiliated with, "
             "endorsed or sponsored by NVIDIA Corporation.",
         "Qt ist eine Marke der The Qt Company Ltd., Python eine Marke der Python "
         "Software Foundation, Windows eine Marke der Microsoft Corporation. Alle "
@@ -440,28 +440,28 @@ TRANSLATIONS = {
 
         # Startmeldungen
         "Keine NVIDIA-Grafikkarte gefunden": "No NVIDIA graphics card found",
-        "Neuro-Enhance benötigt eine NVIDIA-RTX-Grafikkarte (ab der RTX-2000-Serie) "
+        "Silberkorn benötigt eine NVIDIA-RTX-Grafikkarte (ab der RTX-2000-Serie) "
         "mit installiertem NVIDIA-Treiber. Auf diesem Rechner wurde weder eine "
         "NVIDIA-Grafikkarte noch ein NVIDIA-Treiber gefunden.":
-            "Neuro-Enhance requires an NVIDIA RTX graphics card (RTX 2000 series or "
+            "Silberkorn requires an NVIDIA RTX graphics card (RTX 2000 series or "
             "newer) with the NVIDIA driver installed. Neither an NVIDIA graphics card "
             "nor an NVIDIA driver was found on this computer.",
         "Der NVIDIA-Treiber ist installiert, meldet aber keine Grafikkarte. "
-        "Neuro-Enhance benötigt eine NVIDIA-RTX-Grafikkarte (ab der RTX-2000-Serie).":
-            "The NVIDIA driver is installed but reports no graphics card. Neuro-Enhance "
+        "Silberkorn benötigt eine NVIDIA-RTX-Grafikkarte (ab der RTX-2000-Serie).":
+            "The NVIDIA driver is installed but reports no graphics card. Silberkorn "
             "requires an NVIDIA RTX graphics card (RTX 2000 series or newer).",
         "Keine RTX-Grafikkarte gefunden": "No RTX graphics card found",
-        "Gefunden: {karte}. Neuro-Enhance benötigt eine RTX-Grafikkarte mit "
+        "Gefunden: {karte}. Silberkorn benötigt eine RTX-Grafikkarte mit "
         "Tensor Cores (ab der RTX-2000-Serie). GTX-Karten und ältere Modelle "
         "werden nicht unterstützt.":
-            "Found: {karte}. Neuro-Enhance requires an RTX graphics card with Tensor "
+            "Found: {karte}. Silberkorn requires an RTX graphics card with Tensor "
             "Cores (RTX 2000 series or newer). GTX cards and older models are not "
             "supported.",
         "Grafiktreiber zu alt": "Graphics driver too old",
-        "Gefunden: {karte} mit Treiber {treiber}. Neuro-Enhance benötigt den "
+        "Gefunden: {karte} mit Treiber {treiber}. Silberkorn benötigt den "
         "NVIDIA-Treiber {mindestens} oder neuer. Bitte den Grafiktreiber "
         "aktualisieren und das Programm danach erneut starten.":
-            "Found: {karte} with driver {treiber}. Neuro-Enhance requires NVIDIA driver "
+            "Found: {karte} with driver {treiber}. Silberkorn requires NVIDIA driver "
             "{mindestens} or newer. Please update the graphics driver and then start "
             "the program again.",
         "Die vollständigen Systemvoraussetzungen stehen in der README.":

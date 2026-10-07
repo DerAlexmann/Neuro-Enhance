@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from neuro_enhance import ki
+from silberkorn import ki
 
 cp = pytest.importorskip("cupy")
 
@@ -32,8 +32,8 @@ class Platzhalter:
 @pytest.fixture
 def sitzung():
     grafikkarte()
-    from neuro_enhance import bilddatei
-    from neuro_enhance.bearbeitung import Sitzung
+    from silberkorn import bilddatei
+    from silberkorn.bearbeitung import Sitzung
     zufall = np.random.default_rng(4)
     pixel = (zufall.random((120, 160, 3)) * 255).astype(np.uint8)
     daten = bilddatei.Bilddaten(pixel=pixel, profil=None, alpha=None, exif=b"", pfad="t.png")

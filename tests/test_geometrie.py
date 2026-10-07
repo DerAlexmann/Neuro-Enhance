@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from neuro_enhance import filter as f
-from neuro_enhance import geometrie as g
-from neuro_enhance.geometrie import Geometrie
+from silberkorn import filter as f
+from silberkorn import geometrie as g
+from silberkorn.geometrie import Geometrie
 
 
 @pytest.fixture

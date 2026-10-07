@@ -12,7 +12,7 @@ import os
 import numpy as np
 import pytest
 
-from neuro_enhance import ki
+from silberkorn import ki
 
 
 def test_modelle_je_stufe():
@@ -206,7 +206,7 @@ def test_katalog_vollstaendig():
             assert name in ki.DATEIEN
         assert modell.sha256 == ki.DATEIEN[modell.datei][0]
         assert modell.lizenzdatei in ki.dateien(modell)
-        assert modell.release.startswith("https://github.com/DerAlexmann/Neuro-Enhance/")
+        assert modell.release.startswith("https://github.com/DerAlexmann/Silberkorn/")
         assert modell.mindeststufe in ki.STUFEN and set(modell.kacheln) <= set(ki.STUFEN)
     assert set(ki.ALLE_MODELLE) == (set(ki.MODELLE) | set(ki.ENTRAUSCH_MODELLE)
                                     | set(ki.SCHAERF_MODELLE) | set(ki.MASKEN_MODELLE)

@@ -199,12 +199,12 @@ _licht = cp.ElementwiseKernel(
     }
     ziel[3 * i] = r; ziel[3 * i + 1] = g; ziel[3 * i + 2] = b;
     """,
-    "neuro_enhance_licht", preamble=_GEMEINSAM)
+    "silberkorn_licht", preamble=_GEMEINSAM)
 
 _helligkeit = cp.ElementwiseKernel(
     "raw float32 quelle", "raw float32 v",
     "v[i] = kodieren(luma(quelle[3 * i], quelle[3 * i + 1], quelle[3 * i + 2]));",
-    "neuro_enhance_helligkeit", preamble=_GEMEINSAM)
+    "silberkorn_helligkeit", preamble=_GEMEINSAM)
 
 _dunst = cp.ElementwiseKernel(
     "raw float32 quelle, raw float32 durchlass, int32 h0, int32 b0, float32 sy, float32 sx, "
@@ -226,7 +226,7 @@ _dunst = cp.ElementwiseKernel(
     }
     ziel[3 * i] = r; ziel[3 * i + 1] = g; ziel[3 * i + 2] = b;
     """,
-    "neuro_enhance_dunst", preamble=_GEMEINSAM)
+    "silberkorn_dunst", preamble=_GEMEINSAM)
 
 _klarheit = cp.ElementwiseKernel(
     "raw float32 quelle, raw float32 v, raw float32 weich, int32 h0, int32 b0, float32 sy, "
@@ -240,7 +240,7 @@ _klarheit = cp.ElementwiseKernel(
     float q = dekodieren(fmaxf(v_neu, 0.0f)) / fmaxf(luma(r, g, b), EPS);
     ziel[3 * i] = r * q; ziel[3 * i + 1] = g * q; ziel[3 * i + 2] = b * q;
     """,
-    "neuro_enhance_klarheit", preamble=_GEMEINSAM)
+    "silberkorn_klarheit", preamble=_GEMEINSAM)
 
 _kurven_farbe = cp.ElementwiseKernel(
     "raw float32 quelle, raw float32 tabellen, int32 n, int32 hell, int32 rot, int32 gruen, "
@@ -294,7 +294,7 @@ _kurven_farbe = cp.ElementwiseKernel(
     }
     ziel[3 * i] = r; ziel[3 * i + 1] = g; ziel[3 * i + 2] = b;
     """,
-    "neuro_enhance_kurven_farbe", preamble=_GEMEINSAM)
+    "silberkorn_kurven_farbe", preamble=_GEMEINSAM)
 
 # --------------------------------------------------------------------------
 # Entrauschen
@@ -324,7 +324,7 @@ _nlm = cp.ElementwiseKernel(
     }
     ziel[i] = summe / gewichte;
     """,
-    "neuro_enhance_nlm", preamble=_GEMEINSAM + r"""
+    "silberkorn_nlm", preamble=_GEMEINSAM + r"""
     __device__ __forceinline__ int spiegel(int a, int n) {
         return a < 0 ? -a : (a >= n ? 2 * (n - 1) - a : a);
     }
@@ -337,7 +337,7 @@ _helligkeit_setzen = cp.ElementwiseKernel(
     float q = dekodieren(fmaxf(v_neu[i], 0.0f)) / fmaxf(luma(r, g, b), EPS);
     ziel[3 * i] = r * q; ziel[3 * i + 1] = g * q; ziel[3 * i + 2] = b * q;
     """,
-    "neuro_enhance_helligkeit_setzen", preamble=_GEMEINSAM)
+    "silberkorn_helligkeit_setzen", preamble=_GEMEINSAM)
 
 _farbrauschen = cp.ElementwiseKernel(
     "raw float32 quelle, raw float32 v, raw float32 a, raw float32 b, int32 h0, int32 b0, "
@@ -360,7 +360,7 @@ _farbrauschen = cp.ElementwiseKernel(
         ziel[3 * i + k] = dekodieren(fmaxf(hell + chroma, 0.0f));
     }
     """,
-    "neuro_enhance_farbrauschen", preamble=_GEMEINSAM)
+    "silberkorn_farbrauschen", preamble=_GEMEINSAM)
 
 _AUSGABE = r"""
     float r = quelle[3 * i], g = quelle[3 * i + 1], b = quelle[3 * i + 2];
@@ -381,7 +381,7 @@ _ausgabe = {
         "raw float32 quelle, raw float32 v, raw float32 weich, float32 staerke",
         f"raw {typ} ziel",
         _AUSGABE.replace("TYP", ctyp).replace("HOECHST", hoechst),
-        f"neuro_enhance_ausgabe{bits}", preamble=_GEMEINSAM)
+        f"silberkorn_ausgabe{bits}", preamble=_GEMEINSAM)
     for bits, typ, ctyp, hoechst in ((8, "uint8", "unsigned char", "255.0f"),
                                      (16, "uint16", "unsigned short", "65535.0f"))
 }

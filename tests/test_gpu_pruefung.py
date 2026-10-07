@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from neuro_enhance import gpu_pruefung as g
+from silberkorn import gpu_pruefung as g
 
 GIB = 1024 ** 3
 
