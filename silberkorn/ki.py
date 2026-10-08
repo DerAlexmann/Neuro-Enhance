@@ -1,12 +1,14 @@
 """
 KI-Hochskalieren (Real-ESRGAN), KI-Entrauschen (SCUNet), KI-Schaerfen
 (Restormer), Freistellen (BiRefNet), Auswahl per Klick (SAM 2), Objekte
-entfernen (LaMa) und Tiefe schaetzen (Depth Anything V2) ueber ONNX Runtime
+entfernen (LaMa), Tiefe schaetzen (Depth Anything V2) und Bild erweitern
+(FLUX.2 [klein] mit Outpaint-LoRA) ueber ONNX Runtime
 
 Die Modelle stammen aus den offiziellen Releases von Real-ESRGAN (BSD-3-Clause),
 SCUNet (Apache-2.0), Restormer (MIT), BiRefNet (MIT), SAM 2, LaMa und Depth
 Anything V2 Small (alle drei Apache-2.0) und sind mit
-werkzeuge/modelle_exportieren.py nach ONNX gewandelt. Bereit liegen sie als
+werkzeuge/modelle_exportieren.py nach ONNX gewandelt; FLUX.2 [klein] 4B und
+die Outpaint-LoRA von fal (beide Apache-2.0) mit werkzeuge/outpaint_export.py. Bereit liegen sie als
 Dateien eigener Releases dieses Projekts, mit dem jeweiligen Lizenztext
 daneben. Heruntergeladen wird nur auf Wunsch des Anwenders; jede Datei wird
 gegen ihre SHA-256-Pruefsumme geprueft, bevor sie an ihren Platz kommt und
@@ -53,6 +55,7 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import importlib.util
+import math
 import os
 import sys
 import urllib.error
@@ -71,6 +74,7 @@ QUELLE_BIREFNET = "https://github.com/ZhengPeng7/BiRefNet"
 QUELLE_SAM2 = "https://github.com/facebookresearch/sam2"
 QUELLE_LAMA = "https://github.com/advimman/lama"
 QUELLE_TIEFE = "https://github.com/DepthAnything/Depth-Anything-V2"
+QUELLE_FLUX2 = "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B"
 MODELL_RELEASE = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-1/"
 MODELL_RELEASE_2 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-2/"
 MODELL_RELEASE_3 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-3/"
@@ -78,7 +82,24 @@ MODELL_RELEASE_4 = "https://github.com/DerAlexmann/Silberkorn/releases/download/
 MODELL_RELEASE_5 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-5/"
 MODELL_RELEASE_6 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-6/"
 MODELL_RELEASE_7 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-7/"
+MODELL_RELEASE_8 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-8/"
 BLOCK = 1 << 20
+# Pruefsumme einer Datei, deren Release noch aussteht - werkzeuge/outpaint_export.py
+# gibt die echten Summen und Groessen aus. Bis dahin lehnt datei_pruefen() jede
+# Datei mit diesem Namen ab.
+OFFEN = "0" * 64
+
+# Bild erweitern: FLUX.2 [klein] 4B mit eingerechneter Outpaint-LoRA, int8. GitHub
+# nimmt je Release-Datei hoechstens 2 GB an - die Gewichte des Transformers liegen
+# deshalb als externe ONNX-Daten auf mehrere Dateien verteilt; ONNX Runtime liest sie
+# aus dem Ordner der .onnx-Datei. Die Groessen sind bis zum Release geschaetzt.
+OUTPAINT_TRANSFORMER = "flux2-klein-outpaint.onnx"
+OUTPAINT_GEWICHTE = ("flux2-klein-outpaint-1.bin", "flux2-klein-outpaint-2.bin",
+                     "flux2-klein-outpaint-3.bin")
+OUTPAINT_KODIERER = "flux2-vae-kodierer.onnx"
+OUTPAINT_DEKODIERER = "flux2-vae-dekodierer.onnx"
+OUTPAINT_DATEN = "flux2-klein-outpaint-daten.npz"     # Prompt-Einbettung, VAE-Normierung
+OUTPAINT_NOTICE = "NOTICE-FLUX2-klein.txt"
 
 # Datei -> (SHA-256, Groesse in Bytes)
 DATEIEN = {
@@ -118,6 +139,17 @@ DATEIEN = {
         ("2b7c680369d243ed48c240d98f6263e1ca1a03e8c1035445b8614c0e4a909f6a", 102597798),
     "LICENSE-DepthAnythingV2.txt":
         ("c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4", 11357),
+    OUTPAINT_TRANSFORMER: (OFFEN, 4_000_000),
+    OUTPAINT_GEWICHTE[0]: (OFFEN, 1_900_000_000),
+    OUTPAINT_GEWICHTE[1]: (OFFEN, 1_900_000_000),
+    OUTPAINT_GEWICHTE[2]: (OFFEN, 350_000_000),
+    OUTPAINT_KODIERER: (OFFEN, 70_000_000),
+    OUTPAINT_DEKODIERER: (OFFEN, 100_000_000),
+    OUTPAINT_DATEN: (OFFEN, 15_730_000),
+    "LICENSE-FLUX2-klein.txt":
+        ("c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4", 11357),
+    OUTPAINT_NOTICE:
+        ("ff81c3175087a2d1e5cf128670177c4c35c75efe461a71f1befff738ea767c1e", 1590),
 }
 LIZENZDATEI = "LICENSE-Real-ESRGAN.txt"
 RAND = 10                    # Ueberlappung je Kachelseite in Eingabepixeln, wie in Real-ESRGAN
@@ -158,9 +190,12 @@ class Modell:
     # einmal, verkleinert, statt in Kacheln
     feste_groesse: tuple[int, int] | None = None
     ausgabe_kanaele: int = 3
-    # Weitere ONNX-Dateien (Datei, SHA-256), die zum Modell gehoeren - etwa der
-    # Decoder neben dem Encoder
+    # Weitere Dateien (Datei, SHA-256), die zum Modell gehoeren - etwa der Decoder
+    # neben dem Encoder
     weitere: tuple[tuple[str, str], ...] = ()
+    # Wie viel Grafikspeicher (GiB, wie die Karte ihn meldet) das Modell mindestens
+    # braucht, falls mehr als die Mindeststufe verspricht
+    mindest_vram: float = 0.0
 
 
 MODELLE = {
@@ -268,8 +303,27 @@ TIEFEN_MODELLE = {
         massstab=1, rand=0, vielfaches=14, nhwc=False, cuda_fp16=False,
         feste_groesse=(700, 1050), ausgabe_kanaele=1),
 }
+# Bild erweitern: FLUX.2 [klein] 4B, destilliert auf 4 Schritte, mit der Outpaint-LoRA
+# von fal (Staerke 1,1 fest eingerechnet) und in int8 (MatMulNBits). Es rechnet auf
+# rund einem Megapixel; der Transformer allein belegt gut 4 GB, mit den
+# Zwischenergebnissen braucht es eine Karte mit 8 GB (Spitze in PyTorch 6,2 GB).
+ERWEITER_MODELLE = {
+    "outpaint": Modell(
+        "outpaint", OUTPAINT_TRANSFORMER, DATEIEN[OUTPAINT_TRANSFORMER][0],
+        None,
+        "M", {"M": 1024, "L": 1024, "XL": 1024},
+        lizenz="Apache-2.0", quelle=QUELLE_FLUX2,
+        herkunft="FLUX.2 [klein] 4B (Apache-2.0, Black Forest Labs) mit der "
+                 "Outpaint-LoRA von fal (Apache-2.0)",
+        lizenzdatei="LICENSE-FLUX2-klein.txt", release=MODELL_RELEASE_8,
+        massstab=1, rand=0, vielfaches=16, nhwc=False, cuda_fp16=False,
+        weitere=tuple((name, DATEIEN[name][0]) for name in (
+            *OUTPAINT_GEWICHTE, OUTPAINT_KODIERER, OUTPAINT_DEKODIERER, OUTPAINT_DATEN,
+            OUTPAINT_NOTICE)),
+        mindest_vram=7.0),          # 8-GB-Karten melden 7,6 bis 8 GiB
+}
 ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE, **SCHAERF_MODELLE, **MASKEN_MODELLE,
-                **AUSWAHL_MODELLE, **ENTFERN_MODELLE, **TIEFEN_MODELLE}
+                **AUSWAHL_MODELLE, **ENTFERN_MODELLE, **TIEFEN_MODELLE, **ERWEITER_MODELLE}
 STUFEN = ("S", "M", "L", "XL")
 
 
@@ -320,6 +374,11 @@ def dateien(modell: Modell) -> list[str]:
 
 def angeboten(modell: Modell, stufe: str) -> bool:
     return stufe in STUFEN and STUFEN.index(stufe) >= STUFEN.index(modell.mindeststufe)
+
+
+def genug_vram(modell: Modell, vram_bytes: int) -> bool:
+    """Reicht der Grafikspeicher der Karte, auch ueber die Stufe hinaus?"""
+    return vram_bytes >= modell.mindest_vram * 2**30
 
 
 def kachelgroesse(modell: Modell, stufe: str) -> int:
@@ -1120,3 +1179,428 @@ class Tiefenschaetzer(_Netz):
         radius = max(2, round(max(fh, fb) / max(mh, mb)))
         fein = filter.gefuehrter_filter(fuehrung, grob, radius, 1e-4)
         return cp.ascontiguousarray(cp.clip(fein, 0, 1))
+
+
+# --------------------------------------------------------------------------
+# Bild erweitern (Outpainting): FLUX.2 [klein] mit Outpaint-LoRA
+# --------------------------------------------------------------------------
+#
+# Das Original kommt mittig auf eine Leinwand im Zielformat, der Rest wird
+# reingruen; die LoRA hat gelernt, gruene Flaechen passend zum Bild zu fuellen.
+# Gerechnet wird auf rund einem Megapixel (Kanten durch 16 teilbar), mit festem
+# Prompt, dessen Einbettung beiliegt - der Text-Encoder (Qwen3, 8 GB) entfaellt.
+# Die Ablaeufe folgen Flux2KleinPipeline aus diffusers 0.41: Latents in 2 x 2
+# zusammenfassen (patchify) und normieren, das Leinwandbild als Referenz-Tokens
+# neben die verrauschten Tokens legen (Zeitkoordinate 10 statt 0), vier
+# Euler-Schritte des Flow Matching mit verschobenem Zeitplan (compute_empirical_mu).
+#
+# Das Modell zeichnet das ganze Bild neu, auch den Bereich des Originals - mit
+# demselben leichten Farbstich wie die neuen Raender. farbe_angleichen() misst
+# den Stich am Original und nimmt ihn ueberall heraus; eingesetzt wird danach das
+# unveraenderte Original in voller Aufloesung, mit weichem Saum nur an den
+# erweiterten Seiten.
+#
+# Die Rechenhilfen nehmen NumPy- und CuPy-Arrays; die Tests laufen so auch ohne
+# Grafikkarte.
+
+OUTPAINT_FLAECHE = 1024 * 1024     # Arbeitsgroesse in Pixeln, hoechstens
+OUTPAINT_VIELFACHES = 16           # VAE (8) mal patchify (2)
+OUTPAINT_GRUEN = (0.0, 1.0, 0.0)   # was die LoRA fuellt (#00FF00)
+OUTPAINT_SCHRITTE = 4              # destilliertes Modell, ohne CFG (guidance 1.0)
+OUTPAINT_REFERENZ_T = 10           # Zeitkoordinate des Referenzbildes (diffusers: scale)
+OUTPAINT_SAUM = 0.015              # weicher Saum: Anteil der kurzen Kante des Originals
+OUTPAINT_GROSSER_RAND = 0.25       # ab hier erfindet die KI mehr, als sie sieht
+
+
+def _ndimage(xp):
+    if xp is np:
+        from scipy import ndimage
+    else:
+        from cupyx.scipy import ndimage
+    return ndimage
+
+
+def leinwand_planen(breite: int, hoehe: int, verhaeltnis: float, anteil: float = 1.0,
+                    raster: int = 1) -> tuple[int, int, int, int]:
+    """Leinwand im Seitenverhaeltnis verhaeltnis (Breite/Hoehe) um ein Original.
+
+    Rueckgabe (W, H, x, y) in Pixeln des Originals: Groesse der Leinwand und Lage
+    des Originals darin, mittig. anteil < 1 erweitert zusaetzlich rundum. x und y
+    liegen auf einem Vielfachen von raster (fuer die verkleinerte Vorschau).
+    """
+    bw, bh = breite / anteil, hoehe / anteil
+    if bw / bh < verhaeltnis:
+        bw = bh * verhaeltnis
+    else:
+        bh = bw / verhaeltnis
+    gross_b, gross_h = max(round(bw), breite), max(round(bh), hoehe)
+    x = (gross_b - breite) // 2 // raster * raster
+    y = (gross_h - hoehe) // 2 // raster * raster
+    return gross_b, gross_h, x, y
+
+
+def rand_anteile(breite: int, hoehe: int, gross_b: int, gross_h: int, x: int,
+                 y: int) -> tuple[float, float, float, float]:
+    """Wie viel je Seite dazukommt (links, oben, rechts, unten), als Anteil der
+    Kante des Originals in dieser Richtung."""
+    return (x / breite, y / hoehe, (gross_b - breite - x) / breite,
+            (gross_h - hoehe - y) / hoehe)
+
+
+def grosser_rand(breite: int, hoehe: int, gross_b: int, gross_h: int, x: int, y: int) -> bool:
+    return max(rand_anteile(breite, hoehe, gross_b, gross_h, x, y)) > OUTPAINT_GROSSER_RAND
+
+
+def arbeitsgroesse(gross_b: int, gross_h: int, flaeche: int = OUTPAINT_FLAECHE,
+                   vielfaches: int = OUTPAINT_VIELFACHES) -> tuple[int, int]:
+    """(Breite, Hoehe) fuers Modell: Seitenverhaeltnis der Leinwand, rund `flaeche`
+    Pixel, Kanten Vielfache von `vielfaches`. Nie mehr als `flaeche` - sonst
+    verkleinerte diffusers das Referenzbild selbst noch einmal."""
+    s = (flaeche / (gross_b * gross_h)) ** 0.5
+    ab = max(vielfaches, round(gross_b * s / vielfaches) * vielfaches)
+    ah = max(vielfaches, round(gross_h * s / vielfaches) * vielfaches)
+    while ab * ah > flaeche:
+        # Die Kante kuerzen, die beim Runden am meisten zugelegt hat
+        if ab / (gross_b * s) >= ah / (gross_h * s):
+            ab -= vielfaches
+        else:
+            ah -= vielfaches
+    return ab, ah
+
+
+def _skalieren(bild, hoehe: int, breite: int):
+    """Bild (h, w, k) auf (hoehe, breite): erst ganzzahlig mitteln, dann bilinear."""
+    faktor = max(1, min(bild.shape[0] // max(hoehe, 1), bild.shape[1] // max(breite, 1)))
+    xp = filter.xp_von(bild)
+    klein = filter.verkleinern_box(bild, faktor).astype(xp.float32)
+    return filter.vergroessern(klein, hoehe, breite)
+
+
+def eingabe_bauen(srgb, gross_b: int, gross_h: int, x: int, y: int, ab: int, ah: int):
+    """Leinwand fuers Modell: (ah, ab, 3) reingruen, das verkleinerte Original darauf.
+
+    Rueckgabe: Leinwand und (ox, oy, ob, oh), die Lage des Originals darin.
+    """
+    xp = filter.xp_von(srgb)
+    hoehe, breite = srgb.shape[:2]
+    sx, sy = ab / gross_b, ah / gross_h
+    ox, oy = round(x * sx), round(y * sy)
+    ob, oh = min(round(breite * sx), ab - ox), min(round(hoehe * sy), ah - oy)
+    leinwand = xp.empty((ah, ab, 3), dtype=xp.float32)
+    leinwand[...] = xp.asarray(OUTPAINT_GRUEN, dtype=xp.float32)
+    leinwand[oy:oy + oh, ox:ox + ob] = xp.clip(_skalieren(srgb, oh, ob), 0, 1)
+    return leinwand, (ox, oy, ob, oh)
+
+
+def patchify(latent):
+    """(1, C, H, W) -> (1, 4C, H/2, W/2): je 2 x 2 Punkte zu einem (wie diffusers)."""
+    b, c, h, w = latent.shape
+    teile = latent.reshape(b, c, h // 2, 2, w // 2, 2).transpose(0, 1, 3, 5, 2, 4)
+    return teile.reshape(b, c * 4, h // 2, w // 2)
+
+
+def unpatchify(latent):
+    b, c, h, w = latent.shape
+    teile = latent.reshape(b, c // 4, 2, 2, h, w).transpose(0, 1, 4, 2, 5, 3)
+    return teile.reshape(b, c // 4, h * 2, w * 2)
+
+
+def packen(latent):
+    """(1, C, h, w) -> Tokens (1, h*w, C), zeilenweise."""
+    b, c, h, w = latent.shape
+    return latent.reshape(b, c, h * w).transpose(0, 2, 1)
+
+
+def entpacken(tokens, hoehe: int, breite: int):
+    b, n, c = tokens.shape
+    return tokens.transpose(0, 2, 1).reshape(b, c, hoehe, breite)
+
+
+def positionen(hoehe: int, breite: int, t: int = 0, xp=np):
+    """Positions-IDs (h*w, 4) der Bild-Tokens: (T, Zeile, Spalte, 0), zeilenweise."""
+    zeilen, spalten = xp.meshgrid(xp.arange(hoehe, dtype=xp.float32),
+                                  xp.arange(breite, dtype=xp.float32), indexing="ij")
+    ids = xp.zeros((hoehe * breite, 4), dtype=xp.float32)
+    ids[:, 0] = t
+    ids[:, 1] = zeilen.ravel()
+    ids[:, 2] = spalten.ravel()
+    return ids
+
+
+def text_positionen(laenge: int, xp=np):
+    """Positions-IDs (L, 4) der Text-Tokens: (0, 0, 0, Stelle)."""
+    ids = xp.zeros((laenge, 4), dtype=xp.float32)
+    ids[:, 3] = xp.arange(laenge, dtype=xp.float32)
+    return ids
+
+
+def empirischer_mu(bild_tokens: int, schritte: int) -> float:
+    """Verschiebung des Zeitplans nach Bildgroesse - compute_empirical_mu aus diffusers."""
+    a1, b1 = 8.73809524e-05, 1.89833333
+    a2, b2 = 0.00016927, 0.45666666
+    if bild_tokens > 4300:
+        return float(a2 * bild_tokens + b2)
+    m_200 = a2 * bild_tokens + b2
+    m_10 = a1 * bild_tokens + b1
+    a = (m_200 - m_10) / 190.0
+    b = m_200 - 200.0 * a
+    return float(a * schritte + b)
+
+
+@dataclass(frozen=True)
+class Zeitplan:
+    """Die Einstellungen des FlowMatchEulerDiscreteScheduler, die hier zaehlen."""
+    dynamisch: bool = True         # use_dynamic_shifting
+    exponentiell: bool = True      # time_shift_type == "exponential"
+    verschiebung: float = 3.0      # shift, nur ohne dynamische Verschiebung
+    ende: float = 0.0              # shift_terminal, 0 = keins
+
+
+def sigmas_berechnen(schritte: int, mu: float, plan: Zeitplan) -> np.ndarray:
+    """Rauschanteile je Schritt, mit 0 am Ende (schritte + 1 Werte, float32).
+
+    Wie Flux2KleinPipeline: linspace(1, 1/n, n), verschoben um mu, und
+    FlowMatchEulerDiscreteScheduler.set_timesteps.
+    """
+    s = np.linspace(1.0, 1 / schritte, schritte).astype(np.float32)
+    if plan.dynamisch:
+        if plan.exponentiell:
+            s = math.exp(mu) / (math.exp(mu) + (1 / s - 1))
+        else:
+            s = mu / (mu + (1 / s - 1))
+    else:
+        s = plan.verschiebung * s / (1 + (plan.verschiebung - 1) * s)
+    if plan.ende:
+        rest = 1 - s
+        s = 1 - rest / (rest[-1] / (1 - plan.ende))
+    return np.append(s.astype(np.float32), np.float32(0))
+
+
+def euler_schritt(latents, geschwindigkeit, sigma: float, sigma_danach: float):
+    """Ein Schritt des Flow Matching: x <- x + (sigma' - sigma) * v."""
+    return latents + np.float32(sigma_danach - sigma) * geschwindigkeit
+
+
+def _weich(bild, sigma: float):
+    nd = _ndimage(filter.xp_von(bild))
+    if bild.ndim == 2:
+        return nd.gaussian_filter(bild, sigma)
+    xp = filter.xp_von(bild)
+    return xp.stack([nd.gaussian_filter(bild[..., k], sigma) for k in range(bild.shape[2])],
+                    axis=-1)
+
+
+def farbe_angleichen(roh, orig, ox: int, oy: int):
+    """Den Farbstich des Modells herausnehmen.
+
+    roh: Ergebnis des Modells (ah, ab, 3) sRGB 0..1; orig: das Original in der
+    Groesse, in der es auf der Leinwand lag (oh, ob, 3), an der Stelle (ox, oy).
+    Je Kanal eine lineare Abbildung Modell -> Original, gemessen im Bereich des
+    Originals; danach die weichgezeichnete Restabweichung vom naechsten Punkt des
+    Originals nach aussen fortgesetzt - so laufen auch oertliche Unterschiede
+    am Rand des Originals sanft in die neuen Raender aus.
+    """
+    xp = filter.xp_von(roh)
+    ah, ab = roh.shape[:2]
+    oh, ob = orig.shape[:2]
+    m = roh.astype(xp.float32, copy=True)
+    o = orig.astype(xp.float32)
+    for k in range(3):
+        x = m[oy:oy + oh, ox:ox + ob, k].ravel()
+        y = o[..., k].ravel()
+        mx, my = float(x.mean()), float(y.mean())
+        streuung = float(((x - mx) ** 2).mean())
+        a = float(((x - mx) * (y - my)).mean()) / streuung if streuung > 1e-8 else 1.0
+        m[..., k] = m[..., k] * a + (my - a * mx)
+    sigma = max(ab, ah) / 40
+    abweichung = xp.zeros_like(m)
+    gewicht = xp.zeros((ah, ab), dtype=xp.float32)
+    abweichung[oy:oy + oh, ox:ox + ob] = o - m[oy:oy + oh, ox:ox + ob]
+    gewicht[oy:oy + oh, ox:ox + ob] = 1
+    abweichung = _weich(abweichung, sigma) / xp.maximum(_weich(gewicht, sigma), 1e-3)[..., None]
+    _abstand, naechste = _ndimage(xp).distance_transform_edt(gewicht < 0.5,
+                                                             return_indices=True)
+    fortgesetzt = abweichung[naechste[0], naechste[1]]
+    return xp.clip(m + _weich(fortgesetzt, sigma), 0, 1).astype(xp.float32)
+
+
+def saum_deckkraft(gross_b: int, gross_h: int, x: int, y: int, breite: int, hoehe: int,
+                   saum: float, xp=np):
+    """Deckkraft des Originals (hoehe, breite) beim Einsetzen in die Leinwand.
+
+    Faellt zu den erweiterten Seiten hin ueber `saum` Pixel auf 0 ab; Seiten, an
+    denen das Original schon die Leinwand beruehrt, bleiben hart (1). Das ist der
+    euklidische Abstand zur Leinwand ausserhalb des Originals - bei einem Rechteck
+    der kleinste Abstand zu einer erweiterten Kante.
+    """
+    weit = xp.float32(1e9)
+    zeilen = xp.arange(hoehe, dtype=xp.float32)
+    spalten = xp.arange(breite, dtype=xp.float32)
+    oben = zeilen + 1 if y > 0 else xp.full_like(zeilen, weit)
+    unten = hoehe - zeilen if y + hoehe < gross_h else xp.full_like(zeilen, weit)
+    links = spalten + 1 if x > 0 else xp.full_like(spalten, weit)
+    rechts = breite - spalten if x + breite < gross_b else xp.full_like(spalten, weit)
+    abstand = xp.minimum(xp.minimum(oben, unten)[:, None], xp.minimum(links, rechts)[None, :])
+    return xp.clip(abstand / max(saum, 1e-6), 0, 1).astype(xp.float32)
+
+
+def saum_breite(breite: int, hoehe: int) -> float:
+    return max(4.0, round(min(breite, hoehe) * OUTPAINT_SAUM))
+
+
+def einsetzen(gross, orig, x: int, y: int, deckkraft):
+    """Das Original (h, w, k) mit Deckkraft (h, w) an (x, y) in die Leinwand setzen."""
+    hoehe, breite = orig.shape[:2]
+    ergebnis = gross.copy()
+    teil = ergebnis[y:y + hoehe, x:x + breite]
+    teil += deckkraft[..., None] * (orig - teil)
+    return ergebnis
+
+
+@dataclass(frozen=True)
+class OutpaintDaten:
+    """Was dem Transformer neben den Gewichten beiliegt (flux2-klein-outpaint-daten.npz)."""
+    prompt: object                 # Einbettung des festen Prompts (1, 512, 7680)
+    mittel: object                 # Normierung der Latents (bn des VAE), (1, 128, 1, 1)
+    streuung: object
+    zeitplan: Zeitplan
+
+
+def outpaint_daten_laden(pfad: str, xp=np) -> OutpaintDaten:
+    with np.load(pfad) as daten:
+        def feld(name, form=None):
+            wert = xp.asarray(daten[name], dtype=xp.float32)
+            return xp.ascontiguousarray(wert if form is None else wert.reshape(form))
+        return OutpaintDaten(
+            feld("prompt"), feld("bn_mittel", (1, -1, 1, 1)), feld("bn_std", (1, -1, 1, 1)),
+            Zeitplan(bool(daten["dynamisch"]), bool(daten["exponentiell"]),
+                     float(daten["verschiebung"]), float(daten["ende"])))
+
+
+def outpaint_rauschen(seed: int, tokens: int, kanaele: int, xp=np):
+    """Startrauschen (1, tokens, kanaele) - gleich fuer gleichen Seed."""
+    return xp.random.RandomState(seed).standard_normal((1, tokens, kanaele)).astype(xp.float32)
+
+
+def outpaint_rechnen(eingabe, rauschen, daten: OutpaintDaten, kodieren, transformieren,
+                     dekodieren, weiter=None):
+    """Der Ablauf von Flux2KleinPipeline.__call__ fuer ein Referenzbild, ohne CFG.
+
+    eingabe: Leinwand (ah, ab, 3) sRGB 0..1; rauschen: (1, n, 128) mit n = ah*ab/256.
+    Die Netze sind Funktionen: kodieren(bild (1, 3, ah, ab)) -> Latent (1, 32, ah/8,
+    ab/8), transformieren(eingaben: dict) -> Geschwindigkeit (1, 2n, 128),
+    dekodieren(latent) -> Bild (1, 3, ah, ab) sRGB 0..1. weiter() nach jedem Netzlauf.
+    NumPy oder CuPy - je nachdem, worauf eingabe liegt.
+    """
+    xp = filter.xp_von(eingabe)
+    weiter = weiter or (lambda: None)
+    ah, ab = eingabe.shape[:2]
+    h, w = ah // OUTPAINT_VIELFACHES, ab // OUTPAINT_VIELFACHES
+    n = h * w
+    bild = xp.ascontiguousarray(xp.moveaxis(eingabe.astype(xp.float32), -1, 0))[None]
+    roh = kodieren(bild)
+    del bild
+    weiter()
+    referenz = xp.ascontiguousarray(packen((patchify(roh) - daten.mittel) / daten.streuung))
+    ids = xp.ascontiguousarray(xp.concatenate([positionen(h, w, 0, xp),
+                                               positionen(h, w, OUTPAINT_REFERENZ_T, xp)]))
+    text_ids = text_positionen(daten.prompt.shape[1], xp)
+    sigmas = sigmas_berechnen(OUTPAINT_SCHRITTE, empirischer_mu(n, OUTPAINT_SCHRITTE),
+                              daten.zeitplan)
+    latents = rauschen
+    for i in range(OUTPAINT_SCHRITTE):
+        eingang = xp.ascontiguousarray(xp.concatenate([latents, referenz], axis=1))
+        geschwindigkeit = transformieren({
+            "latents": eingang, "prompt": daten.prompt,
+            "zeit": xp.asarray([sigmas[i]], dtype=xp.float32),
+            "bild_ids": ids, "text_ids": text_ids})
+        # Nur die eigenen Tokens zaehlen, nicht die des Referenzbildes
+        latents = euler_schritt(latents, geschwindigkeit[:, :n], sigmas[i], sigmas[i + 1])
+        del eingang, geschwindigkeit
+        weiter()
+    latent = unpatchify(entpacken(latents, h, w) * daten.streuung + daten.mittel)
+    ergebnis = dekodieren(xp.ascontiguousarray(latent, dtype=xp.float32))
+    weiter()
+    return xp.ascontiguousarray(xp.clip(xp.moveaxis(ergebnis[0], 0, -1), 0, 1))
+
+
+class Erweiterer(_Netz):
+    """FLUX.2 [klein] mit Outpaint-LoRA - erfindet die Raender um ein Bild.
+
+    Drei Netze: Transformer (int8, auf mehrere Dateien verteilt), VAE-Encoder und
+    VAE-Decoder (FP16, Ein- und Ausgaenge FP32 in sRGB 0..1). Dazu liegen die
+    Prompt-Einbettung, die Normierung der Latents (bn des VAE) und die
+    Einstellungen des Zeitplans bei.
+    """
+
+    def __init__(self, modell: Modell | None = None):
+        modell = modell or ERWEITER_MODELLE["outpaint"]
+        pfade = {name: datei_pruefen(name, sha256) for name, sha256 in modell.weitere}
+        haupt = datei_pfad(modell.datei)
+        for name in OUTPAINT_GEWICHTE:
+            # ONNX Runtime sucht die externen Gewichte neben der .onnx-Datei
+            if haupt is None or os.path.dirname(pfade[name]) != os.path.dirname(haupt):
+                raise KiFehler(f"{name} muss im selben Ordner liegen wie {modell.datei}.")
+        super().__init__(modell, fp16=False, kachel=None, tensorrt=False)
+        self.kodierer = self._cuda_sitzung(pfade[OUTPAINT_KODIERER])
+        self.dekodierer = self._cuda_sitzung(pfade[OUTPAINT_DEKODIERER])
+        self.daten = outpaint_daten_laden(pfade[OUTPAINT_DATEN], cp)
+
+    def _rechnen(self, sitzung, eingaben: dict, ausgabe_name: str, form):
+        ausgabe = cp.empty(form, dtype=cp.float32)
+        try:
+            _binden(sitzung, eingaben, {ausgabe_name: ausgabe})
+        except cp.cuda.memory.OutOfMemoryError as fehler:
+            raise KiFehler("Zu wenig Grafikspeicher zum Erweitern.") from fehler
+        except Exception as fehler:              # ORT wirft eigene Fehlerklassen
+            text = str(fehler)
+            if "memory" in text.lower() or "alloc" in text.lower():
+                raise KiFehler("Zu wenig Grafikspeicher zum Erweitern.") from fehler
+            raise KiFehler(text) from fehler
+        return ausgabe
+
+    def erzeugen(self, eingabe, seed: int, fortschritt=None):
+        """Leinwand (ah, ab, 3) sRGB 0..1 auf der GPU, Gruen = zu fuellen ->
+        Ergebnis des Modells, gleiche Form. fortschritt(i, n) nach jedem Netzlauf;
+        gibt es False zurueck, wird abgebrochen."""
+        ah, ab = eingabe.shape[:2]
+        n = (ah // OUTPAINT_VIELFACHES) * (ab // OUTPAINT_VIELFACHES)
+        kanaele = self.daten.mittel.shape[1]
+        anzahl, nummer = OUTPAINT_SCHRITTE + 2, 0
+
+        def weiter():
+            nonlocal nummer
+            nummer += 1
+            if fortschritt is not None and fortschritt(nummer, anzahl) is False:
+                raise KiAbbruch()
+
+        return outpaint_rechnen(
+            eingabe, outpaint_rauschen(seed, n, kanaele, cp), self.daten,
+            lambda bild: self._rechnen(self.kodierer, {"bild": bild}, "latent",
+                                       (1, kanaele // 4, ah // 8, ab // 8)),
+            lambda eingaben: self._rechnen(self.sitzung, eingaben, "geschwindigkeit",
+                                           (1, 2 * n, kanaele)),
+            lambda latent: self._rechnen(self.dekodierer, {"latent": latent}, "bild",
+                                         (1, 3, ah, ab)),
+            weiter)
+
+    def raender(self, srgb, gross_b: int, gross_h: int, x: int, y: int, seed: int,
+                fortschritt=None):
+        """sRGB-Original (h, w, 3) 0..1 auf der GPU -> Leinwand (H, W, 3) in voller
+        Groesse, wie sie das Modell sieht: farblich ans Original angeglichen, aber
+        noch ohne eingesetztes Original (das setzt einsetzen() mit Saum ein)."""
+        ab, ah = arbeitsgroesse(gross_b, gross_h)
+        eingabe, (ox, oy, ob, oh) = eingabe_bauen(srgb, gross_b, gross_h, x, y, ab, ah)
+        roh = self.erzeugen(eingabe, seed, fortschritt)
+        angeglichen = farbe_angleichen(roh, eingabe[oy:oy + oh, ox:ox + ob], ox, oy)
+        del roh, eingabe
+        return filter.vergroessern(angeglichen, gross_h, gross_b)
+
+    def erweitern(self, srgb, verhaeltnis: float, seed: int, fortschritt=None):
+        """sRGB-Original (h, w, 3) -> erweitertes Bild im Seitenverhaeltnis, auf der GPU."""
+        hoehe, breite = srgb.shape[:2]
+        gross_b, gross_h, x, y = leinwand_planen(breite, hoehe, verhaeltnis)
+        gross = self.raender(srgb, gross_b, gross_h, x, y, seed, fortschritt)
+        deckkraft = saum_deckkraft(gross_b, gross_h, x, y, breite, hoehe,
+                                   saum_breite(breite, hoehe), cp)
+        return einsetzen(gross, srgb.astype(cp.float32), x, y, deckkraft)
