@@ -211,7 +211,7 @@ def test_katalog_vollstaendig():
     assert set(ki.ALLE_MODELLE) == (set(ki.MODELLE) | set(ki.ENTRAUSCH_MODELLE)
                                     | set(ki.SCHAERF_MODELLE) | set(ki.MASKEN_MODELLE)
                                     | set(ki.AUSWAHL_MODELLE) | set(ki.ENTFERN_MODELLE)
-                                    | set(ki.TIEFEN_MODELLE))
+                                    | set(ki.TIEFEN_MODELLE) | set(ki.ERWEITER_MODELLE))
 
 
 def test_entrauschmodell_aus_eigenem_release():
@@ -224,6 +224,7 @@ def test_entrauschmodell_aus_eigenem_release():
     assert ki.AUSWAHL_MODELLE["sam2"].release == ki.MODELL_RELEASE_5
     assert ki.ENTFERN_MODELLE["lama"].release == ki.MODELL_RELEASE_6
     assert ki.TIEFEN_MODELLE["tiefe"].release == ki.MODELL_RELEASE_7
+    assert ki.ERWEITER_MODELLE["outpaint"].release == ki.MODELL_RELEASE_8
 
 
 def test_weitere_dateien_gehoeren_zum_modell():
