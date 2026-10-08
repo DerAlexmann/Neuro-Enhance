@@ -313,8 +313,9 @@ Wer das selbst nachvollziehen will:
    `<ordner>/klein-4b-destilliert/transformer/` und
    `flux-outpaint-lora.safetensors` von
    [fal](https://huggingface.co/fal/flux-2-klein-4B-outpaint-lora) nach
-   `<ordner>/lora/` laden, dann `pip install torch diffusers peft transformers`
-   und `python werkzeuge/outpaint_export.py <ordner>`. Das braucht rund 48 GB
+   `<ordner>/lora/` laden, dann
+   `pip install torch diffusers peft transformers onnx onnx-ir scipy`
+   und `python werkzeuge/outpaint_export.py <ordner>`. Das braucht rund 30 GB
    Arbeitsspeicher und prüft jedes Netz sowie den ganzen Ablauf gegen diffusers.
 
 ## Hinweis zu KI-Ergebnissen

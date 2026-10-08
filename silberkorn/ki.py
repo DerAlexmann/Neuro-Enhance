@@ -92,7 +92,8 @@ OFFEN = "0" * 64
 # Bild erweitern: FLUX.2 [klein] 4B mit eingerechneter Outpaint-LoRA, int8. GitHub
 # nimmt je Release-Datei hoechstens 2 GB an - die Gewichte des Transformers liegen
 # deshalb als externe ONNX-Daten auf mehrere Dateien verteilt; ONNX Runtime liest sie
-# aus dem Ordner der .onnx-Datei. Die Groessen sind bis zum Release geschaetzt.
+# aus dem Ordner der .onnx-Datei. MatMul (int8-Gewichte) und Attention rechnen in
+# FP16, der Rest in FP32 - ganz in FP16 laufen die Aktivierungen ueber (NaN).
 OUTPAINT_TRANSFORMER = "flux2-klein-outpaint.onnx"
 OUTPAINT_GEWICHTE = ("flux2-klein-outpaint-1.bin", "flux2-klein-outpaint-2.bin",
                      "flux2-klein-outpaint-3.bin")
@@ -139,17 +140,24 @@ DATEIEN = {
         ("2b7c680369d243ed48c240d98f6263e1ca1a03e8c1035445b8614c0e4a909f6a", 102597798),
     "LICENSE-DepthAnythingV2.txt":
         ("c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4", 11357),
-    OUTPAINT_TRANSFORMER: (OFFEN, 4_000_000),
-    OUTPAINT_GEWICHTE[0]: (OFFEN, 1_900_000_000),
-    OUTPAINT_GEWICHTE[1]: (OFFEN, 1_900_000_000),
-    OUTPAINT_GEWICHTE[2]: (OFFEN, 350_000_000),
-    OUTPAINT_KODIERER: (OFFEN, 70_000_000),
-    OUTPAINT_DEKODIERER: (OFFEN, 100_000_000),
-    OUTPAINT_DATEN: (OFFEN, 15_730_000),
+    OUTPAINT_TRANSFORMER:
+        ("7b142a619b1fe979afea9cebcca58b7f190ca0ed432870cb6b7a8b9ad975c052", 2090922),
+    OUTPAINT_GEWICHTE[0]:
+        ("05175916238ef91c1d5d6934c5a54841240e756c30dcbc0b11d4eea254a6df32", 1893335040),
+    OUTPAINT_GEWICHTE[1]:
+        ("df5979950f12e816cc5764aebf1533e4de09364b8939eff7c401b41415de8990", 1840250880),
+    OUTPAINT_GEWICHTE[2]:
+        ("cd45115e7f23e4473afadc3a7c7f693f7b7385c31fbd961d1b95a7912c19b9cc", 206794752),
+    OUTPAINT_KODIERER:
+        ("a90651cbe02e4f761988cbf2f7ba3cacdd60d1d158dc67d301594c14778c6bce", 68942587),
+    OUTPAINT_DEKODIERER:
+        ("cd844387a12a49598479d3938ace3c0bdea4e199fc0aec477037eddd3e89150a", 99345574),
+    OUTPAINT_DATEN:
+        ("85aceb5808cd6ccd44d58815a08757db3fdeb2b4f06773fa97c1285860c08cba", 15731444),
     "LICENSE-FLUX2-klein.txt":
         ("c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4", 11357),
     OUTPAINT_NOTICE:
-        ("ff81c3175087a2d1e5cf128670177c4c35c75efe461a71f1befff738ea767c1e", 1590),
+        ("dc4d5e17f058373b302df5cc7496972d2955779caaaf6e5b299cdf6fbdeb40ab", 1610),
 }
 LIZENZDATEI = "LICENSE-Real-ESRGAN.txt"
 RAND = 10                    # Ueberlappung je Kachelseite in Eingabepixeln, wie in Real-ESRGAN
@@ -651,6 +659,9 @@ class _Netz:
     def beschleuniger(self) -> str:
         return "TensorRT" if self.tensorrt else "CUDA"
 
+    def _speichergrenze(self) -> int:
+        return _speichergrenze()
+
     def _optionen(self):
         optionen = self._ort.SessionOptions()
         optionen.log_severity_level = 3
@@ -665,7 +676,7 @@ class _Netz:
                                                "prefer_nhwc": "1" if halb and self.modell.nhwc
                                                else "0",
                                                "arena_extend_strategy": "kSameAsRequested",
-                                               "gpu_mem_limit": str(_speichergrenze())})]
+                                               "gpu_mem_limit": str(self._speichergrenze())})]
         try:
             sitzung = self._ort.InferenceSession(netz, self._optionen(), providers=anbieter)
         except Exception as fehler:               # ORT wirft eigene Fehlerklassen
@@ -943,15 +954,22 @@ class Freisteller(_Netz):
         return cp.ascontiguousarray(cp.clip(maske, 0, 1))
 
 
-def _binden(sitzung, eingaben: dict, ausgaben: dict):
-    """Netz mit CuPy-Arrays (float32) als Ein- und Ausgaengen rechnen, alles auf der GPU."""
+def _binden(sitzung, eingaben: dict, ausgaben: dict, schrumpfen: bool = False):
+    """Netz mit CuPy-Arrays (float32) als Ein- und Ausgaengen rechnen, alles auf der GPU.
+    schrumpfen: danach gibt ONNX Runtime seinen Zwischenspeicher wieder frei, statt ihn
+    fuer den naechsten Lauf zu behalten - fuer Netze, die sich den Speicher teilen."""
     bindung = sitzung.io_binding()
     for name, wert in eingaben.items():
         bindung.bind_input(name, "cuda", 0, np.float32, list(wert.shape), wert.data.ptr)
     for name, wert in ausgaben.items():
         bindung.bind_output(name, "cuda", 0, np.float32, list(wert.shape), wert.data.ptr)
     cp.cuda.Device().synchronize()                 # CuPy hat fertig geschrieben
-    sitzung.run_with_iobinding(bindung)
+    optionen = None
+    if schrumpfen:
+        import onnxruntime as ort
+        optionen = ort.RunOptions()
+        optionen.add_run_config_entry("memory.enable_memory_arena_shrinkage", "gpu:0")
+    sitzung.run_with_iobinding(bindung, optionen)
 
 
 class Auswaehler(_Netz):
@@ -1204,6 +1222,16 @@ class Tiefenschaetzer(_Netz):
 # Grafikkarte.
 
 OUTPAINT_FLAECHE = 1024 * 1024     # Arbeitsgroesse in Pixeln, hoechstens
+# Mit weniger als 12 GB: Gewichte (4,2 GB) und Zwischenwerte von 1 MP (3,5 GB) passen
+# nicht zusammen in 8 GB. RTX 4060 (8 GB): 0,6 MP, 4 Schritte je ~3,5 s
+OUTPAINT_FLAECHE_KNAPP = 640 * 1024
+OUTPAINT_VRAM_VOLL = 11.5 * 2**30  # ab hier die volle Arbeitsgroesse (12-GB-Karten)
+OUTPAINT_FLAECHE_MIN = 256 * 1024  # kleiner wird nicht versucht - zu wenig Details
+OUTPAINT_RESERVE = 768 << 20       # Grafikspeicher fuer Windows und die Anzeige
+
+
+class _ErweiternSpeicher(KiFehler):
+    """Zu wenig Grafikspeicher fuer die gewaehlte Arbeitsgroesse."""
 OUTPAINT_VIELFACHES = 16           # VAE (8) mal patchify (2)
 OUTPAINT_GRUEN = (0.0, 1.0, 0.0)   # was die LoRA fuellt (#00FF00)
 OUTPAINT_SCHRITTE = 4              # destilliertes Modell, ohne CFG (guidance 1.0)
@@ -1545,17 +1573,29 @@ class Erweiterer(_Netz):
         self.kodierer = self._cuda_sitzung(pfade[OUTPAINT_KODIERER])
         self.dekodierer = self._cuda_sitzung(pfade[OUTPAINT_DEKODIERER])
         self.daten = outpaint_daten_laden(pfade[OUTPAINT_DATEN], cp)
+        gesamt = cp.cuda.runtime.memGetInfo()[1]
+        self.flaeche = OUTPAINT_FLAECHE if gesamt >= OUTPAINT_VRAM_VOLL \
+            else OUTPAINT_FLAECHE_KNAPP
+
+    def _speichergrenze(self) -> int:
+        """Grenze je Sitzung: der ganze Grafikspeicher bis auf eine Reserve - nicht nur,
+        was beim Anlegen frei ist. Drei Sitzungen teilen sich den Speicher und geben
+        ihn nach jedem Lauf zurueck; mit der engeren Grenze scheiterte der Transformer
+        am zweiten Bild anderer Form, obwohl genug frei war (Arena von ONNX Runtime)."""
+        return max(1 << 30, cp.cuda.runtime.memGetInfo()[1] - OUTPAINT_RESERVE)
 
     def _rechnen(self, sitzung, eingaben: dict, ausgabe_name: str, form):
         ausgabe = cp.empty(form, dtype=cp.float32)
         try:
-            _binden(sitzung, eingaben, {ausgabe_name: ausgabe})
+            # Drei Netze teilen sich den Speicher: jedes gibt seinen Zwischenspeicher
+            # zurueck, sonst haelt der Transformer ihn, und der Decoder muss auslagern
+            _binden(sitzung, eingaben, {ausgabe_name: ausgabe}, schrumpfen=True)
         except cp.cuda.memory.OutOfMemoryError as fehler:
-            raise KiFehler("Zu wenig Grafikspeicher zum Erweitern.") from fehler
+            raise _ErweiternSpeicher("Zu wenig Grafikspeicher zum Erweitern.") from fehler
         except Exception as fehler:              # ORT wirft eigene Fehlerklassen
             text = str(fehler)
             if "memory" in text.lower() or "alloc" in text.lower():
-                raise KiFehler("Zu wenig Grafikspeicher zum Erweitern.") from fehler
+                raise _ErweiternSpeicher("Zu wenig Grafikspeicher zum Erweitern.") from fehler
             raise KiFehler(text) from fehler
         return ausgabe
 
@@ -1566,6 +1606,8 @@ class Erweiterer(_Netz):
         ah, ab = eingabe.shape[:2]
         n = (ah // OUTPAINT_VIELFACHES) * (ab // OUTPAINT_VIELFACHES)
         kanaele = self.daten.mittel.shape[1]
+        # Was CuPy fuer grosse Bilder vorhaelt, braucht jetzt ONNX Runtime
+        cp.get_default_memory_pool().free_all_blocks()
         anzahl, nummer = OUTPAINT_SCHRITTE + 2, 0
 
         def weiter():
@@ -1589,9 +1631,20 @@ class Erweiterer(_Netz):
         """sRGB-Original (h, w, 3) 0..1 auf der GPU -> Leinwand (H, W, 3) in voller
         Groesse, wie sie das Modell sieht: farblich ans Original angeglichen, aber
         noch ohne eingesetztes Original (das setzt einsetzen() mit Saum ein)."""
-        ab, ah = arbeitsgroesse(gross_b, gross_h)
-        eingabe, (ox, oy, ob, oh) = eingabe_bauen(srgb, gross_b, gross_h, x, y, ab, ah)
-        roh = self.erzeugen(eingabe, seed, fortschritt)
+        while True:
+            ab, ah = arbeitsgroesse(gross_b, gross_h, self.flaeche)
+            eingabe, (ox, oy, ob, oh) = eingabe_bauen(srgb, gross_b, gross_h, x, y, ab, ah)
+            try:
+                roh = self.erzeugen(eingabe, seed, fortschritt)
+                break
+            except _ErweiternSpeicher:
+                # Wie viel neben den Gewichten frei bleibt, haengt von Bild und Fragmentierung
+                # ab: kleiner versuchen und es fuer die naechsten Bilder so lassen
+                del eingabe
+                cp.get_default_memory_pool().free_all_blocks()
+                if self.flaeche <= OUTPAINT_FLAECHE_MIN:
+                    raise
+                self.flaeche = max(OUTPAINT_FLAECHE_MIN, int(self.flaeche * 0.75))
         angeglichen = farbe_angleichen(roh, eingabe[oy:oy + oh, ox:ox + ob], ox, oy)
         del roh, eingabe
         return filter.vergroessern(angeglichen, gross_h, gross_b)

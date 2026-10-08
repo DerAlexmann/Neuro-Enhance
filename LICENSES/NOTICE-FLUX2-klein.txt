@@ -23,7 +23,8 @@ https://github.com/DerAlexmann/Silberkorn):
     the range 0..1; the decoder returns images in the range 0..1.
   - The weights of the matrix multiplications of the transformer are
     quantised to 8-bit integers (MatMulNBits, block size 128, symmetric);
-    its other weights and the VAE are stored in 16-bit floating point.
+    its other weights are stored in 32-bit, those of the VAE in 16-bit
+    floating point.
   - The weights of the transformer are split into several files.
   - flux2-klein-outpaint-daten.npz holds the embedding of the fixed prompt
     "Fill the green spaces according to the image", computed with the text
