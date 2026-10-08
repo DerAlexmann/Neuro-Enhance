@@ -375,6 +375,8 @@ class BearbeitenSeite(QWidget):
         self.vorher_knopf.released.connect(lambda: self._vorher_zeigen(False))
         leiste.addWidget(self.vorher_knopf)
         self.zuruecksetzen_knopf = self._knopf(_("Alles zurücksetzen"), self.alles_zuruecksetzen)
+        self.fenster.beschriften(self.zuruecksetzen_knopf.setToolTip, _(
+            "Setzt alle Regler, Drehung und Zuschnitt zurück und verwirft eine KI-Erweiterung."))
         leiste.addWidget(self.zuruecksetzen_knopf)
         return leiste
 
@@ -1805,7 +1807,10 @@ class BearbeitenSeite(QWidget):
         if self.leinwand.zuschnitt is not None:
             # Im Zuschnittmodus das ganze Bild zeigen, der Rahmen liegt darueber
             werte = dataclasses.replace(werte, zuschnitt=VOLLER_ZUSCHNITT)
-        self.leinwand.voll_form = self.sitzung.ausgabe_form(werte)
+        # „Vorher“ zeigt nach einem KI-Erweitern das Original ohne die erfundenen Raender -
+        # eingepasst; in der 100-%-Ansicht passte der sichtbare Ausschnitt nicht mehr
+        ohne_raender = self._vorher and self.sitzung.erweitert and self.leinwand.zoom is None
+        self.leinwand.voll_form = self.sitzung.ausgabe_form(werte, ohne_erweiterung=ohne_raender)
         if self._klick_ziel is not None:
             ziel = self._klick_ziel
             gleich = (not self._vorher
@@ -1813,7 +1818,8 @@ class BearbeitenSeite(QWidget):
             self.leinwand.klickpunkte = list(self._klick_marken.get(ziel, [])) if gleich else []
         self.sitzung.tiefe_zeigen = self.tiefe_zeigen_box.isChecked() and not self._vorher
         if self.leinwand.zoom is None:
-            bild, ms, histogramm = self.sitzung.vorschau(werte=werte)
+            bild, ms, histogramm = self.sitzung.vorschau(werte=werte,
+                                                         ohne_erweiterung=ohne_raender)
             self.leinwand.zeigen(bild)
         else:
             bereich = self.leinwand.sichtbarer_bereich()
@@ -1835,6 +1841,9 @@ class BearbeitenSeite(QWidget):
 
     def alles_zuruecksetzen(self):
         self.zuschnitt_abbrechen()
+        if self.erweitern_box.isChecked():
+            # Auch die KI-Erweiterung gehoert zu „alles“: Abwaehlen verwirft sie
+            self.erweitern_box.setChecked(False)
         if self.sitzung is not None:
             self.sitzung.werte = filter.Einstellungen()
         self._alles_anzeigen()

@@ -100,6 +100,8 @@ TRANSLATIONS = {
         "Gedrückt halten, um das unbearbeitete Bild zu sehen.":
             "Hold down to see the unedited image.",
         "Alles zurücksetzen": "Reset all",
+        "Setzt alle Regler, Drehung und Zuschnitt zurück und verwirft eine KI-Erweiterung.":
+            "Resets all sliders, rotation and crop and discards an AI extension.",
         "Doppelklick setzt den Regler zurück.": "Double-click resets the slider.",
 
         # Reglergruppen und Regler
