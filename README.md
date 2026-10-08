@@ -112,6 +112,15 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   auf Wunsch ganz scharf. Gerechnet wird in linearem Licht, damit Lichter
   aufblühen, und Scharfes läuft nicht als Schein ins Unscharfe. Ab 4 GB
   Grafikspeicher.
+- **KI-Erweitern** mit FLUX.2 [klein] 4B und der Outpaint-LoRA von fal: Statt
+  auf ein Seitenverhältnis zuzuschneiden, erfindet die KI die fehlenden Ränder
+  passend zum Bild dazu – etwa um ein 4:3-Foto auf 16:9 zu bringen. Das Original
+  bleibt Pixel für Pixel erhalten und wird mit weichem Saum eingesetzt, ein
+  Farbstich der KI wird am Original gemessen und herausgenommen. „Neu erzeugen“
+  würfelt die Ränder neu; die Regler wirken danach auf das ganze Bild. Kommt
+  mehr als ein Viertel je Seite dazu, weist das Programm darauf hin, dass die KI
+  dann mehr erfindet, als sie sieht. Rund eine halbe Minute auf einer RTX 4060;
+  braucht 8 GB Grafikspeicher.
 - **Geometrie**: um 90° drehen, spiegeln, begradigen, Perspektive senkrecht
   und waagrecht, Zuschneiden mit Rahmen und festen Seitenverhältnissen. Leere
   Ecken nach dem Begradigen werden automatisch weggeschnitten.
@@ -228,8 +237,8 @@ Silberkorn arbeitet vollständig auf dem eigenen Rechner. Es werden keine Bilder
 hochgeladen und keine Nutzungsdaten gesendet. Auch die KI rechnet lokal auf der
 Grafikkarte. Die einzige Verbindung ins Netz ist das Laden eines KI-Modells – und
 das nur, wenn man in einer der Karten „KI-Hochskalieren“, „KI-Entrauschen“,
-„KI-Schärfen“, „Motiv & Hintergrund“, „Objekte entfernen“ oder „Tiefe & Bokeh“
-ausdrücklich auf das Laden klickt und die Rückfrage mit Quelle,
+„KI-Schärfen“, „Motiv & Hintergrund“, „Objekte entfernen“, „Tiefe & Bokeh“ oder
+bei „Mit KI erweitern“ in der Karte „Geometrie“ ausdrücklich auf das Laden klickt und die Rückfrage mit Quelle,
 Größe und Lizenz bestätigt. Die EXE lädt außerdem beim ersten Start – ebenfalls
 erst nach Zustimmung – die NVIDIA-Bibliotheken von pypi.org.
 
@@ -251,7 +260,11 @@ SAM 2 mit 147 MB, in der Karte „Objekte entfernen“ aus
 [modelle-6](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-6)
 LaMa mit 196 MB, in der Karte „Tiefe & Bokeh“ aus
 [modelle-7](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-7)
-Depth Anything V2 Small mit 98 MB. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft,
+Depth Anything V2 Small mit 98 MB und in der Karte „Geometrie“ für „Mit KI
+erweitern“ aus
+[modelle-8](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-8)
+FLUX.2 [klein] 4B mit Outpaint-LoRA mit rund 4,3 GB – auf mehrere Dateien
+verteilt, denn GitHub nimmt je Datei höchstens 2 GB an. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft,
 bevor sie verwendet wird.
 Abgelegt werden sie im Ordner `modelle` neben dem Programm oder, wenn der
 schreibgeschützt ist, unter `%LOCALAPPDATA%\Silberkorn\modelle`.
@@ -265,7 +278,12 @@ Copyright 2022 Syed Waqas Zamir), [BiRefNet](https://github.com/ZhengPeng7/BiRef
 (Apache-2.0, Copyright Meta Platforms, Inc. and affiliates) und
 [LaMa](https://github.com/advimman/lama) (Apache-2.0, Copyright 2021 Samsung
 Research) und [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2)
-Small (Apache-2.0), nach ONNX gewandelt.
+Small (Apache-2.0), nach ONNX gewandelt; dazu
+[FLUX.2 [klein] 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
+(Apache-2.0, Black Forest Labs) mit der
+[Outpaint-LoRA von fal](https://huggingface.co/fal/flux-2-klein-4B-outpaint-lora)
+(Apache-2.0), die LoRA eingerechnet und der Transformer nach int8 quantisiert
+(NOTICE nennt alle Änderungen).
 Wer das selbst nachvollziehen will:
 
 1. Aus den [Releases von Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/releases)
@@ -287,6 +305,17 @@ Wer das selbst nachvollziehen will:
 2. `pip install torch` (nur für diesen Schritt nötig).
 3. `python werkzeuge/modelle_exportieren.py` – das legt die ONNX-Modelle in
    `modelle/` ab und prüft sie gegen PyTorch.
+4. Für KI-Erweitern von Hugging Face
+   [FLUX.2-klein-base-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-base-4B)
+   (Text-Encoder, Tokenizer, VAE, Scheduler) nach `<ordner>/klein-base-4b/`, den
+   Transformer von
+   [FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) nach
+   `<ordner>/klein-4b-destilliert/transformer/` und
+   `flux-outpaint-lora.safetensors` von
+   [fal](https://huggingface.co/fal/flux-2-klein-4B-outpaint-lora) nach
+   `<ordner>/lora/` laden, dann `pip install torch diffusers peft transformers`
+   und `python werkzeuge/outpaint_export.py <ordner>`. Das braucht rund 48 GB
+   Arbeitsspeicher und prüft jedes Netz sowie den ganzen Ablauf gegen diffusers.
 
 ## Hinweis zu KI-Ergebnissen
 

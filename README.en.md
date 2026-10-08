@@ -102,6 +102,13 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   stays sharp, and a detected subject can be kept fully sharp. The blur is computed in
   linear light so that highlights bloom, and sharp areas do not bleed into blurred ones.
   From 4 GB of graphics memory.
+- **AI extend** with FLUX.2 [klein] 4B and the outpaint LoRA by fal: instead of cropping
+  to an aspect ratio, the AI invents the missing borders to match the image – for
+  example to turn a 4:3 photo into 16:9. The original is kept pixel for pixel and set in
+  with a soft seam; a colour cast of the AI is measured on the original and removed.
+  "Regenerate" rolls new borders; the sliders then work on the whole image. If more than
+  a quarter per side is added, the program points out that the AI then invents more
+  than it sees. About half a minute on an RTX 4060; needs 8 GB of graphics memory.
 - **Geometry**: rotate by 90°, flip, straighten, vertical and horizontal perspective, crop
   with a frame and fixed aspect ratios. Empty corners after straightening are cropped
   away automatically.
@@ -211,7 +218,7 @@ Silberkorn works entirely on your own computer. No images are uploaded and no us
 data is sent. The AI also runs locally on the graphics card. The only network access is
 downloading an AI model – and only when you explicitly ask for it in the "AI upscaling",
 "AI denoise", "AI sharpen", "Subject & background", "Remove objects" or "Depth & bokeh"
-card and confirm the prompt that names source, size and
+card or at "Extend with AI" in the "Geometry" card and confirm the prompt that names source, size and
 licence. The executable also downloads the NVIDIA libraries from pypi.org at first
 start – likewise only after you agree.
 
@@ -232,7 +239,10 @@ with 147 MB, in the "Remove objects" card from
 [modelle-6](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-6) LaMa
 with 196 MB, in the "Depth & bokeh" card from
 [modelle-7](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-7) Depth
-Anything V2 Small with 98 MB. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
+Anything V2 Small with 98 MB, and for "Extend with AI" in the "Geometry" card from
+[modelle-8](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-8) FLUX.2
+[klein] 4B with the outpaint LoRA with about 4.3 GB – split into several files, as GitHub
+accepts at most 2 GB per file. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
 folder next to the program or, if that is read-only, in
 `%LOCALAPPDATA%\Silberkorn\modelle`.
 
@@ -244,7 +254,12 @@ The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/
 (Apache-2.0, Copyright Meta Platforms, Inc. and affiliates) and
 [LaMa](https://github.com/advimman/lama) (Apache-2.0, Copyright 2021 Samsung Research)
 and [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2) Small
-(Apache-2.0), converted to ONNX. To reproduce this yourself:
+(Apache-2.0), converted to ONNX; in addition
+[FLUX.2 [klein] 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
+(Apache-2.0, Black Forest Labs) with the
+[outpaint LoRA by fal](https://huggingface.co/fal/flux-2-klein-4B-outpaint-lora)
+(Apache-2.0), with the LoRA merged in and the transformer quantised to int8 (NOTICE lists
+all changes). To reproduce this yourself:
 
 1. Download `realesr-general-x4v3.pth`, `realesr-general-wdn-x4v3.pth` and
    `RealESRGAN_x4plus.pth` from the
@@ -265,6 +280,15 @@ and [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2) Smal
 2. `pip install torch` (only needed for this step).
 3. `python werkzeuge/modelle_exportieren.py` – this writes the ONNX models to `modelle/`
    and checks them against PyTorch.
+4. For AI extend, download from Hugging Face
+   [FLUX.2-klein-base-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-base-4B)
+   (text encoder, tokenizer, VAE, scheduler) into `<folder>/klein-base-4b/`, the
+   transformer of [FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
+   into `<folder>/klein-4b-destilliert/transformer/` and `flux-outpaint-lora.safetensors`
+   from [fal](https://huggingface.co/fal/flux-2-klein-4B-outpaint-lora) into
+   `<folder>/lora/`, then run `pip install torch diffusers peft transformers` and
+   `python werkzeuge/outpaint_export.py <folder>`. This needs about 48 GB of RAM and
+   checks every network as well as the whole pipeline against diffusers.
 
 ## A note on AI results
 

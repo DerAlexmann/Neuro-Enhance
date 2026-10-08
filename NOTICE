@@ -268,6 +268,33 @@ Depth Anything V2 (model Depth-Anything-V2-Small)
   text (LICENSE-DepthAnythingV2.txt), which Silberkorn also downloads and
   stores next to the model.
 
+FLUX.2 [klein] 4B with the outpaint LoRA by fal (for "Extend with AI")
+  FLUX.2 [klein] 4B: Copyright Black Forest Labs
+  Licence: Apache License 2.0
+  https://huggingface.co/black-forest-labs/FLUX.2-klein-4B
+  https://huggingface.co/black-forest-labs/FLUX.2-klein-base-4B
+  flux-2-klein-4B-outpaint-lora: Copyright fal
+  Licence: Apache License 2.0
+  https://huggingface.co/fal/flux-2-klein-4B-outpaint-lora
+  The transformer of the distilled model and the VAE are converted to ONNX
+  with werkzeuge/outpaint_export.py, which uses diffusers and contains no
+  code of the originals. Changes to the originals: the LoRA is merged into
+  the transformer weights with a scale of 1.1; the weights of its matrix
+  multiplications are quantised to 8-bit integers (MatMulNBits, block size
+  128), its other weights and the VAE are stored in 16-bit floating point;
+  for the export, rotary embedding and RMSNorm are written out as plain
+  operations computing the same result; the VAE encoder returns the mean of
+  the latent distribution and both VAE parts take and return images in
+  0..1. The embedding of the fixed prompt "Fill the green spaces according
+  to the image", computed with the text encoder of FLUX.2 [klein] base 4B
+  (Qwen3, Apache License 2.0), is stored together with the batch-norm
+  statistics of the VAE and the scheduler settings. The converted files are
+  published as assets of the release "modelle-8" of this project, the
+  transformer weights split into several files, together with the Apache
+  License 2.0 text (LICENSE-FLUX2-klein.txt) and a notice of these changes
+  (NOTICE-FLUX2-klein.txt, also in LICENSES/), which Silberkorn also
+  downloads and stores next to the model.
+
 Only models whose licence permits use and redistribution in an
 open-source project are offered by default.
 
