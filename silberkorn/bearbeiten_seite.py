@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import random
 from concurrent.futures import wait
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer
@@ -472,6 +473,18 @@ class BearbeitenSeite(QWidget):
         leiste.addWidget(self.zuschnitt_weg_knopf)
         innen.addLayout(leiste)
 
+        # KI-Erweitern: statt auf das Seitenverhaeltnis zuzuschneiden, Raender erfinden
+        self.erweitern_box = QCheckBox()
+        self.fenster.beschriften(self.erweitern_box.setText,
+                                 _("Mit KI erweitern statt beschneiden"))
+        self.erweitern_box.toggled.connect(self._erweitern_umgeschaltet)
+        innen.addWidget(self.erweitern_box)
+        self.erweitern_hinweis = QLabel(objectName="nebentext")
+        self.erweitern_hinweis.setWordWrap(True)
+        innen.addWidget(self.erweitern_hinweis)
+        self.erweitern_knopf = self._knopf("", self.erweitern, "kanal")
+        innen.addWidget(self.erweitern_knopf)
+
     # ------------------------------------------------------------------
     # Geometrie: Drehen, Spiegeln, Zuschneiden
     # ------------------------------------------------------------------
@@ -555,6 +568,9 @@ class BearbeitenSeite(QWidget):
     def _verhaeltnis_gewaehlt(self, *_args):
         if self.sitzung is None:
             return
+        if self.erweitern_box.isChecked() and self.leinwand.zuschnitt is None:
+            self._erweitern_anzeigen()             # erweitert wird erst auf Knopfdruck
+            return
         verhaeltnis = self._verhaeltnis()
         if self.leinwand.zuschnitt is not None:
             self.leinwand.seitenverhaeltnis_setzen(verhaeltnis)
@@ -564,6 +580,147 @@ class BearbeitenSeite(QWidget):
             self.sitzung.werte.zuschnitt = rahmen_mit_verhaeltnis(
                 self.sitzung.werte.zuschnitt, verhaeltnis, rahmen_form)
             self.zeichnen_anfordern()
+
+    # ------------------------------------------------------------------
+    # KI-Erweitern (Outpainting)
+    # ------------------------------------------------------------------
+
+    def _erweitern_modell(self) -> ki.Modell:
+        return ki.ERWEITER_MODELLE["outpaint"]
+
+    def _vram(self) -> int:
+        karte = self.fenster.befund.karte
+        return karte.vram_bytes if karte else 0
+
+    def _erweitern_verhaeltnis(self) -> float | None:
+        """Gewaehltes Seitenverhaeltnis, umgerechnet auf das Original vor dem Drehen -
+        None bei „Frei“ und „Original“."""
+        wert = self.verhaeltnis_wahl.currentData()
+        if wert is None or wert < 0 or self.sitzung is None:
+            return None
+        return 1 / wert if self.sitzung.werte.drehung90 % 2 else wert
+
+    def _erweitern_anzeigen(self):
+        if not hasattr(self, "erweitern_knopf"):
+            return
+        modell = self._erweitern_modell()
+        offen = self.sitzung is not None
+        nutzbar = (ki.angeboten(modell, self._ki_stufe())
+                   and ki.genug_vram(modell, self._vram()))
+        an = self.erweitern_box.isChecked()
+        # Abwaehlen bleibt immer moeglich - es verwirft eine Erweiterung
+        self.erweitern_box.setEnabled((offen and nutzbar) or an)
+        self._modell_tooltip(self.erweitern_box, modell, _(
+            "Statt das Bild auf das Seitenverhältnis zuzuschneiden, erfindet die KI die "
+            "fehlenden Ränder dazu. Das Original bleibt unverändert."))
+        verhaeltnis = self._erweitern_verhaeltnis()
+        plan = self.sitzung.erweiterung_planen(verhaeltnis) if offen and verhaeltnis else None
+        hoehe, breite = self.sitzung.original.shape[:2] if offen else (0, 0)
+        schon = plan is not None and plan[:2] == (breite, hoehe)
+        if not nutzbar:
+            text = _("KI-Erweitern braucht mindestens 8 GB Grafikspeicher.")
+        elif not an:
+            text = ""
+        elif not ki.vorhanden(modell):
+            text = _("Dieses Modell ist noch nicht geladen.")
+        elif plan is None:
+            text = _("Ein Seitenverhältnis wählen – die KI erfindet, was dafür fehlt.")
+        elif schon:
+            text = _("Das Bild hat dieses Seitenverhältnis schon.")
+        else:
+            gross_b, gross_h = plan[:2]
+            if self.sitzung.werte.drehung90 % 2:
+                gross_b, gross_h = gross_h, gross_b
+            text = _("Neue Größe: {breite} × {hoehe} px. Die KI rechnet rund eine halbe "
+                     "Minute.").format(breite=gross_b, hoehe=gross_h)
+            if ki.grosser_rand(breite, hoehe, *plan):
+                text += " " + _("Über 25 % je Seite erfindet die KI mehr, als sie sieht – "
+                                "das Ergebnis kann unstimmig werden.")
+        self.fenster.beschriften(self.erweitern_hinweis.setText, text)
+        self.erweitern_hinweis.setVisible(bool(text))
+        self.erweitern_knopf.setVisible(an and nutzbar)
+        if not ki.vorhanden(modell):
+            self.fenster.beschriften(self.erweitern_knopf.setText, _("Erweitern · {mb} MB").format(
+                mb=f"{ki.download_groesse(modell) / 2**20:.0f}"))
+            self.erweitern_knopf.setEnabled(True)
+            self._modell_tooltip(self.erweitern_knopf, modell)
+            return
+        neu = offen and plan is not None and self.sitzung.erweitert_auf(verhaeltnis)
+        if neu:
+            self.fenster.beschriften(self.erweitern_knopf.setText, _("Neu erzeugen"))
+            self._modell_tooltip(self.erweitern_knopf, modell, _(
+                "Erfindet die Ränder noch einmal, mit anderem Zufall."))
+        else:
+            self.fenster.beschriften(self.erweitern_knopf.setText, _("Erweitern"))
+            self._modell_tooltip(self.erweitern_knopf, modell, _(
+                "Erfindet die fehlenden Ränder für das gewählte Seitenverhältnis. Das "
+                "Original bleibt unverändert."))
+        self.erweitern_knopf.setEnabled(offen and plan is not None and not schon)
+
+    def _erweitern_umgeschaltet(self, an: bool):
+        if an:
+            self.zuschneiden(False)
+            if self.sitzung is not None and self.sitzung.werte.zuschnitt != VOLLER_ZUSCHNITT:
+                self.sitzung.werte.zuschnitt = VOLLER_ZUSCHNITT
+                self.zeichnen_anfordern()
+        elif self.sitzung is not None and self.sitzung.erweiterung_verwerfen():
+            self._klick_marken = {"maske": [], "entfernen": []}
+            self.fenster.melden(_("Erweiterung verworfen."))
+            self.zeichnen_anfordern()
+        self._erweitern_anzeigen()
+
+    def erweitern(self):
+        """Raender fuer das gewaehlte Seitenverhaeltnis erfinden - jedes Mal mit neuem
+        Zufall, so erzeugt derselbe Knopf auch neu."""
+        modell = self._erweitern_modell()
+        if not ki.vorhanden(modell):
+            self.ki_modell_laden(modell)
+            self._erweitern_anzeigen()
+            return
+        verhaeltnis = self._erweitern_verhaeltnis()
+        if self.sitzung is None or verhaeltnis is None:
+            return
+        self.auswahl_beenden()
+        self.pinsel_beenden()
+        self.zuschneiden(False)
+        anzeige = None
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            # Nicht aufheben: Der Transformer allein belegt gut 4 GB Grafikspeicher
+            netz = ki.Erweiterer(modell)
+            anzeige = QProgressDialog(_("KI erweitert das Bild …"), _("Abbrechen"), 0, 100, self)
+            anzeige.setWindowTitle(self.fenster.windowTitle())
+            anzeige.setWindowModality(Qt.WindowModality.WindowModal)
+            anzeige.setMinimumDuration(0)
+
+            def fortschritt(nummer, anzahl):
+                anzeige.setValue(round(100 * nummer / anzahl))
+                QApplication.processEvents()
+                return not anzeige.wasCanceled()
+
+            ms = self.sitzung.ki_erweitern(netz, verhaeltnis, random.randrange(1 << 31),
+                                           fortschritt)
+            del netz
+        except ki.KiAbbruch:
+            self.fenster.melden(_("KI-Erweitern abgebrochen."))
+            return
+        except ki.KiFehler as fehler:
+            self._fehler(_("Das KI-Erweitern ist fehlgeschlagen."), str(fehler))
+            return
+        except cp.cuda.memory.OutOfMemoryError:
+            self._fehler(_("Für dieses Bild reicht der Grafikspeicher nicht."), "")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+            if anzeige is not None:
+                anzeige.close()
+            cp.get_default_memory_pool().free_all_blocks()
+            self._erweitern_anzeigen()
+        # Der Rahmen galt dem alten Bild, die Klickmarken lagen im alten Format
+        self.sitzung.werte.zuschnitt = VOLLER_ZUSCHNITT
+        self._klick_marken = {"maske": [], "entfernen": []}
+        self.fenster.melden(_("KI-Erweitern fertig ({s} s)").format(s=f"{ms / 1000:.1f}"))
+        self.zeichnen_anfordern()
 
     def _ansicht_geaendert(self):
         if self.leinwand.zoom is None and self.sitzung is not None:
@@ -816,6 +973,7 @@ class BearbeitenSeite(QWidget):
         self._masken_anzeigen()
         self._entfernen_anzeigen()
         self._tiefe_anzeigen()
+        self._erweitern_anzeigen()
 
     def _ki_schaerf_dauer(self) -> str:
         if ki.tensorrt_ordner() is not None:
@@ -1099,6 +1257,7 @@ class BearbeitenSeite(QWidget):
         self._masken_anzeigen()
         self._entfernen_anzeigen()
         self._tiefe_anzeigen()
+        self._erweitern_anzeigen()
         self.zeichnen_anfordern()
 
     def _bild_geklickt(self, x: float, y: float, dazu: bool):
@@ -1611,6 +1770,7 @@ class BearbeitenSeite(QWidget):
                        self.einpassen_knopf, self.zoom100_knopf):
             widget.setEnabled(offen)
         self._lut_anzeigen()
+        self._erweitern_anzeigen()
 
     # ------------------------------------------------------------------
     # Regler und Vorschau

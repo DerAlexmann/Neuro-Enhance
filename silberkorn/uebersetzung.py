@@ -272,6 +272,37 @@ TRANSLATIONS = {
         "Bisher entfernt: {n}.": "Removed so far: {n}.",
         "Das Entfernen ist fehlgeschlagen.": "Removing failed.",
         "Entfernt ({s} s)": "Removed ({s} s)",
+        "Mit KI erweitern statt beschneiden": "Extend with AI instead of cropping",
+        "Statt das Bild auf das Seitenverhältnis zuzuschneiden, erfindet die KI die "
+        "fehlenden Ränder dazu. Das Original bleibt unverändert.":
+            "Instead of cropping the image to the aspect ratio, the AI invents the missing "
+            "borders. The original stays unchanged.",
+        "KI-Erweitern braucht mindestens 8 GB Grafikspeicher.":
+            "Extending with AI needs at least 8 GB of graphics memory.",
+        "Ein Seitenverhältnis wählen – die KI erfindet, was dafür fehlt.":
+            "Choose an aspect ratio – the AI invents what is missing for it.",
+        "Das Bild hat dieses Seitenverhältnis schon.":
+            "The image already has this aspect ratio.",
+        "Neue Größe: {breite} × {hoehe} px. Die KI rechnet rund eine halbe Minute.":
+            "New size: {breite} × {hoehe} px. The AI takes about half a minute.",
+        "Über 25 % je Seite erfindet die KI mehr, als sie sieht – das Ergebnis kann "
+        "unstimmig werden.":
+            "Beyond 25 % per side the AI invents more than it sees – the result may not "
+            "fit together.",
+        "Erweitern · {mb} MB": "Extend · {mb} MB",
+        "Erweitern": "Extend",
+        "Neu erzeugen": "Regenerate",
+        "Erfindet die Ränder noch einmal, mit anderem Zufall.":
+            "Invents the borders once more, with a different random seed.",
+        "Erfindet die fehlenden Ränder für das gewählte Seitenverhältnis. Das Original "
+        "bleibt unverändert.":
+            "Invents the missing borders for the chosen aspect ratio. The original stays "
+            "unchanged.",
+        "Erweiterung verworfen.": "Extension discarded.",
+        "KI erweitert das Bild …": "AI is extending the image …",
+        "KI-Erweitern abgebrochen.": "Extending with AI cancelled.",
+        "Das KI-Erweitern ist fehlgeschlagen.": "Extending with AI failed.",
+        "KI-Erweitern fertig ({s} s)": "Extended with AI ({s} s)",
         "Tiefe & Bokeh": "Depth & bokeh",
         "Fokus (fern – nah)": "Focus (far – near)",
         "Schärfentiefe": "Depth of field",
