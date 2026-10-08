@@ -371,3 +371,103 @@ def test_erweitern_mit_modell():
     innen = ergebnis[y:y + 600, x + saum:x + 800 - saum]
     assert float(cp.abs(innen - srgb[:, saum:800 - saum]).max()) < 1e-5
     assert float(ergebnis[:, :x, 1].mean()) < 0.9                      # kein Gruen geblieben
+
+
+# --------------------------------------------------------------------------
+# In der Bearbeitungssitzung - nur mit Grafikkarte, mit Platzhalter statt FLUX
+# --------------------------------------------------------------------------
+
+class Rot:
+    """Statt FLUX: Die erfundenen Raender sind rot."""
+
+    def __init__(self):
+        self.gesehen = None
+
+    def raender(self, srgb, gross_b, gross_h, x, y, seed, fortschritt=None):
+        import cupy as cp
+        self.gesehen = (srgb.shape, gross_b, gross_h, x, y, seed)
+        leinwand = cp.zeros((gross_h, gross_b, 3), dtype=cp.float32)
+        leinwand[..., 0] = 1
+        return leinwand
+
+
+@pytest.fixture
+def sitzung():
+    cp = pytest.importorskip("cupy")
+    try:
+        cp.cuda.runtime.getDeviceCount()
+    except cp.cuda.runtime.CUDARuntimeError:
+        pytest.skip("keine Grafikkarte")
+    from silberkorn import bilddatei
+    from silberkorn.bearbeitung import Sitzung
+    pixel = np.full((120, 160, 3), 64, dtype=np.uint8)
+    alpha = np.full((120, 160), 200, dtype=np.uint8)
+    daten = bilddatei.Bilddaten(pixel=pixel, profil=None, alpha=alpha, exif=b"", pfad="t.png")
+    s = Sitzung(daten, vorschau_kante=80)          # Vorschau halb so gross
+    yield s
+    s.schliessen()
+
+
+def ganz(sitzung):
+    bild, _ms, _h = sitzung.ausschnitt(0, 0, *sitzung.ausgabe_form()[::-1])
+    return bild.astype(int)
+
+
+def test_erweitern_in_der_sitzung(sitzung, tmp_path):
+    from PIL import Image
+    netz = Rot()
+    sitzung.ki_erweitern(netz, 16 / 9, seed=3)
+    form, gross_b, gross_h, x, y, seed = netz.gesehen
+    assert form == (120, 160, 3) and seed == 3 and (gross_h, y) == (120, 0)
+    assert x % 2 == 0                                  # auf dem Raster der Vorschau
+    assert sitzung.erweitert and sitzung.geaendert
+    hoehe, breite = sitzung.ausgabe_form()
+    assert (hoehe, breite) == (gross_h, gross_b) and breite / hoehe == pytest.approx(16 / 9,
+                                                                                    rel=0.01)
+    bild = ganz(sitzung)
+    assert np.abs(bild[60, x + 80] - 64).max() <= 1   # Mitte: das Original
+    assert bild[60, 2, 0] >= 254 and bild[60, 2, 1] <= 1
+    assert 64 < bild[60, x, 0] < 254                   # Saum: gemischt
+    vorschau, _ms, _h = sitzung.vorschau()
+    assert vorschau.shape[:2] == (gross_h // 2, gross_b // 2)
+    assert vorschau[30, 0, 0] >= 254 and np.abs(vorschau[30, (x + 80) // 2] - 64).max() <= 1
+    pfad = str(tmp_path / "aus.png")
+    sitzung.exportieren(pfad)
+    gespeichert = np.asarray(Image.open(pfad))
+    assert gespeichert.shape == (gross_h, gross_b, 4)
+    assert gespeichert[60, 2, 3] == 255 and gespeichert[60, x + 80, 3] == 200
+    assert sitzung.erweiterung_verwerfen() and not sitzung.erweitert
+    assert sitzung.ausgabe_form() == (120, 160)
+    assert not sitzung.erweiterung_verwerfen()
+
+
+def test_regler_wirken_auf_original_und_raender(sitzung):
+    sitzung.ki_erweitern(Rot(), 2.0, seed=1)
+    sitzung.werte.belichtung = 1.0
+    bild = ganz(sitzung)
+    assert bild[60, 120, 0] > 64 + 20                  # Original heller
+    assert bild[60, 2, 1] <= 1 and bild[60, 2, 0] >= 254
+
+
+def test_klick_im_rand_trifft_nichts(sitzung):
+    sitzung.ki_erweitern(Rot(), 2.0, seed=1)          # 240 x 120, Original bei x = 40
+    assert sitzung.quelle_von(10.0, 60.0) is None
+    sx, sy = sitzung.quelle_von(45.0, 60.0)
+    assert sx == pytest.approx(5, abs=1) and sy == pytest.approx(60, abs=1)
+
+
+def test_maske_und_tiefe_auf_der_leinwand(sitzung):
+    import cupy as cp
+    sitzung._ki_maske = (cp.ones((120, 160), cp.float32), cp.ones((60, 80), cp.float32))
+    sitzung._ki_tiefe = cp.linspace(0, 1, 30 * 40, dtype=cp.float32).reshape(30, 40)
+    sitzung.pinseln([(40.0, 60.0)], 10.0, True)
+    sitzung.ki_erweitern(Rot(), 2.0, seed=1)
+    sitzung.werte.hg_belichtung = -1.0
+    sitzung.werte.bokeh = 50.0
+    sitzung.maske_zeigen = True
+    sitzung.tiefe_zeigen = False
+    vorschau, _ms, _h = sitzung.vorschau()
+    assert vorschau.shape[:2] == (60, 120)
+    assert ganz(sitzung).shape[:2] == (120, 240)
+    # Die KI-Netze sehen weiter nur das Original
+    assert sitzung._ausgang(sitzung.werte, True, leinwand=False).shape[:2] == (120, 160)

@@ -34,6 +34,14 @@ mischt dafuer einige unterschiedlich stark weichgezeichnete Fassungen des
 fertigen Bildes, in linearem Licht, damit Lichter wie bei einem Objektiv
 aufbluehen. Scharfe Bereiche fliessen dabei nicht in unscharfe hinein.
 
+Die KI-Erweiterung (Outpainting) liegt wie die Flicken vor den Filtern: eine
+Leinwand im Zielformat mit den erfundenen Raendern, in die das Ausgangsbild mit
+weichem Saum eingesetzt wird. Die Filter und die Geometrie sehen danach die
+ganze Leinwand; Maske, Tiefe, Markierung und Alphakanal werden dafuer am Rand
+fortgesetzt. Die KI-Netze (Freistellen, Klicks, Entfernen, Tiefe) sehen weiter
+nur das Original - so bleiben ihre Ergebnisse gueltig, wenn die Erweiterung
+wegfaellt oder neu erzeugt wird.
+
 Dieses Modul importiert CuPy und darf deshalb erst nach der Startprufung
 geladen werden.
 
@@ -50,7 +58,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import bilddatei, filter, geometrie
+from . import bilddatei, filter, geometrie, ki
 from .cuda import cupy as cp
 from .filter import Einstellungen
 
@@ -100,6 +108,18 @@ class _Flicken:
     vorschau: tuple                 # dasselbe in der Groesse der Vorschau
 
 
+@dataclass
+class _Erweiterung:
+    """Die KI-Erweiterung: Leinwand (linear) mit den erfundenen Raendern und die
+    Deckkraft, mit der das Ausgangsbild an (x, y) eingesetzt wird."""
+    x: int                          # Lage des Originals in Pixeln des Originals,
+    y: int                          # Vielfache des Vorschau-Faktors
+    voll: tuple                     # (Leinwand (H, W, 3), Deckkraft (h, w))
+    vorschau: tuple                 # dasselbe in der Groesse der Vorschau
+    seed: int
+    verhaeltnis: float              # Breite/Hoehe der Leinwand
+
+
 class Sitzung:
     def __init__(self, daten: bilddatei.Bilddaten, vorschau_kante: int):
         self.daten = daten
@@ -116,10 +136,11 @@ class Sitzung:
         self._entfern_klick = None            # (voll, Vorschau): per Klick markiert
         self._pinsel = None                   # (voll, Vorschau): mit dem Pinsel markiert
         self._flicken: list[_Flicken] = []    # entfernte Objekte, in Reihenfolge
-        self._flicken_stand = 0               # zaehlt jede Aenderung an den Flicken
+        self._flicken_stand = 0               # zaehlt jede Aenderung an Flicken und Erweiterung
         self._flicken_gespeichert = 0
         self._ki_tiefe = None                 # Tiefe 0..1 (1 = nah), verkleinert, im Original
         self.tiefe_zeigen = False             # Vorschau zeigt die Tiefenkarte
+        self._erweiterung: _Erweiterung | None = None
 
         self.original = daten.linear(cp)
         # Zwischenpuffer des Demosaicing an den Grafikspeicher zurueckgeben
@@ -165,13 +186,22 @@ class Sitzung:
     def ki_maske_da(self) -> bool:
         return self._ki_maske is not None
 
+    @property
+    def erweitert(self) -> bool:
+        return self._erweiterung is not None
+
+    def erweitert_auf(self, verhaeltnis: float) -> bool:
+        """Ist das Bild schon auf dieses Seitenverhaeltnis erweitert?"""
+        return self._erweiterung is not None and self._erweiterung.verhaeltnis == verhaeltnis
+
     def ki_freistellen(self, freisteller) -> float:
         """Die Maske des Motivs einmal mit KI berechnen; Rueckgabe: Rechenzeit in ms.
 
         Das Netz sieht das Bild, wie es gerade entrauscht und geschaerft ist.
         """
         beginn = time.perf_counter()
-        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True), 0, 1))
+        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True, leinwand=False),
+                                             0, 1))
         voll = freisteller.maske(srgb)
         del srgb
         self._ki_maske = (voll, self._vorschau_von(voll))
@@ -187,7 +217,8 @@ class Sitzung:
         stammt sie schon aus Klicks, geht es mit ihnen weiter.
         """
         beginn = time.perf_counter()
-        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True), 0, 1))
+        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True, leinwand=False),
+                                             0, 1))
         auswaehler.bild_setzen(srgb)
         del srgb
         stand = self._klickstand[ziel]
@@ -198,7 +229,9 @@ class Sitzung:
 
     def quelle_von(self, x: float, y: float) -> tuple[float, float] | None:
         """Punkt im fertigen Bild (Pixel) -> Punkt im Original, oder None ausserhalb."""
-        sx, sy = geometrie.zur_quelle(self.original.shape, geometrie.aus(self.werte), x, y)
+        sx, sy = geometrie.zur_quelle(self.quellform(), geometrie.aus(self.werte), x, y)
+        if self._erweiterung is not None:
+            sx, sy = sx - self._erweiterung.x, sy - self._erweiterung.y
         hoehe, breite = self.original.shape[:2]
         if not (0 <= sx < breite and 0 <= sy < hoehe):
             return None
@@ -293,7 +326,8 @@ class Sitzung:
         if markierung is None:
             return None
         beginn = time.perf_counter()
-        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True), 0, 1))
+        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True, leinwand=False),
+                                             0, 1))
         ergebnis = entferner.fuellen(srgb, markierung)
         del srgb
         if ergebnis is None:
@@ -351,13 +385,92 @@ class Sitzung:
         return bild
 
     # ------------------------------------------------------------------
+    # KI-Erweitern: Raender im Zielformat erfinden
+    # ------------------------------------------------------------------
+
+    def _vorschau_faktor(self) -> int:
+        return round(1 / self.vorschau_massstab)
+
+    def erweiterung_planen(self, verhaeltnis: float) -> tuple[int, int, int, int]:
+        """(W, H, x, y) der Leinwand im Seitenverhaeltnis Breite/Hoehe des Originals."""
+        hoehe, breite = self.original.shape[:2]
+        return ki.leinwand_planen(breite, hoehe, verhaeltnis, raster=self._vorschau_faktor())
+
+    def ki_erweitern(self, erweiterer, verhaeltnis: float, seed: int,
+                     fortschritt=None) -> float:
+        """Das Bild mit KI auf das Seitenverhaeltnis (Breite/Hoehe des Originals, vor
+        dem Drehen) erweitern; Rueckgabe: Rechenzeit in ms.
+
+        Das Netz sieht das Bild, wie es gerade entrauscht, geschaerft und
+        retuschiert ist. Gespeichert werden nur die Raender: Eingesetzt wird
+        bei jeder Vorschau das aktuelle Bild - die Regler davor wirken weiter.
+        """
+        beginn = time.perf_counter()
+        hoehe, breite = self.original.shape[:2]
+        gross_b, gross_h, x, y = self.erweiterung_planen(verhaeltnis)
+        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True, leinwand=False),
+                                             0, 1))
+        rand = erweiterer.raender(srgb, gross_b, gross_h, x, y, seed, fortschritt)
+        del srgb
+        rand = filter.srgb_zu_linear(rand)
+        deckkraft = ki.saum_deckkraft(gross_b, gross_h, x, y, breite, hoehe,
+                                      ki.saum_breite(breite, hoehe), cp)
+        voll = (rand, deckkraft)
+        faktor = self._vorschau_faktor()
+        vorschau = voll if faktor == 1 else tuple(
+            filter.verkleinern_box(teil, faktor).astype(cp.float32) for teil in voll)
+        self._erweiterung = None                  # die alte Leinwand zuerst freigeben
+        self._erweiterung = _Erweiterung(x, y, voll, vorschau, seed, verhaeltnis)
+        self._flicken_stand += 1
+        return self._ki_fertig(beginn)
+
+    def erweiterung_verwerfen(self) -> bool:
+        if self._erweiterung is None:
+            return False
+        self._erweiterung = None
+        self._flicken_stand += 1
+        self._ki_fertig(time.perf_counter())
+        return True
+
+    def quellform(self) -> tuple[int, int]:
+        """Hoehe und Breite dessen, was die Geometrie sieht: Original oder Leinwand."""
+        if self._erweiterung is None:
+            return self.original.shape[:2]
+        return self._erweiterung.voll[0].shape[:2]
+
+    def _lage(self, stelle: int) -> tuple[int, int]:
+        faktor = 1 if stelle == 0 else self._vorschau_faktor()
+        return self._erweiterung.x // faktor, self._erweiterung.y // faktor
+
+    def _auf_leinwand(self, bild, stelle: int):
+        """Bild in Groesse des Originals bzw. der Vorschau in die Leinwand einsetzen."""
+        rand, deckkraft = self._erweiterung.voll if stelle == 0 else self._erweiterung.vorschau
+        x, y = self._lage(stelle)
+        return ki.einsetzen(rand, bild, x, y, deckkraft)
+
+    def _ebene_auf_leinwand(self, ebene, fortsetzen: bool = True):
+        """Eine Ebene (h, w) im Original oder in der Vorschau auf die Leinwand bringen -
+        mit dem Wert am Rand fortgesetzt oder mit 0 aufgefuellt."""
+        if self._erweiterung is None:
+            return ebene
+        stelle = 0 if ebene.shape[:2] == self.original.shape[:2] else 1
+        rand = (self._erweiterung.voll if stelle == 0 else self._erweiterung.vorschau)[0]
+        x, y = self._lage(stelle)
+        hoehe, breite = ebene.shape[:2]
+        raender = ((y, rand.shape[0] - y - hoehe), (x, rand.shape[1] - x - breite))
+        if fortsetzen:
+            return cp.pad(ebene, raender, mode="edge")
+        return cp.pad(ebene, raender)
+
+    # ------------------------------------------------------------------
     # Tiefe & Bokeh
     # ------------------------------------------------------------------
 
     def ki_tiefe(self, schaetzer) -> float:
         """Die Tiefe einmal mit KI schaetzen; Rueckgabe: Rechenzeit in ms."""
         beginn = time.perf_counter()
-        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True), 0, 1))
+        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True, leinwand=False),
+                                             0, 1))
         self._ki_tiefe = schaetzer.tiefe(srgb)
         del srgb
         self._vollbild = None
@@ -388,7 +501,7 @@ class Sitzung:
         des fertigen Bildes."""
         quelle = self.original if voll else self.vorschau_original
         tiefe = filter.vergroessern(self._ki_tiefe, *quelle.shape[:2])
-        return self._in_geometrie(tiefe, werte)
+        return self._in_geometrie(self._ebene_auf_leinwand(tiefe), werte)
 
     def _bokeh(self, ergebnis, werte: Einstellungen, voll: bool, hoechst: float):
         """Unschaerfe nach Abstand zur Fokusebene auf das fertige Bild (0..hoechst)."""
@@ -396,7 +509,8 @@ class Sitzung:
         rand = werte.schaerfentiefe / 100 * TIEFE_BEREICH
         abstand = cp.clip((cp.abs(tiefe - werte.fokus / 100) - rand) / TIEFE_UEBERGANG, 0, 1)
         if werte.bokeh_motiv and self._ki_maske is not None:
-            motiv = self._in_geometrie(self._ki_maske[0 if voll else 1], werte)
+            motiv = self._in_geometrie(self._ebene_auf_leinwand(self._ki_maske[0 if voll else 1]),
+                                       werte)
             abstand *= 1 - motiv
         sigma = werte.bokeh / 100 * BOKEH_MAX * max(ergebnis.shape[:2])
         radius = abstand * sigma                  # Sigma je Pixel
@@ -451,7 +565,7 @@ class Sitzung:
             maske = filter.gauss(maske, werte.maske_kante / 100 * MASKE_KANTE * massstab)
         if werte.maske_umkehren:
             maske = 1 - maske
-        return self._in_geometrie(maske, werte)
+        return self._in_geometrie(self._ebene_auf_leinwand(maske), werte)
 
     def _rendern(self, werte: Einstellungen, voll: bool, speicher, bits: int = 8,
                  zeigen: bool = False):
@@ -490,7 +604,8 @@ class Sitzung:
             farbe = cp.asarray(MASKE_FARBE, dtype=cp.float32) * hoechst
             ergebnis = maske * ergebnis + (1 - maske) * (0.4 * ergebnis + 0.6 * farbe)
         if markierung is not None:
-            m = self._in_geometrie(markierung, werte)[..., None] * MARKIERUNG_DECKUNG
+            m = self._in_geometrie(self._ebene_auf_leinwand(markierung, fortsetzen=False),
+                                   werte)[..., None] * MARKIERUNG_DECKUNG
             farbe = cp.asarray(MARKIERUNG_FARBE, dtype=cp.float32) * hoechst
             ergebnis = ergebnis * (1 - m) + m * farbe
         return cp.clip(ergebnis + 0.5, 0, hoechst).astype(typ)
@@ -543,15 +658,18 @@ class Sitzung:
         zehn Pixel, wird deshalb abgezogen.
         """
         beginn = time.perf_counter()
-        korrektur = self._ki_korrektur(schaerfer, self._ausgang(self.werte, True, schaerfen=False),
-                                       kachel, fortschritt)
+        ausgang = self._ausgang(self.werte, True, schaerfen=False, leinwand=False)
+        korrektur = self._ki_korrektur(schaerfer, ausgang, kachel, fortschritt)
+        del ausgang
         for kanal in range(3):
             korrektur[..., kanal] -= filter.gauss(korrektur[..., kanal], SCHAERFE_GROB)
         self._ki_schaerfe = (korrektur, self._vorschau_von(korrektur))
         return self._ki_fertig(beginn)
 
-    def _ausgang(self, werte: Einstellungen, voll: bool, schaerfen: bool = True):
-        """Original - je nach Staerke mit dem KI-entrauschten gemischt und KI-geschaerft."""
+    def _ausgang(self, werte: Einstellungen, voll: bool, schaerfen: bool = True,
+                 leinwand: bool = True):
+        """Original - je nach Staerke mit dem KI-entrauschten gemischt und KI-geschaerft,
+        mit den Flicken und, wenn erweitert und leinwand gesetzt, auf der Leinwand."""
         stelle = 0 if voll else 1
         bild = self.original if voll else self.vorschau_original
         if self._ki_rauschfrei is not None and werte.ki_rauschen > 0:
@@ -562,6 +680,8 @@ class Sitzung:
             bild = _auflegen(bild, self._ki_schaerfe[stelle], cp.float32(werte.ki_schaerfe / 100))
         if self._flicken:
             bild = self._flicken_auflegen(bild, stelle)
+        if leinwand and self._erweiterung is not None:
+            bild = self._auf_leinwand(bild, stelle)
         return bild
 
     def vorschau(self, unbearbeitet: bool = False,
@@ -578,7 +698,7 @@ class Sitzung:
     def ausgabe_form(self, werte: Einstellungen | None = None) -> tuple[int, int]:
         """Hoehe und Breite des fertigen Bildes in voller Aufloesung."""
         werte = self.werte if werte is None else werte
-        return geometrie.ausgabe_form(self.original.shape, geometrie.aus(werte))
+        return geometrie.ausgabe_form(self.quellform(), geometrie.aus(werte))
 
     def ausschnitt(self, x0: int, y0: int, breite: int, hoehe: int,
                    werte: Einstellungen | None = None) -> tuple[np.ndarray, float, np.ndarray]:
@@ -611,6 +731,12 @@ class Sitzung:
         alpha = self.daten.alpha
         if alpha is None:
             return None
+        if self._erweiterung is not None:         # die erfundenen Raender sind deckend
+            hoehe, breite = alpha.shape[:2]
+            gross_h, gross_b = self.quellform()
+            x, y = self._lage(0)
+            alpha = np.pad(alpha, ((y, gross_h - y - hoehe), (x, gross_b - x - breite)),
+                           constant_values=np.iinfo(alpha.dtype).max)
         geo = geometrie.aus(self.werte)
         if geo.ist_neutral() and faktor == 1:
             return alpha
@@ -677,6 +803,7 @@ class Sitzung:
         self._pinsel = None
         self._flicken = []
         self._ki_tiefe = None
+        self._erweiterung = None
         self._speicher.clear()
         cp.get_default_memory_pool().free_all_blocks()
 
