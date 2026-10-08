@@ -286,8 +286,9 @@ all changes). To reproduce this yourself:
    transformer of [FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
    into `<folder>/klein-4b-destilliert/transformer/` and `flux-outpaint-lora.safetensors`
    from [fal](https://huggingface.co/fal/flux-2-klein-4B-outpaint-lora) into
-   `<folder>/lora/`, then run `pip install torch diffusers peft transformers` and
-   `python werkzeuge/outpaint_export.py <folder>`. This needs about 48 GB of RAM and
+   `<folder>/lora/`, then run
+   `pip install torch diffusers peft transformers onnx onnx-ir scipy` and
+   `python werkzeuge/outpaint_export.py <folder>`. This needs about 30 GB of RAM and
    checks every network as well as the whole pipeline against diffusers.
 
 ## A note on AI results

@@ -8,10 +8,9 @@ in die Gewichte eingerechnet, fester Prompt, 4 Schritte ohne CFG.
 Erzeugt in modelle/ (oder --ziel):
   flux2-klein-outpaint.onnx        Transformer. Die Gewichte der MatMul in int8
                                    (MatMulNBits, Block 128, symmetrisch), der Rest
-                                   FP16 - nur die Winkel der Positions- und
-                                   Zeiteinbettung (Sin/Cos und was sie speist) bleiben
-                                   FP32, in FP16 waeren sie um Zehntel verschoben.
-                                   Ein- und Ausgaenge FP32.
+                                   FP32: in FP16 laufen die Aktivierungen ueber, der
+                                   Transformer gibt dann nur NaN aus (geprueft mit
+                                   onnxruntime-gpu 1.26). Ein- und Ausgaenge FP32.
   flux2-klein-outpaint-1.bin ...   seine Gewichte als externe ONNX-Daten, auf Dateien
                                    unter 2 GB verteilt (Grenze von GitHub je Datei)
   flux2-vae-kodierer.onnx          VAE-Encoder: sRGB 0..1 -> Mittelwert der Latents
@@ -28,16 +27,22 @@ Geprueft wird (abschaltbar mit --ohne-pruefung):
     Flux2KleinPipeline - mit demselben Startrauschen auf einer Probeleinwand.
 
 Aufruf (braucht PyTorch, diffusers 0.41, peft, transformers, onnx und
-onnxruntime-gpu; der Transformer wird in FP32 auf dem Prozessor exportiert, das
-braucht rund 48 GB Arbeitsspeicher):
-    python werkzeuge/outpaint_export.py <modelle> [--ziel ORDNER] [--fp32] [--vae-fp32]
+onnxruntime-gpu; der Transformer wird in FP32 auf dem Prozessor exportiert. Damit
+das PyTorch-Modell und das ONNX-Modell nie gleichzeitig im Speicher liegen, rechnet
+ein eigener Prozess den PyTorch-Teil samt Sollwerten der Pruefung und legt alles in
+<ziel>/_export-zwischenstand/ ab; der Hauptprozess wandelt und prueft danach ohne
+PyTorch-Modell):
+    python werkzeuge/outpaint_export.py <modelle> [--ziel ORDNER] [--fp16] [--vae-fp32]
                                         [--ohne-pruefung]
   <modelle> wie bei outpaint_referenz.py: klein-base-4b/, klein-4b-destilliert/transformer/,
   lora/flux-outpaint-lora.safetensors; liegt dort prompt_einbettung.pt (von
   outpaint_referenz.py), wird sie uebernommen, sonst mit dem Text-Encoder berechnet.
-  --fp32      Transformer ausser den int8-Gewichten in FP32 statt FP16 (falls FP16
-              ueberlaeuft - der Kosinus der Pruefung zeigt es)
+  --fp16      Transformer ausser den int8-Gewichten in FP16 statt FP32 - nur zum
+              Ausprobieren; Sin/Cos der Positions- und Zeiteinbettung und die
+              RMSNorm bleiben dabei FP32
   --vae-fp32  VAE in FP32 statt FP16
+Spitze im Arbeitsspeicher rund 30 GB. Besteht die Pruefung nicht, bleibt der
+Zwischenstand liegen, und ein weiterer Lauf beginnt bei der Wandlung.
 
 Licensed under MIT License
 Copyright 2026 Alexander Unverhau
@@ -260,16 +265,21 @@ def daten_speichern(pipe, prompt, pfad: str):
 # ONNX: Export, FP16, int8, verteilt speichern
 # --------------------------------------------------------------------------
 
+def onnx_schreiben(huelle: nn.Module, beispiel: tuple, eingaenge: list[str],
+                   ausgaenge: list[str], achsen: dict, pfad: str) -> None:
+    """Export ueber TorchScript; Modelle ueber 2 GB schreibt PyTorch mit externen Daten."""
+    with torch.no_grad():
+        torch.onnx.export(huelle, beispiel, pfad, input_names=eingaenge,
+                          output_names=ausgaenge, dynamic_axes=achsen,
+                          opset_version=OPSET, dynamo=False, do_constant_folding=True)
+
+
 def nach_onnx(huelle: nn.Module, beispiel: tuple, eingaenge: list[str], ausgaenge: list[str],
               achsen: dict) -> onnx.ModelProto:
-    """Export ueber TorchScript; Modelle ueber 2 GB schreibt PyTorch mit externen Daten,
-    deshalb in einen Zwischenordner, und laedt sie von dort samt Gewichten."""
+    """Export in einen Zwischenordner und von dort samt Gewichten laden."""
     with tempfile.TemporaryDirectory() as ordner:
         pfad = os.path.join(ordner, "netz.onnx")
-        with torch.no_grad():
-            torch.onnx.export(huelle, beispiel, pfad, input_names=eingaenge,
-                              output_names=ausgaenge, dynamic_axes=achsen,
-                              opset_version=OPSET, dynamo=False, do_constant_folding=True)
+        onnx_schreiben(huelle, beispiel, eingaenge, ausgaenge, achsen, pfad)
         return onnx.load(pfad, load_external_data=True)
 
 
@@ -348,6 +358,158 @@ def nach_int8(modell: onnx.ModelProto) -> onnx.ModelProto:
     return quant.model.model
 
 
+def attention_fusionieren(modell: onnx.ModelProto) -> int:
+    """Die vom TorchScript-Export zerlegte scaled_dot_product_attention durch
+    com.microsoft.MultiHeadAttention ersetzen. Zerlegt legt ONNX Runtime die ganze
+    Matrix (Koepfe x Tokens x Tokens) an - bei 1 MP ueber 7 GB; fusioniert rechnet
+    sie blockweise. Muster je Block, Q, K, V jeweils (B, S, H, D):
+        Transpose(Q, 0213) * c -> MatMul <- Transpose(K, 0231) * c
+        -> Softmax -> MatMul <- Transpose(V, 0213) -> Transpose(0213)
+    c ist die Wurzel der Skala 1/sqrt(D), wie sie MultiHeadAttention ohnehin nimmt.
+    Rueckgabe: Zahl der ersetzten Attention. Nur der Graph aendert sich, die Gewichte
+    bleiben (geht auch an einem schon gespeicherten Modell ohne seine Gewichte)."""
+    from onnx import helper
+    knoten = list(modell.graph.node)
+    erzeuger = {a: k for k in knoten for a in k.output}
+    nutzer: dict[str, list] = {}
+    for k in knoten:
+        for e in k.input:
+            nutzer.setdefault(e, []).append(k)
+
+    def perm(k):
+        return [a for a in k.attribute if a.name == "perm"][0].ints
+
+    def vor_transpose(name, erwartet):
+        """Mul(Transpose(x, erwartet), c) -> x, oder Transpose(x, erwartet) -> x."""
+        k = erzeuger[name]
+        if k.op_type == "Mul":
+            k = next(erzeuger[e] for e in k.input
+                     if e in erzeuger and erzeuger[e].op_type == "Transpose")
+        assert k.op_type == "Transpose" and list(perm(k)) == erwartet, k.name
+        return k.input[0]
+
+    neu, ersetzt = [], 0
+    kopf_form = helper.make_tensor("mha_form_kopf", onnx.TensorProto.INT64, [3], [0, 0, -1])
+    for softmax in [k for k in knoten if k.op_type == "Softmax"]:
+        qk = erzeuger[softmax.input[0]]
+        av = nutzer[softmax.output[0]][0]
+        zurueck = nutzer[av.output[0]][0]
+        assert qk.op_type == "MatMul" and av.op_type == "MatMul", softmax.name
+        assert zurueck.op_type == "Transpose" and list(perm(zurueck)) == [0, 2, 1, 3]
+        q = vor_transpose(qk.input[0], [0, 2, 1, 3])
+        k = vor_transpose(qk.input[1], [0, 2, 3, 1])
+        v = vor_transpose(av.input[1], [0, 2, 1, 3])
+        stamm = softmax.name.rsplit("/", 1)[0] + "/mha"
+        # Form der Ausgabe (B, S, H, D) wie Q
+        form = stamm + "_form"
+        neu += [helper.make_node("Shape", [q], [form], name=form)]
+        flach = []
+        for name, x in (("q", q), ("k", k), ("v", v)):
+            flach.append(f"{stamm}_{name}")
+            neu.append(helper.make_node("Reshape", [x, "mha_form_kopf"], [flach[-1]],
+                                        name=flach[-1]))
+        aus = stamm + "_aus"
+        neu.append(helper.make_node("MultiHeadAttention", flach, [aus], name=stamm,
+                                    domain="com.microsoft", num_heads=OUTPAINT_KOEPFE))
+        neu.append(helper.make_node("Reshape", [aus, form], [zurueck.output[0]],
+                                    name=stamm + "_zurueck"))
+        for alt in (qk, softmax, av, zurueck):
+            alt.output[0] = alt.output[0] + "_unbenutzt"
+        ersetzt += 1
+    if not ersetzt:
+        return 0
+    modell.graph.initializer.append(kopf_form)
+    modell.graph.node.extend(neu)
+    _unbenutzte_entfernen(modell)
+    _topologisch_ordnen(modell)
+    return ersetzt
+
+
+OUTPAINT_KOEPFE = 24        # FLUX.2 klein 4B: num_attention_heads
+HALB_GENAU = ("MatMulNBits", "MultiHeadAttention")
+
+
+def rechenkerne_fp16(modell: onnx.ModelProto) -> int:
+    """MatMulNBits und MultiHeadAttention in FP16 rechnen lassen - Cast davor und
+    danach, ihre Massstaebe als FP16. Nur sie nutzen dann die Tensorkerne; alles
+    andere (Restverbindungen, Normierung, Gating, GELU) bleibt FP32, denn ganz in
+    FP16 laufen die Aktivierungen ueber. Auf einer RTX 4060 halbiert das die Zeit
+    je Schritt; Kosinus zur FP32-Fassung 0,999999. Rueckgabe: Zahl der Knoten."""
+    from onnx import TensorProto, helper
+    inits = {i.name: i for i in modell.graph.initializer}
+    neu, gewandelt, zahl = [], {}, 0
+    for k in modell.graph.node:
+        if k.op_type not in HALB_GENAU:
+            neu.append(k)
+            continue
+        zahl += 1
+        for j, e in enumerate(k.input):
+            if not e:
+                continue
+            init = inits.get(e)
+            if init is not None:
+                # gepackte int8-Gewichte (Eingang 1) und Nullpunkte bleiben, wie sie sind
+                if init.data_type == TensorProto.FLOAT:
+                    if e not in gewandelt:
+                        halb = numpy_helper.from_array(
+                            numpy_helper.to_array(init).astype(np.float16), e + "_fp16")
+                        modell.graph.initializer.append(halb)
+                        gewandelt[e] = halb.name
+                    k.input[j] = gewandelt[e]
+                continue
+            cast = f"{k.name}_ein{j}_fp16"
+            neu.append(helper.make_node("Cast", [e], [cast], name=cast, to=TensorProto.FLOAT16))
+            k.input[j] = cast
+        neu.append(k)
+        for j, ausgang in enumerate(k.output):
+            halb = f"{k.name}_aus{j}_fp16"
+            k.output[j] = halb
+            neu.append(helper.make_node("Cast", [halb], [ausgang], name=ausgang + "_fp32",
+                                        to=TensorProto.FLOAT))
+    del modell.graph.node[:]
+    modell.graph.node.extend(neu)
+    _unbenutzte_entfernen(modell)
+    return zahl
+
+
+def _unbenutzte_entfernen(modell: onnx.ModelProto) -> None:
+    """Knoten und Initialisierer, von denen keine Ausgabe des Graphen abhaengt."""
+    erzeuger = {a: k for k in modell.graph.node for a in k.output}
+    gebraucht, offen = set(), [a.name for a in modell.graph.output]
+    while offen:
+        name = offen.pop()
+        k = erzeuger.get(name)
+        if k is None or id(k) in gebraucht:
+            continue
+        gebraucht.add(id(k))
+        offen.extend(e for e in k.input if e)
+    bleiben = [k for k in modell.graph.node if id(k) in gebraucht]
+    eingaenge = {e for k in bleiben for e in k.input}
+    inits = [i for i in modell.graph.initializer if i.name in eingaenge]
+    del modell.graph.node[:]
+    modell.graph.node.extend(bleiben)
+    del modell.graph.initializer[:]
+    modell.graph.initializer.extend(inits)
+
+
+def _topologisch_ordnen(modell: onnx.ModelProto) -> None:
+    vorhanden = {e.name for e in modell.graph.input} | {
+        i.name for i in modell.graph.initializer} | {""}
+    offen, sortiert = list(modell.graph.node), []
+    while offen:
+        rest = []
+        for k in offen:
+            if all(e in vorhanden for e in k.input):
+                sortiert.append(k)
+                vorhanden.update(k.output)
+            else:
+                rest.append(k)
+        assert len(rest) < len(offen), "Graph hat einen Zyklus"
+        offen = rest
+    del modell.graph.node[:]
+    modell.graph.node.extend(sortiert)
+
+
 def _alle_tensoren(modell: onnx.ModelProto):
     from onnx.external_data_helper import _get_all_tensors
     return _get_all_tensors(modell)
@@ -413,17 +575,29 @@ def beispiel_transformer(prompt, hoehe: int = 16, breite: int = 16):
             torch.from_numpy(ki.text_positionen(prompt.shape[1])))
 
 
-def transformer_exportieren(pipe, prompt, ziel: str, fp32: bool = False) -> list[str]:
+def transformer_roh(pipe, prompt, pfad: str) -> None:
+    """Der Transformer als FP32-ONNX auf die Platte, ohne ihn wieder zu laden: Das
+    PyTorch-Modell (16 GB) und das geladene ONNX-Modell gleichzeitig im Speicher
+    braeuchten zusammen mit den Kopien der Wandlung rund 48 GB."""
     huelle = TransformerHuelle(pipe.transformer).eval()
     with Exportfreundlich(pipe.transformer):
-        modell = nach_onnx(huelle, beispiel_transformer(prompt),
-                           ["latents", "prompt", "zeit", "bild_ids", "text_ids"],
-                           ["geschwindigkeit"],
-                           {"latents": {1: "tokens"}, "bild_ids": {0: "tokens"},
-                            "geschwindigkeit": {1: "tokens"}})
+        onnx_schreiben(huelle, beispiel_transformer(prompt),
+                       ["latents", "prompt", "zeit", "bild_ids", "text_ids"],
+                       ["geschwindigkeit"],
+                       {"latents": {1: "tokens"}, "bild_ids": {0: "tokens"},
+                        "geschwindigkeit": {1: "tokens"}}, pfad)
+
+
+def transformer_wandeln(roh: str, ziel: str, fp32: bool = False) -> list[str]:
+    """Rohes FP32-ONNX -> FP16 (ausser fp32) -> int8-Gewichte -> fusionierte Attention,
+    verteilt gespeichert."""
+    modell = onnx.load(roh, load_external_data=True)
     if not fp32:
         modell = nach_fp16(modell)
     modell = nach_int8(modell)
+    print(f"Attention fusioniert: {attention_fusionieren(modell)}")
+    if fp32:
+        print(f"In FP16 gerechnet: {rechenkerne_fp16(modell)} Knoten")
     return verteilt_speichern(modell, ziel, ki.OUTPAINT_TRANSFORMER)
 
 
@@ -456,34 +630,55 @@ def sitzung(pfad: str):
     return ort.InferenceSession(pfad, providers=anbieter)
 
 
+MINDEST_KOSINUS = 0.99
+KOSINUS: list[float] = []      # alle Ergebnisse der Pruefung dieses Laufs
+
+
 def _melden(name: str, soll, ist):
     soll, ist = np.asarray(soll), np.asarray(ist)
-    print(f"{name}: Kosinus {kosinus(soll, ist):.6f}, groesste Abweichung "
+    KOSINUS.append(kosinus(soll, ist))
+    print(f"{name}: Kosinus {KOSINUS[-1]:.6f}, groesste Abweichung "
           f"{np.abs(soll - ist).max():.3e} (Werte bis {np.abs(soll).max():.2f})")
 
 
-def netze_pruefen(pipe, prompt, ziel: str):
-    """Jedes Netz gegen PyTorch, in anderen Groessen als beim Export."""
-    kodierer = sitzung(os.path.join(ziel, ki.OUTPAINT_KODIERER))
-    bild = torch.rand(1, 3, 256, 384)
-    with torch.no_grad():
-        soll = KodiererHuelle(pipe.vae)(bild).numpy()
-    _melden("VAE-Encoder", soll, kodierer.run(None, {"bild": bild.numpy()})[0])
+TRANSFORMER_EINGAENGE = ["latents", "prompt", "zeit", "bild_ids", "text_ids"]
+TRANSFORMER_PROBEN = ((16, 24), (32, 32))
 
-    dekodierer = sitzung(os.path.join(ziel, ki.OUTPAINT_DEKODIERER))
-    latent = torch.from_numpy(soll)
+
+def sollwerte_berechnen(pipe, prompt, pfad: str):
+    """Ein- und Ausgaben von PyTorch fuer alle Pruefungen, als .npz - so laeuft die
+    Pruefung der ONNX-Netze spaeter ohne das PyTorch-Modell im Speicher."""
+    werte = {}
+    bild = torch.rand(1, 3, 256, 384, generator=torch.Generator().manual_seed(0))
     with torch.no_grad():
-        soll = DekodiererHuelle(pipe.vae)(latent).numpy()
-    _melden("VAE-Decoder", soll, dekodierer.run(None, {"latent": latent.numpy()})[0])
+        latent = KodiererHuelle(pipe.vae)(bild)
+        werte["kodierer_ein"], werte["kodierer_aus"] = bild.numpy(), latent.numpy()
+        werte["dekodierer_aus"] = DekodiererHuelle(pipe.vae)(latent).numpy()
+        for hoehe, breite in TRANSFORMER_PROBEN:
+            eingaben = beispiel_transformer(prompt, hoehe, breite)
+            werte[f"transformer_{hoehe}x{breite}"] = \
+                TransformerHuelle(pipe.transformer)(*eingaben).numpy()
+    werte["ablauf"] = ablauf_soll(pipe, prompt)
+    np.savez(pfad, **werte)
+
+
+def netze_pruefen(soll: dict, prompt, ziel: str):
+    """Jedes Netz gegen die Sollwerte von PyTorch, in anderen Groessen als beim Export."""
+    kodierer = sitzung(os.path.join(ziel, ki.OUTPAINT_KODIERER))
+    _melden("VAE-Encoder", soll["kodierer_aus"],
+            kodierer.run(None, {"bild": soll["kodierer_ein"]})[0])
+    dekodierer = sitzung(os.path.join(ziel, ki.OUTPAINT_DEKODIERER))
+    _melden("VAE-Decoder", soll["dekodierer_aus"],
+            dekodierer.run(None, {"latent": soll["kodierer_aus"]})[0])
+    del kodierer, dekodierer
 
     transformer = sitzung(os.path.join(ziel, ki.OUTPAINT_TRANSFORMER))
-    namen = ["latents", "prompt", "zeit", "bild_ids", "text_ids"]
-    for hoehe, breite in ((16, 24), (32, 32)):
+    for hoehe, breite in TRANSFORMER_PROBEN:
         eingaben = beispiel_transformer(prompt, hoehe, breite)
-        with torch.no_grad():
-            soll = TransformerHuelle(pipe.transformer)(*eingaben).numpy()
-        ist = transformer.run(None, {n: t.numpy() for n, t in zip(namen, eingaben, strict=True)})
-        _melden(f"Transformer ({16 * breite} x {16 * hoehe})", soll, ist[0])
+        ist = transformer.run(None, {n: t.numpy() for n, t in
+                                     zip(TRANSFORMER_EINGAENGE, eingaben, strict=True)})
+        _melden(f"Transformer ({16 * breite} x {16 * hoehe})",
+                soll[f"transformer_{hoehe}x{breite}"], ist[0])
 
 
 def probeleinwand(breite: int = 512, hoehe: int = 384) -> np.ndarray:
@@ -500,20 +695,35 @@ def probeleinwand(breite: int = 512, hoehe: int = 384) -> np.ndarray:
     return (np.clip(bild, 0, 1) * 255 + 0.5).astype(np.uint8)
 
 
-def ablauf_pruefen(pipe, prompt, ziel: str, seed: int = 1):
-    """silberkorn.ki.outpaint_rechnen mit den ONNX-Netzen gegen Flux2KleinPipeline -
-    dieselbe Leinwand, dasselbe Startrauschen."""
-    from PIL import Image
+def _probe(seed: int):
+    """Probeleinwand und Startrauschen - in beiden Prozessen gleich."""
     leinwand = probeleinwand()
     hoehe, breite = leinwand.shape[:2]
     h, w = hoehe // ki.OUTPAINT_VIELFACHES, breite // ki.OUTPAINT_VIELFACHES
-    daten = ki.outpaint_daten_laden(os.path.join(ziel, ki.OUTPAINT_DATEN))
-    rauschen = ki.outpaint_rauschen(seed, h * w, daten.mittel.shape[1])
+    # Kanaele der Latents nach patchify: 4 * latent_channels des VAE (32)
+    rauschen = ki.outpaint_rauschen(seed, h * w, 128)
+    return leinwand, rauschen, h, w
+
+
+def ablauf_soll(pipe, prompt, seed: int = 1) -> np.ndarray:
+    """Flux2KleinPipeline auf der Probeleinwand mit festem Startrauschen."""
+    from PIL import Image
+    leinwand, rauschen, h, w = _probe(seed)
+    hoehe, breite = leinwand.shape[:2]
     with torch.no_grad():
-        soll = pipe(image=Image.fromarray(leinwand), prompt_embeds=prompt, width=breite,
+        return pipe(image=Image.fromarray(leinwand), prompt_embeds=prompt, width=breite,
                     height=hoehe, num_inference_steps=ki.OUTPAINT_SCHRITTE, guidance_scale=1.0,
                     latents=torch.from_numpy(np.ascontiguousarray(ki.entpacken(rauschen, h, w))),
                     output_type="np").images[0]
+
+
+def ablauf_pruefen(soll: np.ndarray, ziel: str, seed: int = 1):
+    """silberkorn.ki.outpaint_rechnen mit den ONNX-Netzen gegen Flux2KleinPipeline -
+    dieselbe Leinwand, dasselbe Startrauschen."""
+    from PIL import Image
+    leinwand, rauschen, _h, _w = _probe(seed)
+    daten = ki.outpaint_daten_laden(os.path.join(ziel, ki.OUTPAINT_DATEN))
+    assert daten.mittel.shape[1] == rauschen.shape[-1], "Kanalzahl der Latents"
     kodierer = sitzung(os.path.join(ziel, ki.OUTPAINT_KODIERER))
     transformer = sitzung(os.path.join(ziel, ki.OUTPAINT_TRANSFORMER))
     dekodierer = sitzung(os.path.join(ziel, ki.OUTPAINT_DEKODIERER))
@@ -545,16 +755,43 @@ def main(argv: list[str] | None = None):
     teiler = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     teiler.add_argument("modelle")
     teiler.add_argument("--ziel", default=ZIEL)
-    teiler.add_argument("--fp32", action="store_true")
+    teiler.add_argument("--fp16", action="store_true")
     teiler.add_argument("--vae-fp32", action="store_true")
     teiler.add_argument("--ohne-pruefung", action="store_true")
+    # intern: nur der PyTorch-Teil, als eigener Prozess (siehe unten)
+    teiler.add_argument("--nur-pytorch", action="store_true", help=argparse.SUPPRESS)
     args = teiler.parse_args(argv)
     os.makedirs(args.ziel, exist_ok=True)
+    zwischen = os.path.join(args.ziel, "_export-zwischenstand")
+    roh = os.path.join(zwischen, "transformer-fp32.onnx")
+    soll_pfad = os.path.join(zwischen, "sollwerte.npz")
 
-    pipe, prompt = pipeline_laden(args.modelle)
-    ergebnisse = [daten_speichern(pipe, prompt, os.path.join(args.ziel, ki.OUTPAINT_DATEN))]
-    ergebnisse += vae_exportieren(pipe, args.ziel, args.vae_fp32)
-    ergebnisse += transformer_exportieren(pipe, prompt, args.ziel, args.fp32)
+    if args.nur_pytorch:
+        os.makedirs(zwischen, exist_ok=True)
+        pipe, prompt = pipeline_laden(args.modelle)
+        daten_speichern(pipe, prompt, os.path.join(args.ziel, ki.OUTPAINT_DATEN))
+        vae_exportieren(pipe, args.ziel, args.vae_fp32)
+        transformer_roh(pipe, prompt, roh)
+        if not args.ohne_pruefung:
+            sollwerte_berechnen(pipe, prompt, soll_pfad)
+        return
+
+    # Zwei Prozesse, damit PyTorch-Modell (16 GB in FP32) und ONNX-Modell samt Kopien
+    # der Wandlung nie gleichzeitig im Arbeitsspeicher liegen
+    import subprocess
+    befehl = [sys.executable, os.path.abspath(__file__), args.modelle, "--ziel", args.ziel,
+              "--nur-pytorch"]
+    befehl += [f"--{n}" for n in ("vae-fp32", "ohne-pruefung")
+               if getattr(args, n.replace("-", "_"))]
+    if os.path.exists(roh) and (args.ohne_pruefung or os.path.exists(soll_pfad)):
+        # Ein frueherer Lauf scheiterte erst nach dem PyTorch-Teil
+        print(f"Zwischenstand aus {zwischen} wird weiterverwendet")
+    else:
+        subprocess.run(befehl, check=True)
+
+    ergebnisse = [os.path.join(args.ziel, n)
+                  for n in (ki.OUTPAINT_DATEN, ki.OUTPAINT_KODIERER, ki.OUTPAINT_DEKODIERER)]
+    ergebnisse += transformer_wandeln(roh, args.ziel, fp32=not args.fp16)
     for quelle, name in (("Apache-2.0.txt", "LICENSE-FLUX2-klein.txt"),
                          ("NOTICE-FLUX2-klein.txt", ki.OUTPAINT_NOTICE)):
         ergebnisse.append(shutil.copyfile(os.path.join(LIZENZEN, quelle),
@@ -564,8 +801,17 @@ def main(argv: list[str] | None = None):
         print(f"ACHTUNG: Gewichtsdateien {teile} - OUTPAINT_GEWICHTE in silberkorn/ki.py "
               "anpassen")
     if not args.ohne_pruefung:
-        netze_pruefen(pipe, prompt, args.ziel)
-        ablauf_pruefen(pipe, prompt, args.ziel)
+        with np.load(soll_pfad) as soll:
+            soll = dict(soll)
+        prompt = torch.from_numpy(ki.outpaint_daten_laden(
+            os.path.join(args.ziel, ki.OUTPAINT_DATEN)).prompt)
+        netze_pruefen(soll, prompt, args.ziel)
+        ablauf_pruefen(soll["ablauf"], args.ziel)
+    if all(k >= MINDEST_KOSINUS for k in KOSINUS):     # NaN faellt hier durch
+        shutil.rmtree(zwischen)
+    else:
+        print(f"ACHTUNG: Pruefung nicht bestanden (Kosinus unter {MINDEST_KOSINUS} oder NaN) "
+              f"- Zwischenstand bleibt fuer einen weiteren Lauf in {zwischen}")
     for pfad in ergebnisse:
         print(f"{os.path.basename(pfad):34s} {os.path.getsize(pfad):>13,d} B  "
               f"{pruefsumme(pfad)}")

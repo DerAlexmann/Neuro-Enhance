@@ -6,6 +6,8 @@
 *.md   text
 *.toml text
 *.cmd  text eol=crlf
+# Lizenztexte werden byte-genau mit Modellen verteilt und per SHA-256 geprueft
+LICENSES/*.txt text eol=lf
 
 *.png binary
 *.ico binary
