@@ -9,3 +9,7 @@ ruff>=0.6
 # Nur zum Wandeln der Modelle (werkzeuge/modelle_exportieren.py), dazu onnx
 # aus requirements.txt:
 # torch
+# Nur fürs KI-Erweitern (werkzeuge/outpaint_export.py), dazu torch:
+# diffusers==0.41.*
+# peft
+# transformers

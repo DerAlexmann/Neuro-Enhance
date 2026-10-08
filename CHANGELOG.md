@@ -68,6 +68,21 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- KI-Erweitern (Outpainting) mit FLUX.2 [klein] 4B und der Outpaint-LoRA von
+  fal (beide Apache-2.0): In der Karte „Geometrie“ erweitert „Mit KI erweitern
+  statt beschneiden“ das Bild auf das gewählte Seitenverhältnis, statt es
+  zuzuschneiden. Das Original kommt mittig auf eine reingrüne Leinwand von rund
+  einem Megapixel, die KI füllt das Grün in 4 Schritten; danach wird ihr
+  Farbstich am Original herausgenommen und das unveränderte Original mit
+  weichem Saum eingesetzt. „Neu erzeugen“ rechnet mit neuem Zufall; über 25 %
+  je Seite gibt es einen Hinweis. Die Erweiterung liegt vor allen Reglern und
+  lässt sich wieder abwählen. Ab 8 GB Grafikspeicher; das Modell (rund 4,3 GB,
+  Release „modelle-8“, auf mehrere Dateien verteilt) wird erst auf Wunsch
+  geladen.
+- `werkzeuge/outpaint_export.py`: rechnet die LoRA ein, exportiert Transformer
+  und VAE nach ONNX, quantisiert den Transformer nach int8 (MatMulNBits,
+  Block 128) und prüft jedes Netz sowie den ganzen Ablauf gegen diffusers.
+  `werkzeuge/outpaint_referenz.py` ist der lokal geprüfte Stand in PyTorch.
 - Zuschnitt: Seitenverhältnisse 4:5 (etwa für Instagram) und 5:4.
 - Windows-EXE: `build.cmd` baut mit PyInstaller einen Programmordner und ein
   ZIP (ohne Installation). Die EXE bringt CUDA und cuDNN nicht mit, sondern
