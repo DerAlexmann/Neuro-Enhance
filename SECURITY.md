@@ -25,9 +25,11 @@ Gepflegt wird jeweils die neueste veröffentlichte Version.
 
 - **Bilder** bleiben auf dem Rechner. Sie werden weder hochgeladen noch an
   einen Dienst übergeben; gerechnet wird auf der eigenen Grafikkarte.
-- **Netzwerk**: Das Grundgerüst baut keine Verbindungen auf. Spätere Versionen
-  laden KI-Modelle nur auf ausdrücklichen Wunsch und nur von der angezeigten
-  Quelle; jede Modelldatei wird dabei gegen eine im Programm hinterlegte
-  SHA-256-Prüfsumme geprüft.
+- **Netzwerk**: Das Programm lädt KI-Modelle nur auf ausdrücklichen Wunsch und
+  nur von der angezeigten Quelle (den Releases dieses Repositorys); die EXE
+  lädt beim ersten Start nach Zustimmung NVIDIAs CUDA- und cuDNN-Pakete von
+  pypi.org. Jede Datei wird dabei gegen eine im Programm hinterlegte
+  SHA-256-Prüfsumme geprüft, bevor sie verwendet wird. Sonst baut das Programm
+  keine Verbindungen auf.
 - **Gespeichert** werden in `silberkorn.json` neben dem Programm nur
   Sprache, Farbschema und Fensterlage.

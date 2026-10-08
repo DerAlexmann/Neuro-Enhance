@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import os
 import sys
+import traceback
 
-from . import PROGRAMM, VERSION, einstellungen, farben, gpu_pruefung
+from . import PROGRAMM, VERSION, einstellungen, farben, gpu_pruefung, nvidia_laufzeit
 from .gpu_pruefung import Befund, Grafikkarte
 from .uebersetzung import _
 
@@ -28,6 +29,10 @@ TREIBER_SEITE = "https://www.nvidia.com/drivers"
 ENDE_OK = 0
 ENDE_OHNE_QT = 2
 ENDE_OHNE_RTX = 3
+ENDE_OHNE_NVIDIA_BIBLIOTHEKEN = 4
+ENDE_STARTFEHLER = 5
+
+FEHLER_LOG = "silberkorn-fehler.log"
 
 
 def meldungstext(befund: Befund) -> tuple[str, str]:
@@ -123,6 +128,50 @@ def ohne_rtx_beenden(befund: Befund) -> int:
     return ENDE_OHNE_RTX
 
 
+_qt_uebersetzer = None
+
+
+def qt_sprache_setzen(sprache: str) -> None:
+    """Qts eigene Texte (Ja/Nein/Abbrechen, Kontextmenues) in der Programmsprache.
+
+    Ohne das bleiben sie englisch, auch wenn das Programm deutsch spricht. Die
+    Dateien qtbase_<sprache>.qm bringt PySide6 mit; fuer Englisch braucht es keine.
+    """
+    global _qt_uebersetzer
+    from PySide6.QtCore import QLibraryInfo, QTranslator
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if _qt_uebersetzer is not None:
+        app.removeTranslator(_qt_uebersetzer)
+        _qt_uebersetzer = None
+    uebersetzer = QTranslator(app)
+    ordner = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
+    if uebersetzer.load(f"qtbase_{sprache}", ordner):
+        app.installTranslator(uebersetzer)
+        _qt_uebersetzer = uebersetzer
+
+
+def startfehler_zeigen(titel: str, details: str) -> int:
+    """Fehler nach dem Laden von Qt: Fenster mit Details, dazu eine Logdatei
+    neben dem Programm - die EXE hat keine Konsole."""
+    from PySide6.QtWidgets import QMessageBox
+
+    log = os.path.join(einstellungen.programm_ordner(), FEHLER_LOG)
+    try:
+        with open(log, "w", encoding="utf-8") as datei:
+            datei.write(f"{PROGRAMM} {VERSION}\n{titel}\n\n{details}\n")
+    except OSError:
+        log = ""
+    box = QMessageBox(QMessageBox.Icon.Critical, f"{PROGRAMM} {VERSION}", f"<b>{titel}</b>")
+    box.setInformativeText(
+        _("Die Einzelheiten stehen unter „Details“ und in {log}.").format(log=log) if log
+        else _("Die Einzelheiten stehen unter „Details“."))
+    box.setDetailedText(details)
+    box.exec()
+    return ENDE_STARTFEHLER
+
+
 def main(argumente: list[str] | None = None) -> int:
     argumente = sys.argv[1:] if argumente is None else argumente
 
@@ -131,6 +180,7 @@ def main(argumente: list[str] | None = None) -> int:
     os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
 
     try:
+        from PySide6.QtCore import Qt
         from PySide6.QtGui import QFont
         from PySide6.QtWidgets import QApplication
     except ImportError:
@@ -142,8 +192,12 @@ def main(argumente: list[str] | None = None) -> int:
     app.setApplicationName(PROGRAMM)
     app.setApplicationVersion(VERSION)
     app.setFont(QFont(*farben.FONT[:2]))
+    # Windows blendet Aufklapplisten sonst ein und malt dabei kurz den eigenen
+    # Hintergrund - im hellen Schema ein sichtbares Flackern
+    app.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, False)
 
     _.language = einstellungen.startup_language()
+    qt_sprache_setzen(_.language)
     farben.apply_theme(einstellungen.startup_theme())
     app.setStyleSheet(farben.stylesheet())
 
@@ -151,8 +205,21 @@ def main(argumente: list[str] | None = None) -> int:
     if not befund.ok:
         return ohne_rtx_beenden(befund)
 
-    from .hauptfenster import Hauptfenster
-    fenster = Hauptfenster(befund)
+    # Die EXE bringt CUDA und cuDNN nicht mit - beim ersten Start laden
+    if nvidia_laufzeit.noetig() and nvidia_laufzeit.gefunden() is None:
+        from .einrichten import nvidia_einrichten
+        if not nvidia_einrichten():
+            return ENDE_OHNE_NVIDIA_BIBLIOTHEKEN
+
+    from . import cuda
+    if cuda.cupy is None:
+        return startfehler_zeigen(_("CuPy ließ sich nicht laden"), cuda.fehler or "")
+    try:
+        from .hauptfenster import Hauptfenster
+        fenster = Hauptfenster(befund)
+    except Exception:
+        return startfehler_zeigen(_("Das Hauptfenster ließ sich nicht öffnen"),
+                                  traceback.format_exc())
     fenster.show()
     app.exec()
     return ENDE_OK

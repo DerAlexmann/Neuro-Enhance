@@ -45,6 +45,16 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Behoben
 
+- Sprachwechsel: Die Auffrischung brach am ersten Text ohne Übersetzung
+  („100 %“) ab, fast alles blieb in der alten Sprache. Auswahllisten und Qts
+  eigene Knöpfe (Ja/Nein/Abbrechen) wechseln jetzt ebenfalls mit.
+- Reglerleiste: Ihr Inhalt ist immer genau so breit wie sichtbar; ein zu
+  breites Element schob vorher alle Karten nach rechts aus dem Bild.
+- Darstellung: Aufklapplisten, Kästchen, Fortschrittsbalken, Kontextmenüs
+  und das Detailfeld von Fehlermeldungen folgen dem Farbschema; Listen
+  zeigen ihren längsten Eintrag ganz und flackern beim Aufklappen nicht mehr.
+- KI-Knöpfe: kurze Beschriftungen („Anklicken · 147 MB“) statt abgeschnittener
+  Texte; der Tooltip erklärt ohne Modell den Download, mit Modell die Aktion.
 - `python -m silberkorn` startete das Programm auch in jedem Hilfsprozess
   erneut; der Start steht jetzt hinter `if __name__ == "__main__"`.
 - Ein Bild mit Alphakanal ließ sich nach Zuschnitt oder Drehung nicht
@@ -58,6 +68,12 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- Zuschnitt: Seitenverhältnisse 4:5 (etwa für Instagram) und 5:4.
+- Windows-EXE: `build.cmd` baut mit PyInstaller einen Programmordner und ein
+  ZIP (ohne Installation). Die EXE bringt CUDA und cuDNN nicht mit, sondern
+  lädt beim ersten Start nach Zustimmung zu NVIDIAs Lizenzen NVIDIAs
+  offizielle Pakete von pypi.org (1,6 GB) und prüft sie gegen ihre
+  Prüfsummen. Die Lizenztexte aller eingepackten Pakete liegen bei.
 - Neue Karte „Tiefe & Bokeh“ mit Depth Anything V2 Small (Apache-2.0): Die
   Tiefe wird einmal geschätzt (0,16 s bei 26 MP, RTX 4060) und mit einem
   geführten Filter an die Kanten des Bildes gelegt. „Unschärfe“ zeichnet nach

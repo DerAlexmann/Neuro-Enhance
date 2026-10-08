@@ -41,7 +41,31 @@ from .kurveneditor import KurvenEditor
 from .leinwand import Leinwand, rahmen_mit_verhaeltnis
 from .uebersetzung import _
 
-REGLERLEISTE_BREITE = 320
+REGLERLEISTE_BREITE = 340
+
+
+class Reglerleiste(QScrollArea):
+    """Senkrecht rollende Leiste, deren Inhalt immer genau so breit ist wie sichtbar.
+
+    Ein QScrollArea macht seinen Inhalt sonst mindestens so breit, wie das
+    breiteste Element es verlangt - eine etwas breitere Schrift oder ein langer
+    Text schoebe dann alle Karten nach rechts aus dem Bild. So wird stattdessen
+    nur das zu breite Element enger, Rahmen und Regler bleiben sichtbar.
+    """
+
+    def viewportEvent(self, ereignis):
+        # auch wenn der Rollbalken erscheint oder verschwindet
+        if ereignis.type() == QEvent.Type.Resize:
+            self._breite_anpassen()
+        return super().viewportEvent(ereignis)
+
+    def _breite_anpassen(self):
+        if self.widget() is not None:
+            self.widget().setFixedWidth(self.viewport().width())
+
+    def setWidget(self, inhalt):
+        super().setWidget(inhalt)
+        self._breite_anpassen()
 
 
 def gruppen_titel(gruppe: str) -> str:
@@ -154,7 +178,8 @@ KI_ENTRAUSCHEN = filter.Regler("ki_entrauschen", "ki", 0, 100, vorgabe=50)
 def seitenverhaeltnisse() -> list[tuple[str, float | None]]:
     """Auswahl fuer den Zuschnitt: Beschriftung und Breite/Hoehe; None heisst frei."""
     return [(_("Frei"), None), (_("Original"), -1.0), ("1:1", 1.0), ("3:2", 3 / 2),
-            ("2:3", 2 / 3), ("4:3", 4 / 3), ("3:4", 3 / 4), ("16:9", 16 / 9), ("9:16", 9 / 16)]
+            ("2:3", 2 / 3), ("4:3", 4 / 3), ("3:4", 3 / 4), ("5:4", 5 / 4),
+            ("4:5", 4 / 5), ("16:9", 16 / 9), ("9:16", 9 / 16)]
 
 
 def zuschnitt_drehen(rahmen, richtung: int):
@@ -305,6 +330,23 @@ class BearbeitenSeite(QWidget):
             knopf.clicked.connect(aktion)
         return knopf
 
+    def _modell_tooltip(self, knopf: QPushButton, modell: ki.Modell, aktion=None):
+        """Tooltip eines Knopfs, der ohne Modell erst laedt: solange das Modell
+        fehlt, der Hinweis auf den Download - danach, was der Knopf tut."""
+        if not ki.vorhanden(modell):
+            text = _("Lädt zuerst das KI-Modell ({mb} MB) aus den Releases von Silberkorn "
+                     "auf GitHub – nach einer Rückfrage mit Quelle, Größe und Lizenz.").format(
+                mb=f"{ki.download_groesse(modell) / 2**20:.0f}")
+        else:
+            text = aktion if aktion is not None else ""
+        self.fenster.beschriften(knopf.setToolTip, text)
+
+    def _eintrag(self, auswahl: QComboBox, text, wert):
+        """Eintrag einer Auswahlliste, der den Sprachwechsel mitmacht."""
+        auswahl.addItem("", wert)
+        nummer = auswahl.count() - 1
+        self.fenster.beschriften(lambda t: auswahl.setItemText(nummer, t), text)
+
     def _werkzeugleiste(self) -> QHBoxLayout:
         leiste = QHBoxLayout()
         leiste.setSpacing(8)
@@ -336,7 +378,7 @@ class BearbeitenSeite(QWidget):
         return leiste
 
     def _reglerleiste(self) -> QScrollArea:
-        flaeche = QScrollArea()
+        flaeche = Reglerleiste()
         flaeche.setWidgetResizable(True)
         flaeche.setFixedWidth(REGLERLEISTE_BREITE)
         flaeche.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -420,7 +462,7 @@ class BearbeitenSeite(QWidget):
             "Rahmen auf dem Bild ziehen; Eingabetaste übernimmt, Esc bricht ab."))
         self.verhaeltnis_wahl = QComboBox()
         for text, wert in seitenverhaeltnisse():
-            self.verhaeltnis_wahl.addItem(text, wert)
+            self._eintrag(self.verhaeltnis_wahl, text, wert)
         self.verhaeltnis_wahl.currentIndexChanged.connect(self._verhaeltnis_gewaehlt)
         self.zuschnitt_weg_knopf = self._knopf(_("Voll"), self.zuschnitt_zuruecksetzen, "kanal")
         self.fenster.beschriften(self.zuschnitt_weg_knopf.setToolTip,
@@ -538,10 +580,10 @@ class BearbeitenSeite(QWidget):
         zeile = QHBoxLayout()
         self.ki_faktor = QComboBox()
         for text, wert in ((_("Aus"), 0), ("2 ×", 2), ("4 ×", 4)):
-            self.ki_faktor.addItem(text, wert)
+            self._eintrag(self.ki_faktor, text, wert)
         self.ki_modell = QComboBox()
-        self.ki_modell.addItem(_("Schnell"), "schnell")
-        self.ki_modell.addItem(_("Hohe Qualität"), "qualitaet")
+        self._eintrag(self.ki_modell, _("Schnell"), "schnell")
+        self._eintrag(self.ki_modell, _("Hohe Qualität"), "qualitaet")
         zeile.addWidget(self.ki_faktor)
         zeile.addWidget(self.ki_modell, 1)
         innen.addLayout(zeile)
@@ -596,6 +638,7 @@ class BearbeitenSeite(QWidget):
             self.fenster.beschriften(self.ki_laden_knopf.setText, _(
                 "Modell herunterladen ({mb} MB)").format(
                     mb=f"{ki.download_groesse(modell) / 2**20:.0f}"))
+            self._modell_tooltip(self.ki_laden_knopf, modell)
         if offen and an:
             hoehe, breite = ki.ausgabe_form(self.sitzung.ausgabe_form(),
                                             self.ki_faktor.currentData())
@@ -765,6 +808,9 @@ class BearbeitenSeite(QWidget):
             knopf.setVisible(beschriftung is not None)
             if beschriftung is not None:
                 self.fenster.beschriften(knopf.setText, beschriftung)
+                self._modell_tooltip(knopf, modell, _(
+                    "Berechnet das Ergebnis einmal für das ganze Bild; mit „Stärke“ lässt "
+                    "es sich danach stufenlos einblenden."))
                 knopf.setEnabled(offen or not ki.vorhanden(modell))
             self.zeilen[gruppe].schieber.setEnabled(fertig)
         self._masken_anzeigen()
@@ -844,9 +890,6 @@ class BearbeitenSeite(QWidget):
         self.auswahl_knopf = QPushButton()
         self.auswahl_knopf.setCheckable(True)
         self.auswahl_knopf.toggled.connect(self._auswahl_knopf_gedrueckt)
-        self.fenster.beschriften(self.auswahl_knopf.setToolTip, _(
-            "Ein Objekt im Bild per Klick auswählen – die Regler dieser Karte wirken dann "
-            "auf alles andere."))
         self.auswahl_zurueck_knopf = self._knopf(_("Klick zurück"), self.klick_zuruecknehmen,
                                                  "kanal")
         self.fenster.beschriften(self.auswahl_zurueck_knopf.setToolTip,
@@ -913,7 +956,7 @@ class BearbeitenSeite(QWidget):
                 text += " " + _("Das Erkennen ohne Klick braucht 6 GB Grafikspeicher.")
         if not klicken and ki.angeboten(modell, stufe) and (not fertig or per_klick):
             if not ki.vorhanden(modell):
-                knopf = _("Motiv erkennen – Modell laden ({mb} MB)").format(
+                knopf = _("Motiv erkennen · {mb} MB").format(
                     mb=f"{ki.download_groesse(modell) / 2**20:.0f}")
             else:
                 knopf = _("Motiv erkennen")
@@ -921,12 +964,18 @@ class BearbeitenSeite(QWidget):
         self.masken_knopf.setVisible(knopf is not None)
         if knopf is not None:
             self.fenster.beschriften(self.masken_knopf.setText, knopf)
+            self._modell_tooltip(self.masken_knopf, modell, _(
+                "Die KI erkennt das Hauptmotiv – die Regler dieser Karte wirken dann auf den "
+                "Hintergrund."))
             self.masken_knopf.setEnabled(offen or not ki.vorhanden(modell))
         self.auswahl_knopf.setVisible(ki.angeboten(sam, stufe))
         self.fenster.beschriften(
             self.auswahl_knopf.setText, _("Objekt anklicken") if ki.vorhanden(sam) else
-            _("Objekt anklicken – Modell laden ({mb} MB)").format(
+            _("Objekt anklicken · {mb} MB").format(
                 mb=f"{ki.download_groesse(sam) / 2**20:.0f}"))
+        self._modell_tooltip(self.auswahl_knopf, sam, _(
+            "Ein Objekt im Bild per Klick auswählen – die Regler dieser Karte wirken dann "
+            "auf alles andere."))
         self.auswahl_knopf.setEnabled(offen or not ki.vorhanden(sam))
         if self.auswahl_knopf.isChecked() != klicken:
             self.auswahl_knopf.blockSignals(True)
@@ -1102,8 +1151,6 @@ class BearbeitenSeite(QWidget):
         self.entfern_klick_knopf.setCheckable(True)
         self.entfern_klick_knopf.toggled.connect(
             lambda an: self._auswahl_knopf_gedrueckt(an, "entfernen"))
-        self.fenster.beschriften(self.entfern_klick_knopf.setToolTip, _(
-            "Ein Objekt per Klick markieren – Rechtsklick nimmt einen Bereich wieder weg."))
         self.pinsel_knopf = QPushButton()
         self.pinsel_knopf.setCheckable(True)
         self.fenster.beschriften(self.pinsel_knopf.setText, _("Pinsel"))
@@ -1129,17 +1176,21 @@ class BearbeitenSeite(QWidget):
         zeile.addWidget(groesse)
         zeile.addWidget(self.pinsel_groesse, 1)
         innen.addWidget(self.pinsel_zeile)
+        self.entfernen_knopf = self._knopf("", self.entfernen, "hauptschalter")
+        innen.addWidget(self.entfernen_knopf)
         leiste = QHBoxLayout()
         leiste.setSpacing(4)
-        self.entfernen_knopf = self._knopf("", self.entfernen, "hauptschalter")
         self.markierung_weg_knopf = self._knopf(_("Markierung löschen"),
                                                 self.markierung_verwerfen)
-        leiste.addWidget(self.entfernen_knopf, 1)
-        leiste.addWidget(self.markierung_weg_knopf)
-        innen.addLayout(leiste)
-        self.entfernung_zurueck_knopf = self._knopf(_("Letzte Entfernung zurücknehmen"),
+        self.fenster.beschriften(self.markierung_weg_knopf.setToolTip,
+                                 _("Die blaue Markierung verwerfen, ohne etwas zu entfernen."))
+        self.entfernung_zurueck_knopf = self._knopf(_("Zurücknehmen"),
                                                     self.entfernung_zuruecknehmen)
-        innen.addWidget(self.entfernung_zurueck_knopf)
+        self.fenster.beschriften(self.entfernung_zurueck_knopf.setToolTip,
+                                 _("Letzte Entfernung zurücknehmen"))
+        leiste.addWidget(self.markierung_weg_knopf, 1)
+        leiste.addWidget(self.entfernung_zurueck_knopf, 1)
+        innen.addLayout(leiste)
         return karte
 
     def _entfern_modell(self) -> ki.Modell:
@@ -1178,8 +1229,10 @@ class BearbeitenSeite(QWidget):
         self.entfern_klick_knopf.setVisible(nutzbar and ki.angeboten(sam, stufe))
         self.fenster.beschriften(
             self.entfern_klick_knopf.setText, _("Anklicken") if ki.vorhanden(sam) else
-            _("Anklicken – Modell laden ({mb} MB)").format(
+            _("Anklicken · {mb} MB").format(
                 mb=f"{ki.download_groesse(sam) / 2**20:.0f}"))
+        self._modell_tooltip(self.entfern_klick_knopf, sam, _(
+            "Ein Objekt per Klick markieren – Rechtsklick nimmt einen Bereich wieder weg."))
         self.entfern_klick_knopf.setEnabled(offen or not ki.vorhanden(sam))
         self.pinsel_knopf.setEnabled(offen)
         for knopf, an in ((self.entfern_klick_knopf, klicken), (self.pinsel_knopf, malen)):
@@ -1196,9 +1249,17 @@ class BearbeitenSeite(QWidget):
             self.entfernen_knopf.setEnabled(markiert)
         else:
             self.fenster.beschriften(
-                self.entfernen_knopf.setText, _("Entfernen – Modell laden ({mb} MB)").format(
+                self.entfernen_knopf.setText, _("Entfernen · {mb} MB").format(
                     mb=f"{ki.download_groesse(lama) / 2**20:.0f}"))
             self.entfernen_knopf.setEnabled(True)
+        self._modell_tooltip(self.entfernen_knopf, lama, _(
+            "Füllt die blau markierte Stelle mit passendem Hintergrund."))
+        # Blau als Hauptknopf nur, wenn wirklich etwas zum Entfernen markiert ist
+        rolle = "hauptschalter" if markiert and ki.vorhanden(lama) else ""
+        if self.entfernen_knopf.objectName() != rolle:
+            self.entfernen_knopf.setObjectName(rolle)
+            self.entfernen_knopf.style().unpolish(self.entfernen_knopf)
+            self.entfernen_knopf.style().polish(self.entfernen_knopf)
         self.markierung_weg_knopf.setEnabled(markiert)
         self.entfernung_zurueck_knopf.setEnabled(entfernt > 0)
 
@@ -1356,6 +1417,9 @@ class BearbeitenSeite(QWidget):
         self.tiefe_knopf.setVisible(knopf is not None)
         if knopf is not None:
             self.fenster.beschriften(self.tiefe_knopf.setText, knopf)
+            self._modell_tooltip(self.tiefe_knopf, modell, _(
+                "Schätzt die Tiefe des ganzen Bildes – danach wirken Unschärfe, Fokus und "
+                "Schärfentiefe."))
             self.tiefe_knopf.setEnabled(offen or not ki.vorhanden(modell))
         fokussieren = self._klick_ziel == "fokus"
         self.fokus_knopf.setVisible(fertig)

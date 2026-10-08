@@ -152,8 +152,6 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   from a lens database (lensfun).
 - **X-Trans on the GPU**: demosaicing for Fujifilm sensors on the graphics card as
   well.
-- **More AI features**: denoising, deblurring, background removal, click-to-select
-  objects, object removal, depth maps for synthetic depth of field.
 
 ## Running it
 
@@ -169,7 +167,22 @@ total); a separate CUDA Toolkit installation is not needed. The first time a fil
 used, the graphics card compiles the matching program once; this takes one to three
 seconds and is kept for all later starts.
 
-A ready-made executable will follow with the first release.
+**As a program (Windows):** unpack the ZIP from the release and start
+`Silberkorn.exe` – no installation, no admin rights.
+
+The executable does not include CUDA and cuDNN: NVIDIA's licences do not allow them to
+be passed on together with Silberkorn. At first start the program therefore asks,
+names source, size and NVIDIA's licence terms and, once you agree, downloads NVIDIA's
+official packages from the Python Package Index once – 1.6 GB, about 2.3 GB unpacked in
+the `nvidia` folder next to the executable. Every file is verified against its
+checksum. The executable computes with CUDA; TensorRT is only available in the Python
+version.
+
+**Building the executable yourself:** `build.cmd` creates the clean environment
+`.venv-build` (only the packages from `requirements-build.txt`) and uses PyInstaller to
+produce the folder `dist\Silberkorn` and the ZIP with its SHA-256. The licence texts of
+all bundled packages are placed next to the executable (`lizenzen/`,
+`DRITTANBIETER.txt`).
 
 ### TensorRT (optional)
 
@@ -199,7 +212,8 @@ data is sent. The AI also runs locally on the graphics card. The only network ac
 downloading an AI model – and only when you explicitly ask for it in the "AI upscaling",
 "AI denoise", "AI sharpen", "Subject & background", "Remove objects" or "Depth & bokeh"
 card and confirm the prompt that names source, size and
-licence.
+licence. The executable also downloads the NVIDIA libraries from pypi.org at first
+start – likewise only after you agree.
 
 ## AI models
 

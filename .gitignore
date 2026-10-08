@@ -2,6 +2,8 @@
 build/
 dist/
 *.spec
+!silberkorn.spec
+.venv-build/
 
 # Python
 __pycache__/
@@ -15,6 +17,7 @@ venv/
 silberkorn.json
 modelle/
 engines/
+nvidia/
 
 # Lokale Notizen, nicht für das Repository
 _VEROEFFENTLICHEN.md

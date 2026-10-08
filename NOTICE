@@ -68,9 +68,11 @@ tifffile
 
 imagecodecs
   Copyright Christoph Gohlke
-  Licence: BSD 3-Clause; bundles third-party codec libraries (among them
-  zlib, libpng, libdeflate) under their own permissive licences, listed in
-  the package.
+  Licence: BSD 3-Clause; bundles third-party codec libraries under their
+  own licences, listed in the package. A binary release of Silberkorn
+  contains only the modules for zlib, libdeflate, libpng, libjpeg-turbo,
+  zstd, liblzma and libwebp (all permissive) - not the libheif module
+  (LGPL-3.0).
   https://github.com/cgohlke/imagecodecs
 
 rawpy

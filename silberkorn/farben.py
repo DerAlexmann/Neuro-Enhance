@@ -15,6 +15,9 @@ Created with assistance of Claude AI
 
 from __future__ import annotations
 
+import os
+import tempfile
+
 THEMES = {
     "light": {
         "BG": "#eef1f5",             # Seitenhintergrund
@@ -101,6 +104,31 @@ FONT_MONO_SMALL = ("Consolas", 9)
 FONT_ZAHL = ("Consolas", 12, "bold")
 
 
+SYMBOLE = {   # Name: (Breite, Hoehe, Pfad)
+    "pfeil": (10, 6, "M1 1l4 4 4-4"),
+    "haken": (10, 8, "M1 4l3 3 5-6"),
+}
+
+
+def symbol(name: str, farbe: str) -> str:
+    """SVG-Symbol (Aufklapp-Pfeil, Haken) in dieser Farbe - als Datei, denn
+    Stylesheets kennen Bilder nur per Pfad. Ohne beschreibbaren Temp-Ordner: ""."""
+    breite, hoehe, form = SYMBOLE[name]
+    ordner = os.path.join(tempfile.gettempdir(), "silberkorn-symbole")
+    pfad = os.path.join(ordner, f"{name}-{farbe.lstrip('#')}.svg")
+    if not os.path.exists(pfad):
+        try:
+            os.makedirs(ordner, exist_ok=True)
+            with open(pfad, "w", encoding="utf-8") as datei:
+                datei.write(f'<svg xmlns="http://www.w3.org/2000/svg" width="{breite}" '
+                            f'height="{hoehe}" viewBox="0 0 {breite} {hoehe}"><path d="{form}" '
+                            f'fill="none" stroke="{farbe}" stroke-width="1.6" '
+                            'stroke-linecap="round" stroke-linejoin="round"/></svg>')
+        except OSError:
+            return ""
+    return pfad.replace("\\", "/")
+
+
 def stylesheet() -> str:
     """Qt-Stylesheet aus den Rollen des aktuellen Schemas.
 
@@ -116,13 +144,50 @@ def stylesheet() -> str:
     QMainWindow, QWidget#seite {{ background: {t["BG"]}; }}
     QDialog, QMessageBox {{ background: {t["BG"]}; }}
     QMessageBox QLabel {{ color: {t["TEXT"]}; background: transparent; }}
+    QProgressBar {{
+        background: {t["TROUGH"]}; color: {t["TEXT"]}; border: none; border-radius: 4px;
+        text-align: center; min-height: 16px;
+    }}
+    QProgressBar::chunk {{ background: {t["ACCENT"]}; border-radius: 4px; }}
+    QMenu {{ background: {t["CARD"]}; color: {t["TEXT"]}; border: 1px solid {t["BORDER"]}; }}
+    QMenu::item {{ padding: 5px 24px 5px 16px; }}
+    QMenu::item:selected {{ background: {t["ACCENT"]}; color: {t["ON_ACCENT"]}; }}
+    QMenu::item:disabled {{ color: {t["BTN_DISABLED"]}; }}
+    QMenu::separator {{ height: 1px; background: {t["BORDER"]}; margin: 4px 8px; }}
+    QTextEdit, QPlainTextEdit {{
+        background: {t["FIELD_BG"]}; color: {t["TEXT"]};
+        border: 1px solid {t["BORDER"]}; border-radius: 4px;
+        selection-background-color: {t["ACCENT"]}; selection-color: {t["ON_ACCENT"]};
+    }}
     QScrollArea, QScrollArea > QWidget > QWidget {{ background: {t["BG"]}; border: none; }}
 
     QComboBox {{
         background: {t["FIELD_BG"]}; color: {t["TEXT"]};
-        border: 1px solid {t["BORDER"]}; border-radius: 4px; padding: 2px 8px;
+        border: 1px solid {t["BORDER"]}; border-radius: 4px; padding: 2px 24px 2px 8px;
     }}
+    QComboBox::drop-down {{
+        subcontrol-origin: padding; subcontrol-position: center right;
+        width: 22px; border: none; background: transparent;
+    }}
+    QComboBox::down-arrow {{
+        image: url("{symbol("pfeil", t["TEXT"])}"); width: 10px; height: 6px;
+    }}
+    QFrame#kopf QComboBox::down-arrow {{ image: url("{symbol("pfeil", t["HEADER_TEXT"])}"); }}
+    QCheckBox::indicator {{
+        width: 13px; height: 13px; border-radius: 3px;
+        border: 1px solid {t["BORDER"]}; background: {t["FIELD_BG"]};
+    }}
+    QCheckBox::indicator:checked, QFrame#kopf QCheckBox::indicator:checked {{
+        border-color: {t["ACCENT"]}; background: {t["ACCENT"]};
+        image: url("{symbol("haken", t["ON_ACCENT"])}");
+    }}
+    QCheckBox::indicator:disabled {{ background: {t["BTN_BG"]}; }}
+    QCheckBox::indicator:checked:disabled {{
+        border-color: {t["BTN_DISABLED"]}; background: {t["BTN_DISABLED"]};
+    }}
+    QComboBoxPrivateContainer {{ background: {t["CARD"]}; border: 1px solid {t["BORDER"]}; }}
     QComboBox QAbstractItemView {{
+        border: none; outline: 0;
         background: {t["CARD"]}; color: {t["TEXT"]};
         selection-background-color: {t["ACCENT"]}; selection-color: {t["ON_ACCENT"]};
     }}
@@ -131,9 +196,12 @@ def stylesheet() -> str:
     QLabel#titel {{ color: {t["HEADER_TITLE"]}; font-size: 13pt; font-weight: bold; }}
     QLabel#kopfgruppe {{ color: {t["HEADER_GROUP"]}; font-size: 8pt; }}
     QFrame#kopf QCheckBox {{ color: {t["HEADER_TEXT"]}; background: transparent; }}
+    QFrame#kopf QCheckBox::indicator {{
+        border-color: {t["HEADER_GROUP"]}; background: {t["HEADER_HOVER"]};
+    }}
     QFrame#kopf QComboBox {{
         background: {t["HEADER_HOVER"]}; color: {t["HEADER_TEXT"]};
-        border: 1px solid {t["HEADER_GROUP"]}; border-radius: 4px; padding: 2px 8px;
+        border: 1px solid {t["HEADER_GROUP"]}; border-radius: 4px; padding: 2px 24px 2px 8px;
     }}
     QFrame#kopf QComboBox QAbstractItemView {{
         background: {t["HEADER"]}; color: {t["HEADER_TEXT"]};

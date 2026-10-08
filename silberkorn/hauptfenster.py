@@ -131,6 +131,7 @@ class Hauptfenster(QMainWindow):
         self._reiter_info()
         self._statuszeile()
         self.setCentralWidget(seite)
+        self.auswahlbreiten_anpassen()
         self._fensterlage_laden()
 
     # ------------------------------------------------------------------
@@ -138,16 +139,43 @@ class Hauptfenster(QMainWindow):
     # ------------------------------------------------------------------
 
     def beschriften(self, setzen, text):
-        """Setzt eine Beschriftung und merkt sie fuer den Sprachwechsel."""
+        """Setzt eine Beschriftung und merkt sie fuer den Sprachwechsel.
+
+        Je Ziel zaehlt nur die zuletzt gesetzte Beschriftung - Anzeigen, die sich
+        oft erneuern, sammeln so keine alten Texte an. Feste Texte ohne
+        Uebersetzung (etwa "100 %") werden gesetzt, aber nicht gemerkt.
+        """
         setzen(text)
-        self._beschriftungen.append((setzen, text))
+        self._beschriftungen = [(s, t) for s, t in self._beschriftungen if s != setzen]
+        if hasattr(text, "schluessel"):
+            self._beschriftungen.append((setzen, text))
 
     def texte_auffrischen(self):
+        bleibend = []
         for setzen, text in self._beschriftungen:
             neu = _(text.schluessel)
-            setzen(neu.format(**text.werte) if text.werte else neu)
+            try:
+                setzen(neu.format(**text.werte) if text.werte else neu)
+            except RuntimeError:                 # Widget gibt es nicht mehr
+                continue
+            bleibend.append((setzen, text))
+        self._beschriftungen = bleibend
         for nummer, text in enumerate(self._reitertitel):
             self.reiter.setTabText(nummer, reitertext(_(text.schluessel)))
+        self.auswahlbreiten_anpassen()
+
+    def auswahlbreiten_anpassen(self):
+        """Jede Auswahlliste mindestens so breit wie ihr laengster Eintrag.
+
+        Qt rechnet den Platz fuer den Pfeil aus dem Stylesheet (padding rechts)
+        nicht in die Breite ein - der Text wuerde sonst abgeschnitten, etwa
+        "Schnell (GPU)". Nach jedem Sprachwechsel neu, die Texte aendern sich.
+        """
+        for auswahl in self.findChildren(QComboBox):
+            text = max((auswahl.itemText(i) for i in range(auswahl.count())),
+                       key=auswahl.fontMetrics().horizontalAdvance, default="")
+            # Text + Polster links (8) und rechts mit Pfeil (24) + Rahmen und Luft
+            auswahl.setMinimumWidth(auswahl.fontMetrics().horizontalAdvance(text) + 8 + 24 + 8)
 
     def _label(self, text="", name=None, umbruch=False) -> QLabel:
         label = QLabel()
@@ -219,6 +247,8 @@ class Hauptfenster(QMainWindow):
 
     def _sprache_gewechselt(self):
         _.language = self.sprachwahl.currentData() or SOURCE_LANGUAGE
+        from .start import qt_sprache_setzen
+        qt_sprache_setzen(_.language)
         self.texte_auffrischen()
         self._einstellungen_sichern()
 
@@ -268,7 +298,7 @@ class Hauptfenster(QMainWindow):
         zeilen = [
             (_("Grafikkarte"), k.name if k else "–"),
             (_("Grafikspeicher"), vram_anzeige(self.befund)),
-            (_("Compute Capability"),
+            (_("CUDA-Architektur"),
              f"{k.compute_capability[0]}.{k.compute_capability[1]}" if k else "–"),
             (_("Treiber"), self.befund.treiber or "–"),
             (_("Funktionsstufe"), self.befund.stufe),

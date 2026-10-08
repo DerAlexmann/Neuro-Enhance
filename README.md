@@ -169,8 +169,6 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   einer Objektivdatenbank (lensfun).
 - **X-Trans auf der GPU**: Demosaicing auch für Fujis Sensoren auf der
   Grafikkarte.
-- **Weitere KI-Funktionen**: Entrauschen, Entschärfen, Freistellen, Objektauswahl
-  per Klick, Objekte entfernen, Tiefenkarte für künstliche Unschärfe.
 
 ## Starten
 
@@ -187,7 +185,21 @@ ersten Einsatz eines Filters übersetzt die Grafikkarte das passende Programm
 einmalig; das dauert ein bis drei Sekunden und wird für alle weiteren Starts
 gespeichert.
 
-Eine fertige EXE folgt mit dem ersten Release.
+**Als Programm (Windows):** Das ZIP aus dem Release entpacken und
+`Silberkorn.exe` starten – ohne Installation und ohne Adminrechte.
+
+Die EXE bringt CUDA und cuDNN nicht mit: NVIDIAs Lizenzen erlauben nicht, sie
+zusammen mit Silberkorn weiterzugeben. Beim ersten Start fragt das Programm
+deshalb nach, nennt Quelle, Größe und NVIDIAs Lizenzbedingungen und lädt nach
+Zustimmung einmalig NVIDIAs offizielle Pakete vom Python Package Index – 1,6 GB,
+ausgepackt rund 2,3 GB im Ordner `nvidia` neben der EXE. Jede Datei wird gegen
+ihre Prüfsumme geprüft. Die EXE rechnet mit CUDA; TensorRT gibt es nur in der
+Python-Fassung.
+
+**Die EXE selbst bauen:** `build.cmd` legt die saubere Umgebung `.venv-build`
+an (nur die Pakete aus `requirements-build.txt`) und erzeugt mit PyInstaller
+den Ordner `dist\Silberkorn` sowie das ZIP samt SHA-256. Neben die EXE kommen
+die Lizenztexte aller eingepackten Pakete (`lizenzen/`, `DRITTANBIETER.txt`).
 
 ### TensorRT (optional)
 
@@ -218,7 +230,8 @@ Grafikkarte. Die einzige Verbindung ins Netz ist das Laden eines KI-Modells – 
 das nur, wenn man in einer der Karten „KI-Hochskalieren“, „KI-Entrauschen“,
 „KI-Schärfen“, „Motiv & Hintergrund“, „Objekte entfernen“ oder „Tiefe & Bokeh“
 ausdrücklich auf das Laden klickt und die Rückfrage mit Quelle,
-Größe und Lizenz bestätigt.
+Größe und Lizenz bestätigt. Die EXE lädt außerdem beim ersten Start – ebenfalls
+erst nach Zustimmung – die NVIDIA-Bibliotheken von pypi.org.
 
 ## KI-Modelle
 

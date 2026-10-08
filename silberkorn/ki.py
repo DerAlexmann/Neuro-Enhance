@@ -61,7 +61,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import einstellungen, filter
+from . import einstellungen, filter, nvidia_laufzeit
 from .cuda import cupy as cp
 
 QUELLE = "https://github.com/xinntao/Real-ESRGAN"
@@ -563,7 +563,9 @@ class _Netz:
         ort.set_default_logger_severity(3)       # nur Fehler, keine Hinweise auf der Konsole
         # CUDA- und cuDNN-Bibliotheken aus den pip-Paketen von NVIDIA laden
         if hasattr(ort, "preload_dlls"):
-            ort.preload_dlls(cuda=True, cudnn=True, msvc=False)
+            # (in der EXE aus dem beim ersten Start geladenen Ordner)
+            ort.preload_dlls(cuda=True, cudnn=True, msvc=False,
+                             directory=nvidia_laufzeit.dll_ordner())
         self.modell = modell
         self.fp16 = fp16
         self.kachel = kachel

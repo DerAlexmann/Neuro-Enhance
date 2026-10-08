@@ -1,0 +1,19 @@
+# Bauen der EXE - build.cmd installiert das in die saubere Umgebung .venv-build.
+#
+# Genau die Fassungen, mit denen das Programm getestet ist. Bewusst nicht dabei:
+# die NVIDIA-Pakete (die EXE laedt sie beim ersten Start selbst, siehe
+# silberkorn/nvidia_laufzeit.py), TensorRT und pillow-heif. Von Qt reicht
+# PySide6-Essentials; die Addons nutzt das Programm nicht.
+PySide6-Essentials==6.11.2
+nvidia-ml-py==13.615.71
+Pillow==12.3.0
+numpy==2.5.2
+tifffile==2026.9.20
+imagecodecs==2026.8.16
+rawpy==0.27.1
+cupy-cuda12x==14.2.0
+onnxruntime-gpu==1.26.0
+onnx==1.23.1
+
+pyinstaller==6.22.2
+pyinstaller-hooks-contrib==2026.7

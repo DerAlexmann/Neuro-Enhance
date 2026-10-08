@@ -36,11 +36,14 @@ Meldung – siehe [SECURITY.md](SECURITY.md).
 | `silberkorn/ki.py` | KI-Hochskalieren: Modellkatalog, ONNX Runtime, Kacheln |
 | `werkzeuge/modelle_exportieren.py` | Real-ESRGAN-Gewichte nach ONNX wandeln (braucht PyTorch) |
 | `silberkorn/cuda.py` | lädt CuPy an einer Stelle |
+| `silberkorn/nvidia_laufzeit.py` | EXE: CUDA und cuDNN von pypi.org laden, prüfen, auspacken |
+| `silberkorn/einrichten.py` | EXE: Rückfrage und Fortschritt beim ersten Start |
 | `silberkorn/farben.py` | Farbschemata, Schriften, Qt-Stylesheet |
 | `silberkorn/uebersetzung.py` | Sprachumschaltung und Sprachtabelle |
 | `silberkorn/einstellungen.py` | Einstellungsdatei neben dem Programm |
 | `tests/` | Tests für Kartenbewertung, Startmeldungen, Sprachtabelle, Filter und Dateien |
 | `icon_erzeugen.py` | Programmsymbol erzeugen |
+| `build.cmd`, `silberkorn.spec`, `werkzeuge/exe_bauen.py` | EXE bauen (PyInstaller), Lizenzen beilegen, ZIP packen |
 
 ## Entwickeln
 

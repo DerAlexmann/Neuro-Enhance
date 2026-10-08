@@ -201,9 +201,9 @@ TRANSLATIONS = {
             "The AI detects the subject – in a few seconds for 24 megapixels – or selects what "
             "you click. After that the background can be edited separately or saved as "
             "transparent.",
-        "Motiv erkennen – Modell laden ({mb} MB)": "Detect subject – download model ({mb} MB)",
+        "Motiv erkennen · {mb} MB": "Detect subject · {mb} MB",
         "Objekt anklicken": "Click object",
-        "Objekt anklicken – Modell laden ({mb} MB)": "Click object – download model ({mb} MB)",
+        "Objekt anklicken · {mb} MB": "Click object · {mb} MB",
         "Ein Objekt im Bild per Klick auswählen – die Regler dieser Karte wirken dann auf "
         "alles andere.":
             "Select an object in the image by clicking – the sliders of this card then affect "
@@ -221,7 +221,7 @@ TRANSLATIONS = {
         "Bereit zum Klicken ({s} s)": "Ready for clicking ({s} s)",
         "Objekte entfernen": "Remove objects",
         "Anklicken": "Click",
-        "Anklicken – Modell laden ({mb} MB)": "Click – download model ({mb} MB)",
+        "Anklicken · {mb} MB": "Click · {mb} MB",
         "Ein Objekt per Klick markieren – Rechtsklick nimmt einen Bereich wieder weg.":
             "Mark an object by clicking – right-click removes an area again.",
         "Pinsel": "Brush",
@@ -229,9 +229,30 @@ TRANSLATIONS = {
         "radiert.":
             "Paint over small things such as spots or wires – the right mouse button erases.",
         "Pinselgröße": "Brush size",
-        "Entfernen – Modell laden ({mb} MB)": "Remove – download model ({mb} MB)",
+        "Entfernen · {mb} MB": "Remove · {mb} MB",
         "Markierung löschen": "Clear marking",
         "Letzte Entfernung zurücknehmen": "Undo last removal",
+        "Zurücknehmen": "Undo",
+        "Die blaue Markierung verwerfen, ohne etwas zu entfernen.":
+            "Discard the blue marking without removing anything.",
+        "Füllt die blau markierte Stelle mit passendem Hintergrund.":
+            "Fills the area marked in blue with matching background.",
+        "Lädt zuerst das KI-Modell ({mb} MB) aus den Releases von Silberkorn "
+        "auf GitHub – nach einer Rückfrage mit Quelle, Größe und Lizenz.":
+            "First downloads the AI model ({mb} MB) from Silberkorn's releases on GitHub "
+            "– after asking, with source, size and licence.",
+        "Berechnet das Ergebnis einmal für das ganze Bild; mit „Stärke“ lässt "
+        "es sich danach stufenlos einblenden.":
+            "Computes the result once for the whole image; “Strength” then blends it "
+            "in smoothly.",
+        "Die KI erkennt das Hauptmotiv – die Regler dieser Karte wirken dann auf den "
+        "Hintergrund.":
+            "The AI detects the main subject – the sliders of this card then affect the "
+            "background.",
+        "Schätzt die Tiefe des ganzen Bildes – danach wirken Unschärfe, Fokus und "
+        "Schärfentiefe.":
+            "Estimates the depth of the whole image – then blur, focus and depth of field "
+            "take effect.",
         "Linksklick markiert ein Objekt, Rechtsklick nimmt einen Bereich weg. Strg+Z nimmt "
         "den letzten Klick zurück, Esc beendet.":
             "Left-click marks an object, right-click removes an area. Ctrl+Z undoes the last "
@@ -406,7 +427,7 @@ TRANSLATIONS = {
         "Veröffentlicht unter der MIT-Lizenz.": "Released under the MIT licence.",
         "Technisches": "Technical details",
         "Grafikspeicher": "Video memory",
-        "Compute Capability": "Compute capability",
+        "CUDA-Architektur": "Compute capability",
         "Treiber": "Driver",
         "Funktionsstufe": "Feature tier",
         "Rechengenauigkeit": "Precision",
@@ -468,5 +489,31 @@ TRANSLATIONS = {
             "The full system requirements are listed in the README.",
         "Treiber herunterladen": "Download driver",
         "Beenden": "Quit",
+        "NVIDIA-Bibliotheken einrichten": "Set up NVIDIA libraries",
+        "Silberkorn rechnet mit CUDA und cuDNN von NVIDIA. Diese Bibliotheken "
+        "werden nicht mit dem Programm ausgeliefert, sondern einmalig aus NVIDIAs "
+        "offiziellen Paketen vom Python Package Index (pypi.org) geladen – "
+        "{laden} GB, ausgepackt rund {platz} GB. Jede Datei wird gegen ihre "
+        "Prüfsumme geprüft.":
+            "Silberkorn computes with NVIDIA's CUDA and cuDNN. These libraries are not "
+            "shipped with the program but downloaded once from NVIDIA's official "
+            "packages on the Python Package Index (pypi.org) – {laden} GB, about "
+            "{platz} GB unpacked. Every file is verified against its checksum.",
+        "Für diese Bibliotheken gelten die Lizenzbedingungen von NVIDIA:":
+            "These libraries are subject to NVIDIA's licence terms:",
+        "Mit „Zustimmen und herunterladen“ werden sie anerkannt.":
+            "Clicking “Agree and download” accepts them.",
+        "Ablage: {ordner}": "Location: {ordner}",
+        "Zustimmen und herunterladen": "Agree and download",
+        "CuPy ließ sich nicht laden": "CuPy could not be loaded",
+        "Das Hauptfenster ließ sich nicht öffnen": "The main window could not be opened",
+        "Die Einzelheiten stehen unter „Details“ und in {log}.":
+            "The details are under “Details” and in {log}.",
+        "Die Einzelheiten stehen unter „Details“.": "The details are under “Details”.",
+        "NVIDIA-Bibliotheken werden heruntergeladen …": "Downloading NVIDIA libraries …",
+        "Die NVIDIA-Bibliotheken ließen sich nicht einrichten. "
+        "Beim nächsten Start versucht Silberkorn es erneut.":
+            "The NVIDIA libraries could not be set up. Silberkorn will try again at "
+            "the next start.",
     },
 }
