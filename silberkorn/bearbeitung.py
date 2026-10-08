@@ -568,11 +568,14 @@ class Sitzung:
         return self._in_geometrie(self._ebene_auf_leinwand(maske), werte)
 
     def _rendern(self, werte: Einstellungen, voll: bool, speicher, bits: int = 8,
-                 zeigen: bool = False):
-        """Die ganze Kette bis zum sRGB-Bild - mit eigenem Hintergrund, falls eingestellt."""
+                 zeigen: bool = False, leinwand: bool = True):
+        """Die ganze Kette bis zum sRGB-Bild - mit eigenem Hintergrund, falls eingestellt.
+        leinwand=False: ohne die Raender einer KI-Erweiterung (fuer „Vorher“)."""
         massstab = 1.0 if voll else self.vorschau_massstab
-        eingang = self._ausgang(werte, voll)
+        eingang = self._ausgang(werte, voll, leinwand=leinwand)
         bild = filter.anwenden_ausgabe(eingang, werte, massstab, speicher, bits=bits)
+        if not leinwand and self._erweiterung is not None:
+            return bild                 # Masken, Tiefe und Markierung liegen auf der Leinwand
         markierung = self._markierung(voll) if zeigen else None
         tiefe_zeigen = zeigen and self.tiefe_zeigen and self._ki_tiefe is not None
         zeigen = zeigen and self.maske_zeigen
@@ -684,21 +687,25 @@ class Sitzung:
             bild = self._auf_leinwand(bild, stelle)
         return bild
 
-    def vorschau(self, unbearbeitet: bool = False,
-                 werte: Einstellungen | None = None) -> tuple[np.ndarray, float, np.ndarray]:
-        """Vorschau als sRGB-uint8, Rechenzeit in ms und Helligkeitshistogramm (256 Stufen)."""
+    def vorschau(self, unbearbeitet: bool = False, werte: Einstellungen | None = None,
+                 ohne_erweiterung: bool = False) -> tuple[np.ndarray, float, np.ndarray]:
+        """Vorschau als sRGB-uint8, Rechenzeit in ms und Helligkeitshistogramm (256 Stufen).
+        ohne_erweiterung: das Original ohne die von der KI erfundenen Raender."""
         beginn = time.perf_counter()
         if werte is None:
             werte = Einstellungen() if unbearbeitet else self.werte
-        bild = self._rendern(werte, False, self._speicher, zeigen=not unbearbeitet)
+        bild = self._rendern(werte, False, self._speicher, zeigen=not unbearbeitet,
+                             leinwand=not ohne_erweiterung)
         histogramm = cp.asnumpy(histogramm_von(bild))
         ergebnis = cp.asnumpy(bild)                     # wartet auf die GPU
         return ergebnis, (time.perf_counter() - beginn) * 1000, histogramm
 
-    def ausgabe_form(self, werte: Einstellungen | None = None) -> tuple[int, int]:
+    def ausgabe_form(self, werte: Einstellungen | None = None,
+                     ohne_erweiterung: bool = False) -> tuple[int, int]:
         """Hoehe und Breite des fertigen Bildes in voller Aufloesung."""
         werte = self.werte if werte is None else werte
-        return geometrie.ausgabe_form(self.quellform(), geometrie.aus(werte))
+        quelle = self.original.shape[:2] if ohne_erweiterung else self.quellform()
+        return geometrie.ausgabe_form(quelle, geometrie.aus(werte))
 
     def ausschnitt(self, x0: int, y0: int, breite: int, hoehe: int,
                    werte: Einstellungen | None = None) -> tuple[np.ndarray, float, np.ndarray]:

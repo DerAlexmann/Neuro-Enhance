@@ -449,6 +449,24 @@ def test_regler_wirken_auf_original_und_raender(sitzung):
     assert bild[60, 2, 1] <= 1 and bild[60, 2, 0] >= 254
 
 
+def test_vorher_ohne_raender(sitzung):
+    """„Vorher“ zeigt nach dem Erweitern das Original - auch mit Maske und Markierung."""
+    import cupy as cp
+
+    from silberkorn.filter import Einstellungen
+    sitzung._ki_maske = (cp.ones((120, 160), cp.float32), cp.ones((60, 80), cp.float32))
+    sitzung.pinseln([(40.0, 60.0)], 10.0, True)
+    sitzung.ki_erweitern(Rot(), 2.0, seed=1)
+    sitzung.maske_zeigen = True
+    vorher = Einstellungen()
+    assert sitzung.ausgabe_form(vorher, ohne_erweiterung=True) == (120, 160)
+    assert sitzung.ausgabe_form(vorher) == (120, 240)
+    bild, _ms, _h = sitzung.vorschau(werte=vorher, ohne_erweiterung=True)
+    assert bild.shape[:2] == (60, 80) and np.abs(bild.astype(int) - 64).max() <= 1
+    bild, _ms, _h = sitzung.vorschau(werte=vorher)
+    assert bild.shape[:2] == (60, 120) and bild[30, 0, 0] >= 254
+
+
 def test_klick_im_rand_trifft_nichts(sitzung):
     sitzung.ki_erweitern(Rot(), 2.0, seed=1)          # 240 x 120, Original bei x = 40
     assert sitzung.quelle_von(10.0, 60.0) is None
