@@ -3,7 +3,7 @@
 Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/).
 
-## [Unveröffentlicht]
+## [0.1.0] – 2026-10-09
 
 ### Geändert
 
@@ -269,3 +269,5 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 - Funktionsstufen nach Grafikspeicher (–, S, M, L, XL) und Erkennung der
   Rechengenauigkeit (FP16, FP8 ab Ada, FP4 ab Blackwell).
 - Programmsymbol, Marken- und Lizenzhinweise (NOTICE).
+
+[0.1.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.1.0
