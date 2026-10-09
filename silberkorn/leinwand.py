@@ -19,6 +19,12 @@ Im Pinselmodus zeigt ein Kreis die Pinselgroesse; Ziehen mit der linken Taste
 meldet Punkte zum Markieren, mit der rechten zum Wegnehmen (`pinsel_gezogen`).
 Die mittlere Taste verschiebt das vergroesserte Bild in jedem Modus.
 
+Im Flaechenmodus (Anonymisieren) zeigt die Leinwand die Umrisse der Flaechen;
+Ziehen auf freiem Grund legt eine neue an, in einer Flaeche verschiebt es sie, an
+einer Ecke der gewaehlten aendert es ihre Groesse (`flaeche_gezogen`); Entf loescht
+die gewaehlte (`flaeche_loeschen`). Was das fuer die Flaechen heisst, rechnet die
+Seite - sie liegen im Original, die Leinwand kennt nur ihre Umrisse im Bild.
+
 Licensed under MIT License
 Copyright 2026 Alexander Unverhau
 Created with assistance of Claude AI
@@ -28,7 +34,7 @@ from __future__ import annotations
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPen
+from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 from . import farben
@@ -46,6 +52,9 @@ class Leinwand(QFrame):
     zuschnitt_geaendert = Signal(tuple)
     bild_geklickt = Signal(float, float, bool)       # x, y im Bild; True = linke Taste
     pinsel_gezogen = Signal(float, float, bool, bool)   # x, y, dazu, neuer Strich
+    # Art ("neu", "innen", "ecke0".."ecke3"), Flaeche, Start x, y, jetzt x, y, losgelassen
+    flaeche_gezogen = Signal(str, int, float, float, float, float, bool)
+    flaeche_loeschen = Signal(int)
 
     def __init__(self):
         super().__init__(objectName="leinwand")
@@ -69,6 +78,12 @@ class Leinwand(QFrame):
         self.pinsel_radius = 20.0             # in Fensterpunkten
         self._pinsel_dazu: bool | None = None  # waehrend eines Strichs: linke Taste?
         self._maus: QPointF | None = None     # fuer den Pinselkreis
+        self.flaechenmodus = False
+        self.flaechen_umrisse: list[np.ndarray] = []   # je Flaeche (n, 2) Punkte im Bild
+        self.flaechen_ecken: list[np.ndarray] = []     # je Flaeche (4, 2): Griffe
+        self.flaeche_gewaehlt: int | None = None
+        self._flaeche_ziehen = None           # (Art, Flaeche, Startpunkt im Bild)
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
 
         aufbau = QVBoxLayout(self)
         aufbau.addStretch(1)
@@ -279,12 +294,37 @@ class Leinwand(QFrame):
         self._zeiger()
         self.update()
 
+    def flaechenmodus_setzen(self, an: bool):
+        self.flaechenmodus = an
+        self._flaeche_ziehen = None
+        if not an:
+            self.flaeche_gewaehlt = None
+        self._zeiger()
+        self.update()
+
+    def _flaeche_bei(self, punkt: QPointF) -> tuple[str, int]:
+        """Was unter dem Fensterpunkt liegt: Ecke der gewaehlten, eine Flaeche oder nichts."""
+        gewaehlt = self.flaeche_gewaehlt
+        if gewaehlt is not None and gewaehlt < len(self.flaechen_ecken):
+            for nummer, (x, y) in enumerate(self.flaechen_ecken[gewaehlt]):
+                ecke = self.zu_fenster(x, y)
+                if abs(ecke.x() - punkt.x()) <= GRIFF and abs(ecke.y() - punkt.y()) <= GRIFF:
+                    return f"ecke{nummer}", gewaehlt
+        # die zuletzt angelegte liegt oben
+        for nummer in range(len(self.flaechen_umrisse) - 1, -1, -1):
+            if self._umriss_fenster(nummer).containsPoint(punkt, Qt.FillRule.OddEvenFill):
+                return "innen", nummer
+        return "neu", -1
+
+    def _umriss_fenster(self, nummer: int) -> QPolygonF:
+        return QPolygonF([self.zu_fenster(x, y) for x, y in self.flaechen_umrisse[nummer]])
+
     def massstab(self) -> float:
         """Fensterpunkte je Bildpixel."""
         return self._massstab()
 
     def _zeiger(self):
-        if self.klickmodus or self.pinselmodus:
+        if self.klickmodus or self.pinselmodus or self.flaechenmodus:
             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
             self.setCursor(Qt.CursorShape.OpenHandCursor if self.zoom
@@ -303,6 +343,12 @@ class Leinwand(QFrame):
                 Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
             self._pinsel_dazu = knopf == Qt.MouseButton.LeftButton
             self.pinsel_gezogen.emit(*self.zu_bild(punkt), self._pinsel_dazu, True)
+            return
+        if self.flaechenmodus and self.zuschnitt is None and knopf == Qt.MouseButton.LeftButton:
+            art, nummer = self._flaeche_bei(punkt)
+            start = self.zu_bild(punkt)
+            self._flaeche_ziehen = (art, nummer, start)
+            self.flaeche_gezogen.emit(art, nummer, *start, *start, False)
             return
         if self.klickmodus and self.zuschnitt is None and knopf in (
                 Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
@@ -325,6 +371,18 @@ class Leinwand(QFrame):
             if self._pinsel_dazu is not None:
                 self.pinsel_gezogen.emit(*self.zu_bild(punkt), self._pinsel_dazu, False)
                 return
+        if self.flaechenmodus and self._ziehen is None:
+            if self._flaeche_ziehen is not None:
+                art, nummer, start = self._flaeche_ziehen
+                self.flaeche_gezogen.emit(art, nummer, *start, *self.zu_bild(punkt), False)
+            elif self.voll_form is not None:
+                art = self._flaeche_bei(punkt)[0]
+                self.setCursor({"neu": Qt.CursorShape.CrossCursor,
+                                "innen": Qt.CursorShape.SizeAllCursor,
+                                "ecke0": Qt.CursorShape.SizeFDiagCursor,
+                                "ecke2": Qt.CursorShape.SizeFDiagCursor}.get(
+                                    art, Qt.CursorShape.SizeBDiagCursor))
+            return
         if self._ziehen is None:
             if self.zuschnitt is not None and self.voll_form is not None:
                 art = self._griff_bei(punkt)
@@ -358,6 +416,12 @@ class Leinwand(QFrame):
                 Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
             self._pinsel_dazu = None
             return
+        if self._flaeche_ziehen is not None and ereignis.button() == Qt.MouseButton.LeftButton:
+            art, nummer, start = self._flaeche_ziehen
+            self._flaeche_ziehen = None
+            self.flaeche_gezogen.emit(art, nummer, *start, *self.zu_bild(ereignis.position()),
+                                      True)
+            return
         if self._klick is not None:
             start, links = self._klick
             self._klick = None
@@ -376,8 +440,16 @@ class Leinwand(QFrame):
         else:
             self.zuschnitt_geaendert.emit(self.zuschnitt)
 
+    def keyPressEvent(self, ereignis):                # noqa: N802 - Qt-Name
+        if self.flaechenmodus and self.flaeche_gewaehlt is not None and ereignis.key() in (
+                Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self.flaeche_loeschen.emit(self.flaeche_gewaehlt)
+            return
+        super().keyPressEvent(ereignis)
+
     def mouseDoubleClickEvent(self, ereignis):        # noqa: N802 - Qt-Name
-        if self._bild is None or self.zuschnitt is not None or self.klickmodus:
+        if self._bild is None or self.zuschnitt is not None or self.klickmodus \
+                or self.flaechenmodus:
             return
         self.zoom_setzen(None if self.zoom else 1.0, ereignis.position())
 
@@ -404,6 +476,8 @@ class Leinwand(QFrame):
             self._rahmen_zeichnen(maler, ziel)
         elif self.klickmodus:
             self._klicks_zeichnen(maler)
+        elif self.flaechenmodus:
+            self._flaechen_zeichnen(maler)
         if self.pinselmodus and self._maus is not None and self.zuschnitt is None:
             maler.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             maler.setBrush(Qt.BrushStyle.NoBrush)
@@ -428,6 +502,28 @@ class Leinwand(QFrame):
             maler.drawLine(mitte + QPointF(-3, 0), mitte + QPointF(3, 0))
             if dazu:
                 maler.drawLine(mitte + QPointF(0, -3), mitte + QPointF(0, 3))
+
+    def _flaechen_zeichnen(self, maler: QPainter):
+        """Umrisse der Flaechen - hell mit dunklem Rand, die gewaehlte in der Akzentfarbe
+        und mit Griffen an den Ecken."""
+        rollen = farben.THEMES[farben.CURRENT_THEME]
+        maler.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        maler.setBrush(Qt.BrushStyle.NoBrush)
+        for nummer in range(len(self.flaechen_umrisse)):
+            umriss = self._umriss_fenster(nummer)
+            gewaehlt = nummer == self.flaeche_gewaehlt
+            maler.setPen(QPen(QColor(0, 0, 0, 170), 3.5))
+            maler.drawPolygon(umriss)
+            maler.setPen(QPen(QColor(rollen["ACCENT"]) if gewaehlt else QColor(255, 255, 255),
+                              2 if gewaehlt else 1.5))
+            maler.drawPolygon(umriss)
+        gewaehlt = self.flaeche_gewaehlt
+        if gewaehlt is not None and gewaehlt < len(self.flaechen_ecken):
+            maler.setPen(QPen(QColor(0, 0, 0, 200), 1.5))
+            maler.setBrush(QColor(rollen["ACCENT"]))
+            for x, y in self.flaechen_ecken[gewaehlt]:
+                ecke = self.zu_fenster(x, y)
+                maler.drawRect(QRectF(ecke.x() - 5, ecke.y() - 5, 10, 10))
 
     def _rahmen_zeichnen(self, maler: QPainter, bild: QRectF):
         rollen = farben.THEMES[farben.CURRENT_THEME]

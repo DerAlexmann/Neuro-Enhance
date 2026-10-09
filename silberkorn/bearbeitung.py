@@ -58,7 +58,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import bilddatei, filter, geometrie, ki
+from . import anonym, bilddatei, filter, geometrie, ki
 from .cuda import cupy as cp
 from .filter import Einstellungen
 
@@ -141,6 +141,7 @@ class Sitzung:
         self._ki_tiefe = None                 # Tiefe 0..1 (1 = nah), verkleinert, im Original
         self.tiefe_zeigen = False             # Vorschau zeigt die Tiefenkarte
         self._erweiterung: _Erweiterung | None = None
+        self._anonym_stand = ((), "mosaik", 8.0)   # wofuer die Zwischenstufen gelten
 
         self.original = daten.linear(cp)
         # Zwischenpuffer des Demosaicing an den Grafikspeicher zurueckgeben
@@ -227,15 +228,35 @@ class Sitzung:
         cp.get_default_memory_pool().free_all_blocks()
         return (time.perf_counter() - beginn) * 1000
 
-    def quelle_von(self, x: float, y: float) -> tuple[float, float] | None:
-        """Punkt im fertigen Bild (Pixel) -> Punkt im Original, oder None ausserhalb."""
+    def quelle_von(self, x: float, y: float,
+                   begrenzt: bool = True) -> tuple[float, float] | None:
+        """Punkt im fertigen Bild (Pixel) -> Punkt im Original, oder None ausserhalb
+        (begrenzt=False: auch ausserhalb, etwa im Rand einer KI-Erweiterung)."""
         sx, sy = geometrie.zur_quelle(self.quellform(), geometrie.aus(self.werte), x, y)
         if self._erweiterung is not None:
             sx, sy = sx - self._erweiterung.x, sy - self._erweiterung.y
         hoehe, breite = self.original.shape[:2]
-        if not (0 <= sx < breite and 0 <= sy < hoehe):
+        if begrenzt and not (0 <= sx < breite and 0 <= sy < hoehe):
             return None
         return sx, sy
+
+    def gesichter_finden(self, finder, form: str = "ellipse") -> list[tuple]:
+        """Gesichter im Original als Flaechen (siehe anonym.py). Das Netz sieht das Bild,
+        wie es gerade entrauscht und geschaerft ist - ohne bisherige Flaechen."""
+        srgb = filter.linear_zu_srgb(cp.clip(self._ausgang(self.werte, True, leinwand=False),
+                                             0, 1))
+        rgb = cp.asnumpy((srgb * 255 + 0.5).astype(cp.uint8))
+        del srgb
+        hoehe, breite = rgb.shape[:2]
+        flaechen = [anonym.als_flaeche(g, hoehe, breite, form) for g in finder.finden(rgb)]
+        return [f for f in flaechen if f is not None]
+
+    def ziel_von(self, punkte) -> np.ndarray:
+        """Punkte im Original (n, 2) in Pixeln -> wo sie im fertigen Bild liegen."""
+        punkte = np.asarray(punkte, dtype=np.float64).reshape(-1, 2)
+        if self._erweiterung is not None:
+            punkte = punkte + (self._erweiterung.x, self._erweiterung.y)
+        return geometrie.von_quelle(self.quellform(), geometrie.aus(self.werte), punkte)
 
     def ki_klick(self, auswaehler, x: float, y: float, dazu: bool,
                  ziel: str = "maske") -> float:
@@ -572,7 +593,8 @@ class Sitzung:
         """Die ganze Kette bis zum sRGB-Bild - mit eigenem Hintergrund, falls eingestellt.
         leinwand=False: ohne die Raender einer KI-Erweiterung (fuer „Vorher“)."""
         massstab = 1.0 if voll else self.vorschau_massstab
-        eingang = self._ausgang(werte, voll, leinwand=leinwand)
+        eingang = self._anonymisieren(self._ausgang(werte, voll, leinwand=leinwand), werte,
+                                      voll, leinwand)
         bild = filter.anwenden_ausgabe(eingang, werte, massstab, speicher, bits=bits)
         if not leinwand and self._erweiterung is not None:
             return bild                 # Masken, Tiefe und Markierung liegen auf der Leinwand
@@ -612,6 +634,23 @@ class Sitzung:
             farbe = cp.asarray(MARKIERUNG_FARBE, dtype=cp.float32) * hoechst
             ergebnis = ergebnis * (1 - m) + m * farbe
         return cp.clip(ergebnis + 0.5, 0, hoechst).astype(typ)
+
+    def _anonymisieren(self, bild, werte: Einstellungen, voll: bool, leinwand: bool):
+        """Die Flaechen zum Anonymisieren aufs Ausgangsbild - vor allen Reglern, damit
+        nichts sie wieder schaerft; die KI-Netze bekommen das Bild ohne sie."""
+        stand = (werte.anonym_flaechen, werte.anonym_art, werte.anonym_bloecke)
+        if stand != self._anonym_stand:
+            # Zwischenstufen (Entrauschen, Dunst) gelten nur fuer denselben Bildinhalt
+            self._speicher.clear()
+            self._anonym_stand = stand
+        if not werte.anonym_flaechen:
+            return bild
+        original = (self.original if voll else self.vorschau_original).shape[:2]
+        versatz = (0, 0)
+        if leinwand and self._erweiterung is not None:
+            versatz = self._lage(0 if voll else 1)
+        return anonym.anwenden(bild, werte.anonym_flaechen, werte.anonym_art,
+                               werte.anonym_bloecke, original, versatz)
 
     def _ki_korrektur(self, netz, bild, kachel: int, fortschritt):
         """Was das Netz an einem Bild in linearem Licht aendert, als Korrektur.
@@ -792,7 +831,10 @@ class Sitzung:
         # Zwischenergebnisse der vollen Groesse sofort zurueckgeben - der
         # Speicherpool von CuPy hielte sie sonst fuer das naechste Mal fest.
         cp.get_default_memory_pool().free_all_blocks()
-        bilddatei.speichern(pfad, rgb, self._alpha_gesamt(faktor), self.daten.exif)
+        exif = self.daten.exif
+        if self.werte.metadaten_entfernen:
+            exif = anonym.metadaten_bereinigen(exif)
+        bilddatei.speichern(pfad, rgb, self._alpha_gesamt(faktor), exif)
         self.gespeicherte_werte = dataclasses.replace(self.werte)
         self._flicken_gespeichert = self._flicken_stand
         return (time.perf_counter() - beginn) * 1000
