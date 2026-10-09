@@ -594,5 +594,65 @@ TRANSLATIONS = {
         "Beim nächsten Start versucht Silberkorn es erneut.":
             "The NVIDIA libraries could not be set up. Silberkorn will try again at "
             "the next start.",
+
+        # Für Veröffentlichung speichern
+        "Für Veröffentlichung …": "For publishing …",
+        "Verkleinert, mit Wasserzeichen und Rechteangaben speichern – etwa für Bilder "
+        "im Netz. Das Original bleibt unverändert.":
+            "Save downsized, with watermark and rights information – for images on the "
+            "web, for instance. The original stays unchanged.",
+        "Für Veröffentlichung speichern": "Save for publishing",
+        "Für Veröffentlichung gespeichert: {name} – {breite} × {hoehe} Pixel ({ms} ms)":
+            "Saved for publishing: {name} – {breite} × {hoehe} pixels ({ms} ms)",
+        "Speichern …": "Save …",
+        "Größe": "Size",
+        "Längste Kante": "Longest edge",
+        "Prozent": "Percent",
+        "Kleinere Bilder werden nicht vergrößert.": "Smaller images are not enlarged.",
+        "Das Bild bleibt {breite} × {hoehe} Pixel groß.":
+            "The image stays {breite} × {hoehe} pixels.",
+        "Ergebnis: {breite} × {hoehe} Pixel (Original {b0} × {h0})":
+            "Result: {breite} × {hoehe} pixels (original {b0} × {h0})",
+        "Wasserzeichen": "Watermark",
+        "Text": "Text",
+        "z. B. Spieltitel oder Webadresse": "e.g. game title or web address",
+        "Logo": "Logo",
+        "kein Logo": "no logo",
+        "Wählen …": "Choose …",
+        "Logo entfernen": "Remove logo",
+        "Logo wählen": "Choose logo",
+        "Die Datei lässt sich nicht als Bild lesen.": "The file cannot be read as an image.",
+        "Position": "Position",
+        "Unten rechts": "Bottom right",
+        "Unten links": "Bottom left",
+        "Oben rechts": "Top right",
+        "Oben links": "Top left",
+        "Mitte": "Centre",
+        "Textfarbe": "Text colour",
+        "Weiß": "White",
+        "Schwarz": "Black",
+        "Deckkraft": "Opacity",
+        "Als Muster über das ganze Bild": "As a pattern across the whole image",
+        "Schwerer zu entfernen als ein Zeichen in der Ecke, stört aber mehr beim Ansehen.":
+            "Harder to remove than a mark in the corner, but more distracting to look at.",
+        "Logo am besten als PNG mit durchsichtigem Hintergrund.":
+            "Ideally a PNG logo with a transparent background.",
+        "Rechte & Metadaten": "Rights & metadata",
+        "Urheber": "Creator",
+        "Copyright": "Copyright",
+        "Webadresse": "Web address",
+        "z. B. © 2026 Name": "e.g. © 2026 Name",
+        "KI-Training und Data-Mining untersagen": "Prohibit AI training and data mining",
+        "Schreibt einen maschinenlesbaren Nutzungsvorbehalt nach IPTC in die Datei. "
+        "Suchmaschinen dürfen das Bild weiterhin finden.":
+            "Writes a machine-readable reservation of rights (IPTC) into the file. Search "
+            "engines may still find the image.",
+        "Alle Kameradaten entfernen": "Remove all camera data",
+        "Kamera, Objektiv, Belichtung und Aufnahmezeit. GPS-Position und "
+        "Seriennummern werden in jedem Fall entfernt.":
+            "Camera, lens, exposure and capture time. GPS position and serial numbers are "
+            "always removed.",
+        "Das Bild enthält von der KI erfundene Teile – das wird in den Metadaten vermerkt.":
+            "The image contains parts invented by AI – this is noted in the metadata.",
     },
 }

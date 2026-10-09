@@ -1,7 +1,7 @@
 # Laufzeit
 PySide6>=6.8
 nvidia-ml-py>=12.570
-Pillow>=10
+Pillow>=11
 numpy>=1.26
 tifffile>=2024.1      # TIFF mit 8 und 16 Bit
 imagecodecs>=2024.1   # PNG mit 16 Bit, komprimierte TIFF

@@ -32,7 +32,7 @@ import zlib
 from dataclasses import dataclass
 
 import numpy as np
-from PIL import Image, ImageCms, ImageOps
+from PIL import Image, ImageCms, ImageOps, PngImagePlugin
 
 from . import demosaik, icc
 
@@ -357,8 +357,9 @@ def alpha_umrechnen(alpha: np.ndarray, bits: int) -> np.ndarray:
 
 
 def speichern(pfad: str, rgb: np.ndarray, alpha: np.ndarray | None = None,
-              exif: bytes = b"") -> None:
-    """Speichert rgb (uint8 oder uint16, sRGB) im Format der Dateiendung."""
+              exif: bytes = b"", xmp: bytes = b"", qualitaet: int = JPEG_QUALITAET) -> None:
+    """Speichert rgb (uint8 oder uint16, sRGB) im Format der Dateiendung.
+    XMP schreiben nur JPEG, PNG und WebP mit 8 Bit."""
     endung = os.path.splitext(pfad)[1].lower()
     if endung not in SCHREIBBAR:
         raise BildFehler(f"unbekanntes Format: {endung}")
@@ -381,10 +382,16 @@ def speichern(pfad: str, rgb: np.ndarray, alpha: np.ndarray | None = None,
         optionen = {"icc_profile": _srgb_profil().tobytes()}
         if exif:
             optionen["exif"] = exif
+        if xmp and format_name == "PNG":
+            text = PngImagePlugin.PngInfo()
+            text.add_itxt("XML:com.adobe.xmp", xmp.decode("utf-8"))
+            optionen["pnginfo"] = text
+        elif xmp and format_name in ("JPEG", "WEBP"):
+            optionen["xmp"] = xmp
         if format_name == "JPEG":
-            optionen.update(quality=JPEG_QUALITAET, subsampling=0)
+            optionen.update(quality=qualitaet, subsampling=0)
         elif format_name == "WEBP":
-            optionen.update(quality=JPEG_QUALITAET)
+            optionen.update(quality=qualitaet)
         elif format_name == "TIFF":
             optionen.update(compression="tiff_lzw")
         bild.save(pfad, format_name, **optionen)

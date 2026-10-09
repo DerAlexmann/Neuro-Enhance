@@ -117,6 +117,18 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   without the GPS position, camera and lens serial numbers, owner name and maker notes.
   The opposite, "unpixelating", is deliberately not offered: an AI could not bring back
   a pixelated face, only invent someone else's.
+- **Save for publishing**: images for the web in one step – downsized to a longest edge
+  (quick picks 1280, 1920, 2560 pixels) or a percentage, never enlarged. Plus a visible
+  watermark from text and/or a logo, in a corner, in the centre or as a pattern across
+  the whole image, with size and opacity. Creator, copyright and web address go into the
+  file (EXIF and XMP following IPTC), and on request a machine-readable reservation
+  against AI training and data mining (IPTC "Data Mining"; search engines stay allowed).
+  GPS position and serial numbers are always removed, the other camera data on request.
+  If the image contains parts invented by AI, this is noted (IPTC "Digital Source
+  Type"). A preview shows the result; the settings are kept as a template. The original
+  stays unchanged. Copying published images cannot be prevented entirely – but the
+  watermark and rights information make it unattractive and show where an image came
+  from.
 - **Geometry**: rotate by 90°, flip, straighten, vertical and horizontal perspective, crop
   with a frame and fixed aspect ratios. Empty corners after straightening are cropped
   away automatically.

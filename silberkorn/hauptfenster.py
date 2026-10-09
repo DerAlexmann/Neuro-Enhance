@@ -40,6 +40,7 @@ from .gpu_pruefung import STUFE_OHNE_KI, Befund
 from .uebersetzung import SOURCE_LANGUAGE, _
 
 SYMBOL_NAME = "silberkorn.ico"
+FENSTER_BREITE = 1280               # Startbreite, solange keine Fensterlage gespeichert ist
 
 
 def symbol_pfad() -> str:
@@ -108,7 +109,8 @@ class Hauptfenster(QMainWindow):
         self.befund = befund
         self._beschriftungen = []           # (setzen, Uebersetzt) fuer den Sprachwechsel
 
-        self.setMinimumSize(900, 620)
+        # Die Breite ergibt sich aus dem Inhalt: Kein Knopf wird enger als seine Beschriftung
+        self.setMinimumHeight(620)
         if os.path.exists(symbol_pfad()):
             self.setWindowIcon(QIcon(symbol_pfad()))
         self.setWindowTitle(f"{PROGRAMM} {VERSION}")
@@ -395,7 +397,8 @@ class Hauptfenster(QMainWindow):
                 return
             except (ValueError, TypeError):
                 pass
-        self.resize(1100, 760)
+        verfuegbar = self.screen().availableGeometry()
+        self.resize(min(FENSTER_BREITE, verfuegbar.width()), min(760, verfuegbar.height()))
 
     def _einstellungen_sichern(self, mit_fenster=False):
         daten = einstellungen.load_config()

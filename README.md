@@ -131,6 +131,20 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   Seriennummern von Kamera und Objektiv, Besitzernamen und Herstellerdaten.
   Bewusst nicht angeboten wird das Gegenteil, ein „Entpixeln“: Eine KI könnte
   ein verpixeltes Gesicht nicht zurückholen, nur ein fremdes erfinden.
+- **Für Veröffentlichung speichern**: Bilder fürs Netz in einem Schritt –
+  verkleinert auf eine längste Kante (Schnellwahl 1280, 1920, 2560 Pixel) oder
+  einen Prozentsatz, nie vergrößert. Dazu ein sichtbares Wasserzeichen aus Text
+  und/oder Logo, in einer Ecke, in der Mitte oder als Muster über das ganze
+  Bild, mit Größe und Deckkraft. In die Datei kommen Urheber, Copyright und
+  Webadresse (EXIF und XMP nach IPTC) und auf Wunsch ein maschinenlesbarer
+  Vorbehalt gegen KI-Training und Data-Mining (IPTC „Data Mining“, Suchmaschinen
+  bleiben erlaubt). GPS-Position und Seriennummern fallen immer weg, die übrigen
+  Kameradaten auf Wunsch. Enthält das Bild von der KI erfundene Teile, wird das
+  vermerkt (IPTC „Digital Source Type“). Eine Vorschau zeigt das Ergebnis; die
+  Einstellungen bleiben als Vorlage erhalten. Das Original bleibt unverändert.
+  Ganz verhindern lässt sich das Kopieren veröffentlichter Bilder nicht – das
+  Wasserzeichen und die Rechteangaben machen es aber unattraktiv und belegen,
+  woher ein Bild stammt.
 - **Geometrie**: um 90° drehen, spiegeln, begradigen, Perspektive senkrecht
   und waagrecht, Zuschneiden mit Rahmen und festen Seitenverhältnissen. Leere
   Ecken nach dem Begradigen werden automatisch weggeschnitten.

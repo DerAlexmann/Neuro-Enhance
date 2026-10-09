@@ -39,3 +39,25 @@ def test_alle_sichtbaren_knoepfe_beschriftet(fenster):
     leer = [knopf for knopf in fenster.findChildren(QPushButton)
             if knopf.isVisible() and not knopf.text().strip() and knopf.icon().isNull()]
     assert leer == []
+
+
+@pytest.mark.parametrize("sprache", ["de", "en"])
+def test_knoepfe_auch_im_schmalsten_fenster_lesbar(fenster, sprache):
+    """Die Mindestbreite des Fensters ergibt sich aus dem Inhalt - kein Knopf der
+    Werkzeugleiste wird enger, als seine Beschriftung es verlangt."""
+    from PySide6.QtWidgets import QApplication, QPushButton
+
+    from silberkorn.uebersetzung import _
+    _.language = sprache                      # ohne die Einstellungsdatei zu beruehren
+    fenster.texte_auffrischen()
+    try:
+        fenster.resize(100, 700)              # Qt haelt die Mindestbreite ein
+        QApplication.processEvents()
+        seite = fenster.bearbeiten
+        leiste = [knopf for knopf in seite.findChildren(QPushButton) if knopf.parent() is seite]
+        assert len(leiste) >= 7
+        zu_eng = [knopf.text() for knopf in leiste if knopf.width() < knopf.sizeHint().width()]
+        assert zu_eng == []
+    finally:
+        _.language = "de"
+        fenster.texte_auffrischen()

@@ -167,7 +167,7 @@ def stylesheet() -> str:
     QMenu::item:selected {{ background: {t["ACCENT"]}; color: {t["ON_ACCENT"]}; }}
     QMenu::item:disabled {{ color: {t["BTN_DISABLED"]}; }}
     QMenu::separator {{ height: 1px; background: {t["BORDER"]}; margin: 4px 8px; }}
-    QTextEdit, QPlainTextEdit {{
+    QTextEdit, QPlainTextEdit, QLineEdit, QSpinBox {{
         background: {t["FIELD_BG"]}; color: {t["TEXT"]};
         border: 1px solid {t["BORDER"]}; border-radius: 4px;
         selection-background-color: {t["ACCENT"]}; selection-color: {t["ON_ACCENT"]};

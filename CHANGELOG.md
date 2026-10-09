@@ -3,6 +3,25 @@
 Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/).
 
+## [Unveröffentlicht]
+
+### Neu
+
+- **Für Veröffentlichung speichern**: verkleinert (längste Kante oder Prozent,
+  nie vergrößert), mit sichtbarem Wasserzeichen aus Text und/oder Logo – in
+  einer Ecke, in der Mitte oder als Muster –, mit Urheber, Copyright und
+  Webadresse in EXIF und XMP, auf Wunsch mit Vorbehalt gegen KI-Training und
+  Data-Mining (IPTC) und ohne Kameradaten. GPS und Seriennummern fallen immer
+  weg; von der KI erfundene Bildteile werden vermerkt. Mit Vorschau; die
+  Einstellungen bleiben als Vorlage in `silberkorn.json`.
+
+### Geändert
+
+- Das Fenster startet 1280 Pixel breit und wird nicht schmaler, als die Knöpfe
+  der Werkzeugleiste es verlangen – bisher wurden ihre Beschriftungen in der
+  Standardgröße abgeschnitten.
+- Pillow ab Version 11 (XMP in JPEG).
+
 ## [0.1.1] – 2026-10-09
 
 ### Behoben
@@ -278,5 +297,6 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
   Rechengenauigkeit (FP16, FP8 ab Ada, FP4 ab Blackwell).
 - Programmsymbol, Marken- und Lizenzhinweise (NOTICE).
 
+[Unveröffentlicht]: https://github.com/DerAlexmann/Silberkorn/compare/v0.1.1...HEAD
 [0.1.1]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.1.1
 [0.1.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.1.0
