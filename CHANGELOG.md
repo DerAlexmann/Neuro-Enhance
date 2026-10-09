@@ -7,6 +7,13 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Geändert
 
+- Das Mausrad blättert die Reglerspalte, auch wenn der Zeiger über einem Regler
+  oder einer Auswahlliste steht; diese verstellt nur noch Ziehen, Klicken oder
+  die Tastatur. Bisher hielt das Blättern am ersten Regler an und verstellte ihn.
+- Verweise in Texten, etwa auf NVIDIAs Lizenzen beim ersten Start, erscheinen im
+  Blau des Programms statt im grellen Hellblau des dunklen Windows-Schemas.
+- README: Hinweis, dass das Programm beim ersten Bewegen eines Reglers einige
+  Sekunden zu hängen scheint, weil die Grafikkarte die Filterprogramme übersetzt.
 - Das Programm heißt jetzt **Silberkorn** (bisher Arbeitstitel Neuro-Enhance):
   Paket `silberkorn`, Startdatei `Silberkorn.pyw`, Einstellungen in
   `silberkorn.json`, Modelle bei schreibgeschütztem Programmordner unter

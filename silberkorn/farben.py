@@ -33,6 +33,7 @@ THEMES = {
         "HEADER_HOVER": "#2b3346",
         "ACCENT": "#2f7de1",
         "ACCENT_DARK": "#1f66c4",
+        "LINK": "#1f66c4",           # Verweise in Texten, nah am Blau des Info-Symbols
         "ON_ACCENT": "#ffffff",      # Schrift auf farbigen Flaechen
         "OK": "#2e9e5b",
         "OK_DARK": "#25864b",
@@ -63,6 +64,7 @@ THEMES = {
         "HEADER_HOVER": "#212a38",
         "ACCENT": "#4a90e8",
         "ACCENT_DARK": "#3a7ad0",
+        "LINK": "#6ea8f0",
         "ON_ACCENT": "#ffffff",
         "OK": "#3fb972",
         "OK_DARK": "#349b60",
@@ -93,6 +95,17 @@ def apply_theme(name):
 
 
 apply_theme(DEFAULT_THEME)      # legt BG, CARD, TEXT ... ueberhaupt erst an
+
+
+def palette_setzen(app) -> None:
+    """Farbe von Verweisen in Rich-Text. Stylesheets koennen sie nicht setzen;
+    ohne das nimmt Qt die Palette von Windows - im dunklen Windows ein grelles
+    Hellblau, auch in unserem hellen Schema."""
+    from PySide6.QtGui import QColor, QPalette
+    palette = app.palette()
+    for rolle in (QPalette.ColorRole.Link, QPalette.ColorRole.LinkVisited):
+        palette.setColor(rolle, QColor(THEMES[CURRENT_THEME]["LINK"]))
+    app.setPalette(palette)
 
 FONT = ("Segoe UI", 10)
 FONT_SMALL = ("Segoe UI", 9)

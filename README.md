@@ -13,8 +13,8 @@ NVIDIA Corporation.*
 
 *[English version: README.en.md](README.en.md)*
 
-> **Frühe Entwicklungsphase.** Die klassischen Grundregler laufen bereits auf der GPU;
-> die KI-Funktionen folgen in den nächsten Versionen.
+> **Version 0.x.** Grundregler, RAW-Entwicklung und die KI-Funktionen sind nutzbar;
+> Bedienung und Einstellungsdateien können sich bis Version 1.0 noch ändern.
 
 ## Systemvoraussetzungen
 
@@ -199,10 +199,7 @@ python Silberkorn.pyw
 ```
 
 Die Pakete bringen CuPy und die nötigen CUDA-Bibliotheken von NVIDIA mit
-(zusammen gut 1 GB); ein eigenes CUDA-Toolkit muss nicht installiert sein. Beim
-ersten Einsatz eines Filters übersetzt die Grafikkarte das passende Programm
-einmalig; das dauert ein bis drei Sekunden und wird für alle weiteren Starts
-gespeichert.
+(zusammen gut 1 GB); ein eigenes CUDA-Toolkit muss nicht installiert sein.
 
 **Als Programm (Windows):** Das ZIP aus dem Release entpacken und
 `Silberkorn.exe` starten – ohne Installation und ohne Adminrechte.
@@ -214,6 +211,13 @@ Zustimmung einmalig NVIDIAs offizielle Pakete vom Python Package Index – 1,6 G
 ausgepackt rund 2,3 GB im Ordner `nvidia` neben der EXE. Jede Datei wird gegen
 ihre Prüfsumme geprüft. Die EXE rechnet mit CUDA; TensorRT gibt es nur in der
 Python-Fassung.
+
+**Beim ersten Bearbeiten scheint das Programm kurz zu hängen** – das ist
+gewollt und kein Absturz. Wenn man zum ersten Mal einen Regler bewegt, übersetzt
+die Grafikkarte die Filterprogramme für genau diese Karte; das dauert einige
+Sekunden. Danach reagieren alle Regler flüssig. Die übersetzten Programme werden
+gespeichert (`%USERPROFILE%\.cupy\kernel_cache`), spätere Starts gehen deutlich
+schneller.
 
 **Die EXE selbst bauen:** `build.cmd` legt die saubere Umgebung `.venv-build`
 an (nur die Pakete aus `requirements-build.txt`) und erzeugt mit PyInstaller

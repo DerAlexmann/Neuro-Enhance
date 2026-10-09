@@ -11,8 +11,8 @@ Supports hardware acceleration via NVIDIA CUDA / RTX series GPUs.
 
 *[Deutsche Fassung: README.md](README.md)*
 
-> **Early development.** The classic basic adjustments already run on the GPU; the AI
-> features will follow in the next versions.
+> **Version 0.x.** Basic adjustments, RAW development and the AI features are usable;
+> the user interface and settings files may still change before version 1.0.
 
 ## System requirements
 
@@ -178,9 +178,7 @@ python Silberkorn.pyw
 ```
 
 The packages bring CuPy and the required CUDA libraries from NVIDIA (just over 1 GB in
-total); a separate CUDA Toolkit installation is not needed. The first time a filter is
-used, the graphics card compiles the matching program once; this takes one to three
-seconds and is kept for all later starts.
+total); a separate CUDA Toolkit installation is not needed.
 
 **As a program (Windows):** unpack the ZIP from the release and start
 `Silberkorn.exe` – no installation, no admin rights.
@@ -192,6 +190,12 @@ official packages from the Python Package Index once – 1.6 GB, about 2.3 GB un
 the `nvidia` folder next to the executable. Every file is verified against its
 checksum. The executable computes with CUDA; TensorRT is only available in the Python
 version.
+
+**The program seems to hang briefly the first time you edit** – this is expected and
+not a crash. When you move a slider for the first time, the graphics card compiles the
+filter programs for exactly this card; this takes a few seconds. After that all sliders
+respond smoothly. The compiled programs are saved (`%USERPROFILE%\.cupy\kernel_cache`),
+so later starts are much faster.
 
 **Building the executable yourself:** `build.cmd` creates the clean environment
 `.venv-build` (only the packages from `requirements-build.txt`) and uses PyInstaller to

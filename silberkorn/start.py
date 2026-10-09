@@ -200,6 +200,9 @@ def main(argumente: list[str] | None = None) -> int:
     qt_sprache_setzen(_.language)
     farben.apply_theme(einstellungen.startup_theme())
     app.setStyleSheet(farben.stylesheet())
+    farben.palette_setzen(app)
+    from . import mausrad
+    app.mausrad = mausrad.einrichten(app)
 
     befund = befund_holen(argumente)
     if not befund.ok:

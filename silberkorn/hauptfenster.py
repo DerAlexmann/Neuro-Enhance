@@ -255,6 +255,7 @@ class Hauptfenster(QMainWindow):
     def _schema_gewechselt(self, dunkel: bool):
         farben.apply_theme("dark" if dunkel else "light")
         QApplication.instance().setStyleSheet(farben.stylesheet())
+        farben.palette_setzen(QApplication.instance())
         self._einstellungen_sichern()
 
     # ------------------------------------------------------------------
