@@ -108,7 +108,15 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   with a soft seam; a colour cast of the AI is measured on the original and removed.
   "Regenerate" rolls new borders; the sliders then work on the whole image. If more than
   a quarter per side is added, the program points out that the AI then invents more
-  than it sees. About half a minute on an RTX 4060; needs 8 GB of graphics memory.
+  than it sees. About 15 seconds on an RTX 4060; needs 8 GB of graphics memory.
+- **Anonymise**: pixelate, blur or fill faces, number plates or house numbers in black –
+  as a rectangle or an ellipse. "Find faces" places an area around every detected face
+  (YuNet, included with the program, runs on the processor); areas can be moved,
+  resized, removed and drawn by hand. They follow rotation and crop. The mosaic is
+  coarse by default, as fine mosaics can be partly reversed. On request Silberkorn saves
+  without the GPS position, camera and lens serial numbers, owner name and maker notes.
+  The opposite, "unpixelating", is deliberately not offered: an AI could not bring back
+  a pixelated face, only invent someone else's.
 - **Geometry**: rotate by 90°, flip, straighten, vertical and horizontal perspective, crop
   with a frame and fixed aspect ratios. Empty corners after straightening are cropped
   away automatically.
@@ -215,7 +223,7 @@ it is not part of any ready-made executable and is always installed separately.
 ## Privacy
 
 Silberkorn works entirely on your own computer. No images are uploaded and no usage
-data is sent. The AI also runs locally on the graphics card. The only network access is
+data is sent. The AI also runs locally on the graphics card, face detection on the processor. The only network access is
 downloading an AI model – and only when you explicitly ask for it in the "AI upscaling",
 "AI denoise", "AI sharpen", "Subject & background", "Remove objects" or "Depth & bokeh"
 card or at "Extend with AI" in the "Geometry" card and confirm the prompt that names source, size and
@@ -241,7 +249,7 @@ with 196 MB, in the "Depth & bokeh" card from
 [modelle-7](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-7) Depth
 Anything V2 Small with 98 MB, and for "Extend with AI" in the "Geometry" card from
 [modelle-8](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-8) FLUX.2
-[klein] 4B with the outpaint LoRA with about 4.3 GB – split into several files, as GitHub
+[klein] 4B with the outpaint LoRA with about 4.1 GB – split into several files, as GitHub
 accepts at most 2 GB per file. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
 folder next to the program or, if that is read-only, in
 `%LOCALAPPDATA%\Silberkorn\modelle`.

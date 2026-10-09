@@ -27,6 +27,8 @@ Meldung – siehe [SECURITY.md](SECURITY.md).
 | `silberkorn/filter.py` | Filterformeln mit NumPy/CuPy – die Referenz |
 | `silberkorn/filter_gpu.py` | dieselben Formeln als zusammengefasste CUDA-Kernel |
 | `silberkorn/geometrie.py` | Zuschnitt, Drehen, Begradigen, Perspektive, Objektiv |
+| `silberkorn/anonym.py` | Anonymisieren: Flächen, Gesichter finden (YuNet), Metadaten bereinigen |
+| `silberkorn/daten/` | Modell, das dem Programm beiliegt (YuNet, MIT) |
 | `silberkorn/lut.py` | `.cube`-LUTs lesen, tetraedrisch anwenden |
 | `silberkorn/kurven.py` | Gradationskurven: Punkte bearbeiten, Tabellen bilden |
 | `silberkorn/kurveneditor.py` | Kurvenfeld mit Histogramm |

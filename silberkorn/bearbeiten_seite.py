@@ -13,6 +13,7 @@ import os
 import random
 from concurrent.futures import wait
 
+import numpy as np
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -34,7 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import bilddatei, einstellungen, filter, geometrie, ki, lut
+from . import anonym, bilddatei, einstellungen, filter, geometrie, ki, lut
 from .bearbeitung import Sitzung
 from .cuda import cupy as cp
 from .geometrie import VOLLER_ZUSCHNITT
@@ -181,6 +182,15 @@ def seitenverhaeltnisse() -> list[tuple[str, float | None]]:
     return [(_("Frei"), None), (_("Original"), -1.0), ("1:1", 1.0), ("3:2", 3 / 2),
             ("2:3", 2 / 3), ("4:3", 4 / 3), ("3:4", 3 / 4), ("5:4", 5 / 4),
             ("4:5", 4 / 5), ("16:9", 16 / 9), ("9:16", 9 / 16)]
+
+
+def _ueberlappung(a, b) -> float:
+    """Wie sehr sich zwei Flaechen decken: Schnitt durch die kleinere (0..1)."""
+    _fa, ax0, ay0, ax1, ay1 = a
+    _fb, bx0, by0, bx1, by1 = b
+    schnitt = max(0.0, min(ax1, bx1) - max(ax0, bx0)) * max(0.0, min(ay1, by1) - max(ay0, by0))
+    kleiner = min((ax1 - ax0) * (ay1 - ay0), (bx1 - bx0) * (by1 - by0))
+    return schnitt / kleiner if kleiner > 0 else 0.0
 
 
 def zuschnitt_drehen(rahmen, richtung: int):
@@ -430,6 +440,7 @@ class BearbeitenSeite(QWidget):
         spalte.insertWidget(spalte.indexOf(karten["licht"]) + 1, self._kurvenkarte())
         spalte.insertWidget(spalte.indexOf(karten["farbe"]) + 1, self._hsl_karte())
         spalte.insertWidget(spalte.indexOf(karten["maske"]) + 1, self._entfern_karte())
+        spalte.insertWidget(spalte.indexOf(karten["maske"]) + 2, self._anonym_karte())
         spalte.addWidget(self._ki_karte())
         spalte.addStretch(1)
         flaeche.setWidget(inhalt)
@@ -1354,6 +1365,311 @@ class BearbeitenSeite(QWidget):
         innen.addLayout(leiste)
         return karte
 
+    # ------------------------------------------------------------------
+    # Anonymisieren: Flaechen verpixeln, Gesichter finden, Metadaten
+    # ------------------------------------------------------------------
+
+    def _anonym_karte(self) -> QFrame:
+        karte, innen = self._karte(_("Anonymisieren"))
+        self.anonym_hinweis = QLabel(objectName="nebentext")
+        self.anonym_hinweis.setWordWrap(True)
+        innen.addWidget(self.anonym_hinweis)
+        leiste = QHBoxLayout()
+        leiste.setSpacing(4)
+        self.gesichter_knopf = self._knopf(_("Gesichter finden"), self.gesichter_finden)
+        self.fenster.beschriften(self.gesichter_knopf.setToolTip, _(
+            "Legt um jedes erkannte Gesicht eine Fläche. Prüfen und nachbessern – sehr "
+            "kleine, verdeckte oder seitliche Gesichter können fehlen."))
+        self.flaechen_knopf = QPushButton()
+        self.flaechen_knopf.setCheckable(True)
+        self.fenster.beschriften(self.flaechen_knopf.setText, _("Flächen bearbeiten"))
+        self.fenster.beschriften(self.flaechen_knopf.setToolTip, _(
+            "Auf freiem Grund ziehen legt eine Fläche an; Flächen verschieben, an den Ecken "
+            "die Größe ändern, Entf löscht die gewählte."))
+        self.flaechen_knopf.toggled.connect(
+            lambda an: self.flaechen_beginnen() if an else self.flaechen_beenden())
+        leiste.addWidget(self.gesichter_knopf, 1)
+        leiste.addWidget(self.flaechen_knopf, 1)
+        innen.addLayout(leiste)
+
+        gitter = QGridLayout()
+        gitter.setColumnStretch(1, 1)
+        gitter.setVerticalSpacing(4)
+        beschriftung = QLabel()
+        self.fenster.beschriften(beschriftung.setText, _("Form"))
+        self.anonym_form = QComboBox()
+        self._eintrag(self.anonym_form, _("Ellipse"), "ellipse")
+        self._eintrag(self.anonym_form, _("Rechteck"), "rechteck")
+        self.anonym_form.currentIndexChanged.connect(self._anonym_form_gewaehlt)
+        gitter.addWidget(beschriftung, 0, 0)
+        gitter.addWidget(self.anonym_form, 0, 1)
+        beschriftung = QLabel()
+        self.fenster.beschriften(beschriftung.setText, _("Wirkung"))
+        self.anonym_art = QComboBox()
+        self._eintrag(self.anonym_art, _("Mosaik"), "mosaik")
+        self._eintrag(self.anonym_art, _("Weichzeichnen"), "weich")
+        self._eintrag(self.anonym_art, _("Schwarz füllen"), "fuellen")
+        self.anonym_art.currentIndexChanged.connect(self._anonym_art_gewaehlt)
+        gitter.addWidget(beschriftung, 1, 0)
+        gitter.addWidget(self.anonym_art, 1, 1)
+        self.anonym_bloecke_text = QLabel()
+        self.fenster.beschriften(self.anonym_bloecke_text.setText, _("Raster"))
+        self.anonym_bloecke = QSlider(Qt.Orientation.Horizontal)
+        self.anonym_bloecke.setRange(int(anonym.BLOECKE_MIN), int(anonym.BLOECKE_MAX))
+        self.anonym_bloecke.setValue(int(anonym.BLOECKE))
+        self.fenster.beschriften(self.anonym_bloecke.setToolTip, _(
+            "Blöcke über die Breite einer Fläche. Weniger ist sicherer: feine Mosaike "
+            "lassen sich teilweise zurückrechnen."))
+        self.anonym_bloecke.valueChanged.connect(self._anonym_bloecke_geaendert)
+        gitter.addWidget(self.anonym_bloecke_text, 2, 0)
+        gitter.addWidget(self.anonym_bloecke, 2, 1)
+        innen.addLayout(gitter)
+
+        leiste = QHBoxLayout()
+        leiste.setSpacing(4)
+        self.flaeche_weg_knopf = self._knopf(_("Fläche löschen"), self.flaeche_loeschen)
+        self.flaechen_weg_knopf = self._knopf(_("Alle löschen"), self.flaechen_loeschen)
+        leiste.addWidget(self.flaeche_weg_knopf, 1)
+        leiste.addWidget(self.flaechen_weg_knopf, 1)
+        innen.addLayout(leiste)
+        self.metadaten_box = QCheckBox()
+        self.fenster.beschriften(self.metadaten_box.setText,
+                                 _("Ohne GPS und Seriennummern speichern"))
+        self.fenster.beschriften(self.metadaten_box.setToolTip, _(
+            "Nimmt beim Speichern GPS-Position, Seriennummern von Kamera und Objektiv, den "
+            "Besitzernamen und die Herstellerdaten aus den Metadaten."))
+        self.metadaten_box.toggled.connect(self._metadaten_umgeschaltet)
+        innen.addWidget(self.metadaten_box)
+
+        self.leinwand.flaeche_gezogen.connect(self._flaeche_gezogen)
+        self.leinwand.flaeche_loeschen.connect(self.flaeche_loeschen)
+        self._flaeche_start = None            # Flaechen beim Beginn des Ziehens
+        self._gesichtsfinder: anonym.Gesichtsfinder | None = None
+        return karte
+
+    def _anonym_anzeigen(self):
+        if not hasattr(self, "anonym_hinweis"):
+            return
+        offen = self.sitzung is not None
+        flaechen = self.sitzung.werte.anonym_flaechen if offen else ()
+        bearbeiten = self.leinwand.flaechenmodus
+        gewaehlt = self.leinwand.flaeche_gewaehlt
+        if bearbeiten:
+            text = _("Auf freiem Grund ziehen legt eine Fläche an. Flächen verschieben, an "
+                     "den Ecken die Größe ändern; Entf löscht, Esc beendet.")
+        elif flaechen:
+            text = _("{n} Flächen. Das Mosaik wird beim Speichern fest ins Bild "
+                     "gerechnet.").format(n=len(flaechen))
+        else:
+            text = _("Gesichter, Kennzeichen oder Hausnummern unkenntlich machen.")
+        self.fenster.beschriften(self.anonym_hinweis.setText, text)
+        for widget in (self.gesichter_knopf, self.flaechen_knopf, self.anonym_form,
+                       self.anonym_art, self.anonym_bloecke, self.metadaten_box):
+            widget.setEnabled(offen)
+        if self.flaechen_knopf.isChecked() != bearbeiten:
+            self.flaechen_knopf.blockSignals(True)
+            self.flaechen_knopf.setChecked(bearbeiten)
+            self.flaechen_knopf.blockSignals(False)
+        self.flaeche_weg_knopf.setEnabled(bearbeiten and gewaehlt is not None)
+        self.flaechen_weg_knopf.setEnabled(bool(flaechen))
+        werte = self.sitzung.werte if offen else filter.Einstellungen()
+        for auswahl, wert in ((self.anonym_art, werte.anonym_art),
+                              (self.anonym_form, self._flaechen_form())):
+            nummer = auswahl.findData(wert)
+            if nummer >= 0 and nummer != auswahl.currentIndex():
+                auswahl.blockSignals(True)
+                auswahl.setCurrentIndex(nummer)
+                auswahl.blockSignals(False)
+        for widget, wert in ((self.anonym_bloecke, int(round(werte.anonym_bloecke))),
+                             (self.metadaten_box, werte.metadaten_entfernen)):
+            widget.blockSignals(True)
+            if isinstance(widget, QCheckBox):
+                widget.setChecked(wert)
+            else:
+                widget.setValue(wert)
+            widget.blockSignals(False)
+        self.anonym_bloecke.setEnabled(offen and werte.anonym_art != "fuellen")
+        self.fenster.beschriften(self.anonym_bloecke_text.setText,
+                                 _("Stärke") if werte.anonym_art == "weich" else _("Raster"))
+
+    def _flaechen_form(self) -> str:
+        """Form der gewaehlten Flaeche, sonst die zuletzt gewaehlte fuer neue."""
+        gewaehlt = self.leinwand.flaeche_gewaehlt
+        if self.sitzung is not None and gewaehlt is not None \
+                and gewaehlt < len(self.sitzung.werte.anonym_flaechen):
+            return self.sitzung.werte.anonym_flaechen[gewaehlt][0]
+        return self._neue_form
+
+    _neue_form = "ellipse"
+
+    def _umrisse_setzen(self):
+        """Umrisse und Griffe der Flaechen fuer die Leinwand - im fertigen Bild, also
+        nach Drehen, Begradigen und Zuschnitt."""
+        if self.sitzung is None or not self.leinwand.flaechenmodus:
+            return
+        flaechen = self.sitzung.werte.anonym_flaechen
+        hoehe, breite = self.sitzung.original.shape[:2]
+        teile, laengen = [], []
+        t = np.linspace(0, 1, 9)[:-1]
+        winkel = np.linspace(0, 2 * np.pi, 49)[:-1]
+        for form, x0, y0, x1, y1 in flaechen:
+            ecken = np.array([[x0, y0], [x1, y0], [x1, y1], [x0, y1]])
+            if form == "ellipse":
+                umriss = np.stack([(x0 + x1) / 2 + (x1 - x0) / 2 * np.cos(winkel),
+                                   (y0 + y1) / 2 + (y1 - y0) / 2 * np.sin(winkel)], axis=1)
+            else:
+                # Kanten in Stuecken - verzeichnet sind sie im Bild gebogen
+                umriss = np.concatenate([a + (b - a) * t[:, None]
+                                         for a, b in zip(ecken, np.roll(ecken, -1, axis=0),
+                                                         strict=True)])
+            teile += [umriss, ecken]
+            laengen += [len(umriss), 4]
+        if teile:
+            punkte = np.concatenate(teile) * (breite, hoehe)
+            im_bild = self.sitzung.ziel_von(punkte)
+            stuecke = np.split(im_bild, np.cumsum(laengen)[:-1])
+        else:
+            stuecke = []
+        self.leinwand.flaechen_umrisse = stuecke[0::2]
+        self.leinwand.flaechen_ecken = stuecke[1::2]
+        if self.leinwand.flaeche_gewaehlt is not None \
+                and self.leinwand.flaeche_gewaehlt >= len(flaechen):
+            self.leinwand.flaeche_gewaehlt = None
+        self.leinwand.update()
+
+    def flaechen_beginnen(self):
+        if self.sitzung is None:
+            self._anonym_anzeigen()
+            return
+        self.zuschneiden(False)
+        self.auswahl_beenden()
+        self.pinsel_beenden()                    # beendet auch einen alten Flaechenmodus
+        self.leinwand.flaechenmodus_setzen(True)
+        self._umrisse_setzen()
+        self._anonym_anzeigen()
+
+    def flaechen_beenden(self):
+        if not self.leinwand.flaechenmodus:
+            self._anonym_anzeigen()
+            return
+        self.leinwand.flaechenmodus_setzen(False)
+        self._anonym_anzeigen()
+
+    def _flaechen_setzen(self, flaechen, gewaehlt: int | None = None):
+        werte = self.sitzung.werte
+        if flaechen and not werte.anonym_flaechen and not werte.metadaten_entfernen:
+            # Wer anonymisiert, will meist auch den Standort nicht weitergeben
+            werte.metadaten_entfernen = True
+            self.fenster.melden(_("Standort und Seriennummern werden nicht mitgespeichert."))
+        werte.anonym_flaechen = tuple(flaechen)
+        self.leinwand.flaeche_gewaehlt = gewaehlt
+        self._umrisse_setzen()
+        self._anonym_anzeigen()
+        self.zeichnen_anfordern()
+
+    def gesichter_finden(self):
+        if self.sitzung is None:
+            return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            if self._gesichtsfinder is None:
+                self._gesichtsfinder = anonym.Gesichtsfinder()
+            neu = self.sitzung.gesichter_finden(self._gesichtsfinder, self._neue_form)
+        except Exception as fehler:              # ORT wirft eigene Fehlerklassen
+            QApplication.restoreOverrideCursor()
+            self._fehler(_("Die Gesichtserkennung ist fehlgeschlagen."), str(fehler))
+            return
+        QApplication.restoreOverrideCursor()
+        alt = list(self.sitzung.werte.anonym_flaechen)
+        # Schon abgedeckte Gesichter nicht doppelt anlegen
+        dazu = [f for f in neu if not any(_ueberlappung(f, a) > 0.5 for a in alt)]
+        if not neu:
+            self.fenster.melden(_("Keine Gesichter gefunden – Flächen von Hand aufziehen."))
+        else:
+            self.fenster.melden(_("{n} Gesichter gefunden – bitte prüfen und "
+                                  "nachbessern.").format(n=len(neu)))
+        self.flaechen_beginnen()
+        if dazu:
+            self._flaechen_setzen(alt + dazu)
+
+    def _flaeche_gezogen(self, art: str, nummer: int, sx: float, sy: float, x: float, y: float,
+                         fertig: bool):
+        if self.sitzung is None or self._vorher:
+            return
+        flaechen = list(self.sitzung.werte.anonym_flaechen)
+        if self._flaeche_start is None:
+            self._flaeche_start = (art, nummer, tuple(flaechen))
+        _art, _nummer, vorher = self._flaeche_start
+        if fertig:
+            self._flaeche_start = None
+        hoehe, breite = self.sitzung.original.shape[:2]
+        a = self.sitzung.quelle_von(sx, sy, begrenzt=False)
+        b = self.sitzung.quelle_von(x, y, begrenzt=False)
+        ax, ay, bx, by = a[0] / breite, a[1] / hoehe, b[0] / breite, b[1] / hoehe
+        flaechen = list(vorher)
+        if art == "neu":
+            flaeche = anonym.flaeche_begrenzen((self._neue_form, ax, ay, bx, by))
+            if flaeche is None:
+                # Nur geklickt (oder zu klein): Auswahl aufheben
+                self._flaechen_setzen(vorher, None)
+                return
+            self._flaechen_setzen([*flaechen, flaeche], len(flaechen))
+            return
+        form, x0, y0, x1, y1 = flaechen[nummer]
+        if art == "innen":
+            dx = min(max(bx - ax, -x0), 1 - x1)
+            dy = min(max(by - ay, -y0), 1 - y1)
+            flaeche = (form, x0 + dx, y0 + dy, x1 + dx, y1 + dy)
+        else:
+            ecke = int(art[-1])
+            # Die gezogene Ecke folgt der Maus, die gegenueberliegende bleibt
+            x0, x1 = (bx, x1) if ecke in (0, 3) else (x0, bx)
+            y0, y1 = (by, y1) if ecke in (0, 1) else (y0, by)
+            flaeche = anonym.flaeche_begrenzen((form, x0, y0, x1, y1)) or flaechen[nummer]
+        flaechen[nummer] = flaeche
+        self._flaechen_setzen(flaechen, nummer)
+
+    def flaeche_loeschen(self, nummer: int | None = None):
+        if self.sitzung is None:
+            return
+        if not isinstance(nummer, int) or isinstance(nummer, bool):
+            nummer = self.leinwand.flaeche_gewaehlt
+        flaechen = list(self.sitzung.werte.anonym_flaechen)
+        if nummer is None or not 0 <= nummer < len(flaechen):
+            return
+        del flaechen[nummer]
+        self._flaechen_setzen(flaechen, None)
+
+    def flaechen_loeschen(self):
+        if self.sitzung is not None:
+            self._flaechen_setzen((), None)
+
+    def _anonym_form_gewaehlt(self, *_args):
+        form = self.anonym_form.currentData()
+        self._neue_form = form
+        gewaehlt = self.leinwand.flaeche_gewaehlt
+        if self.sitzung is None or gewaehlt is None:
+            return
+        flaechen = list(self.sitzung.werte.anonym_flaechen)
+        if gewaehlt < len(flaechen):
+            flaechen[gewaehlt] = (form, *flaechen[gewaehlt][1:])
+            self._flaechen_setzen(flaechen, gewaehlt)
+
+    def _anonym_art_gewaehlt(self, *_args):
+        if self.sitzung is not None:
+            self.sitzung.werte.anonym_art = self.anonym_art.currentData()
+            self._anonym_anzeigen()
+            self.zeichnen_anfordern()
+
+    def _anonym_bloecke_geaendert(self, wert: int):
+        if self.sitzung is not None:
+            self.sitzung.werte.anonym_bloecke = float(wert)
+            self.zeichnen_anfordern()
+
+    def _metadaten_umgeschaltet(self, an: bool):
+        if self.sitzung is not None:
+            self.sitzung.werte.metadaten_entfernen = an
+
     def _entfern_modell(self) -> ki.Modell:
         return ki.ENTFERN_MODELLE["lama"]
 
@@ -1435,11 +1751,14 @@ class BearbeitenSeite(QWidget):
             return
         self.zuschneiden(False)
         self.auswahl_beenden()
+        self.flaechen_beenden()
         self.leinwand.pinsel_radius = self.pinsel_groesse.value()
         self.leinwand.pinselmodus_setzen(True)
         self._entfernen_anzeigen()
 
     def pinsel_beenden(self):
+        # Wer einen anderen Modus beginnt, beendet hiermit auch das Flaechenbearbeiten
+        self.flaechen_beenden()
         if not self.leinwand.pinselmodus:
             return
         self.leinwand.pinselmodus_setzen(False)
@@ -1773,6 +2092,7 @@ class BearbeitenSeite(QWidget):
             widget.setEnabled(offen)
         self._lut_anzeigen()
         self._erweitern_anzeigen()
+        self._anonym_anzeigen()
 
     # ------------------------------------------------------------------
     # Regler und Vorschau
@@ -1811,6 +2131,8 @@ class BearbeitenSeite(QWidget):
         # eingepasst; in der 100-%-Ansicht passte der sichtbare Ausschnitt nicht mehr
         ohne_raender = self._vorher and self.sitzung.erweitert and self.leinwand.zoom is None
         self.leinwand.voll_form = self.sitzung.ausgabe_form(werte, ohne_erweiterung=ohne_raender)
+        if not self._vorher:
+            self._umrisse_setzen()                 # Geometrie kann sich geaendert haben
         if self._klick_ziel is not None:
             ziel = self._klick_ziel
             gleich = (not self._vorher
@@ -1858,6 +2180,8 @@ class BearbeitenSeite(QWidget):
         self._hsl_anzeigen()
         self._lut_anzeigen()
         self._ki_bild_anzeigen()
+        self._anonym_anzeigen()
+        self._umrisse_setzen()
 
     # ------------------------------------------------------------------
     # Oeffnen und Speichern

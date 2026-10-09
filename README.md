@@ -119,8 +119,18 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   Farbstich der KI wird am Original gemessen und herausgenommen. „Neu erzeugen“
   würfelt die Ränder neu; die Regler wirken danach auf das ganze Bild. Kommt
   mehr als ein Viertel je Seite dazu, weist das Programm darauf hin, dass die KI
-  dann mehr erfindet, als sie sieht. Rund eine halbe Minute auf einer RTX 4060;
+  dann mehr erfindet, als sie sieht. Rund 15 Sekunden auf einer RTX 4060;
   braucht 8 GB Grafikspeicher.
+- **Anonymisieren**: Gesichter, Kennzeichen oder Hausnummern verpixeln,
+  weichzeichnen oder schwarz füllen – als Rechteck oder Ellipse. „Gesichter
+  finden“ legt um jedes erkannte Gesicht eine Fläche (YuNet, liegt dem Programm
+  bei, rechnet auf dem Prozessor); Flächen lassen sich verschieben, in der Größe
+  ändern, löschen und von Hand aufziehen. Sie folgen Drehen und Zuschnitt. Das
+  Mosaik ist standardmäßig grob, denn feine Mosaike lassen sich teilweise
+  zurückrechnen. Auf Wunsch speichert Silberkorn ohne GPS-Position,
+  Seriennummern von Kamera und Objektiv, Besitzernamen und Herstellerdaten.
+  Bewusst nicht angeboten wird das Gegenteil, ein „Entpixeln“: Eine KI könnte
+  ein verpixeltes Gesicht nicht zurückholen, nur ein fremdes erfinden.
 - **Geometrie**: um 90° drehen, spiegeln, begradigen, Perspektive senkrecht
   und waagrecht, Zuschneiden mit Rahmen und festen Seitenverhältnissen. Leere
   Ecken nach dem Begradigen werden automatisch weggeschnitten.
@@ -235,7 +245,8 @@ installiert.
 
 Silberkorn arbeitet vollständig auf dem eigenen Rechner. Es werden keine Bilder
 hochgeladen und keine Nutzungsdaten gesendet. Auch die KI rechnet lokal auf der
-Grafikkarte. Die einzige Verbindung ins Netz ist das Laden eines KI-Modells – und
+Grafikkarte, die Gesichtserkennung auf dem Prozessor. Die einzige Verbindung ins
+Netz ist das Laden eines KI-Modells – und
 das nur, wenn man in einer der Karten „KI-Hochskalieren“, „KI-Entrauschen“,
 „KI-Schärfen“, „Motiv & Hintergrund“, „Objekte entfernen“, „Tiefe & Bokeh“ oder
 bei „Mit KI erweitern“ in der Karte „Geometrie“ ausdrücklich auf das Laden klickt und die Rückfrage mit Quelle,
@@ -263,7 +274,7 @@ LaMa mit 196 MB, in der Karte „Tiefe & Bokeh“ aus
 Depth Anything V2 Small mit 98 MB und in der Karte „Geometrie“ für „Mit KI
 erweitern“ aus
 [modelle-8](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-8)
-FLUX.2 [klein] 4B mit Outpaint-LoRA mit rund 4,3 GB – auf mehrere Dateien
+FLUX.2 [klein] 4B mit Outpaint-LoRA mit rund 4,1 GB – auf mehrere Dateien
 verteilt, denn GitHub nimmt je Datei höchstens 2 GB an. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft,
 bevor sie verwendet wird.
 Abgelegt werden sie im Ordner `modelle` neben dem Programm oder, wenn der

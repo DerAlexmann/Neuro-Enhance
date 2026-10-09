@@ -43,6 +43,9 @@ VERSTECKT = (collect_submodules("cuda.pathfinder") + collect_submodules("cupy")
              # Standardmodule, die nur kompilierte Module (Cython) importieren
              + ["graphlib", "struct"])
 DATEN = collect_data_files("cupy", include_py_files=False) + collect_data_files("cupyx")
+# Gesichtserkennung (YuNet, MIT, 224 KB) liegt dem Programm bei - siehe silberkorn/anonym.py
+DATEN += [(os.path.join(WURZEL, "silberkorn", "daten", "face_detection_yunet_2026may.onnx"),
+           os.path.join("silberkorn", "daten"))]
 
 a = Analysis(
     [os.path.join(WURZEL, "Silberkorn.pyw")],

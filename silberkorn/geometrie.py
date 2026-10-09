@@ -187,6 +187,39 @@ def zur_quelle(form_quelle, g: Geometrie, x: float, y: float) -> tuple[float, fl
     return float(cx + p.ws / 2), float(cy + p.hs / 2)
 
 
+def von_quelle(form_quelle, g: Geometrie, punkte) -> np.ndarray:
+    """Punkte im Original (n, 2), in Pixeln - wo liegen sie im fertigen Bild?
+
+    Die Abbildung ist nur rueckwaerts geschlossen formuliert; vorwaerts loest das
+    Newton-Verfahren sie fuer alle Punkte zugleich. Sie ist fast affin, nach
+    wenigen Schritten stimmt es auf Bruchteile eines Pixels."""
+    punkte = np.asarray(punkte, dtype=np.float64).reshape(-1, 2)
+    p = _parameter(form_quelle, g, automatischer_zoom(form_quelle, g))
+    sx, sy = punkte[:, 0], punkte[:, 1]
+
+    def rueck(u, v):
+        cx, cy = _verzeichnet(p, *_rueckwaerts(np, p, u, v))
+        return cx + p.ws / 2, cy + p.hs / 2
+
+    u = np.full(len(punkte), 0.5)
+    v = np.full(len(punkte), 0.5)
+    eps = 1e-5
+    for _ in range(12):
+        qx, qy = rueck(u, v)
+        ax, ay = rueck(u + eps, v)
+        bx, by = rueck(u, v + eps)
+        j11, j12 = (ax - qx) / eps, (bx - qx) / eps
+        j21, j22 = (ay - qy) / eps, (by - qy) / eps
+        det = j11 * j22 - j12 * j21
+        det = np.where(np.abs(det) < 1e-12, 1e-12, det)
+        fx, fy = qx - sx, qy - sy
+        du, dv = (j22 * fx - j12 * fy) / det, (j11 * fy - j21 * fx) / det
+        u, v = u - du, v - dv
+        if max(np.abs(du).max(initial=0), np.abs(dv).max(initial=0)) < 1e-9:
+            break
+    return np.stack([u * p.wout, v * p.hout], axis=1)
+
+
 def _catmull_rom(xp, t):
     """Gewichte der vier Nachbarn fuer den Anteil t (Catmull-Rom, a = -0.5)."""
     t2, t3 = t * t, t * t * t

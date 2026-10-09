@@ -114,6 +114,9 @@ GEOMETRIE_FELDER = {"drehung90": 0, "spiegeln": False, "zuschnitt": (0.0, 0.0, 1
 # Schalter der Maske: Wirkung umkehren (Regler wirken aufs Motiv), Hintergrund
 # beim Speichern durchsichtig, Motiv beim Bokeh scharf halten
 MASKEN_SCHALTER = {"maske_umkehren": False, "freistellen": False, "bokeh_motiv": True}
+# Anonymisieren (anonym.py): Flaechen im Original, ihre Wirkung, Metadaten beim Speichern
+ANONYM_FELDER = {"anonym_flaechen": (), "anonym_art": "mosaik", "anonym_bloecke": 8.0,
+                 "metadaten_entfernen": False}
 HINTERGRUND = ("hg_belichtung", "hg_kontrast", "hg_saettigung", "hg_temperatur",
                "hg_unschaerfe")
 
@@ -182,6 +185,11 @@ class Einstellungen:
     vignette: float = 0.0
     ca_rot: float = 0.0
     ca_blau: float = 0.0
+    # Anonymisieren: (form, x0, y0, x1, y1) auf 0..1 des Originals, siehe anonym.py
+    anonym_flaechen: tuple[tuple, ...] = ()
+    anonym_art: str = "mosaik"
+    anonym_bloecke: float = 8.0
+    metadaten_entfernen: bool = False
 
     def ist_neutral(self) -> bool:
         for feld in fields(self):
@@ -200,6 +208,9 @@ class Einstellungen:
                     return False
             elif feld.name in MASKEN_SCHALTER:
                 if wert != MASKEN_SCHALTER[feld.name]:
+                    return False
+            elif feld.name in ANONYM_FELDER:
+                if wert != ANONYM_FELDER[feld.name]:
                     return False
             elif feld.name not in ("schaerfe_radius", "lut_staerke", "fokus", "schaerfentiefe") \
                     and wert != REGLER_NACH_NAME[feld.name].vorgabe:

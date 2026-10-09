@@ -68,6 +68,10 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
 
 ### Hinzugefügt
 
+- Anonymisieren: Flächen als Rechteck oder Ellipse verpixeln, weichzeichnen oder
+  schwarz füllen; „Gesichter finden“ mit YuNet (MIT, liegt bei, Prozessor),
+  Flächen auf dem Bild verschieben, in der Größe ändern und aufziehen. Speichern
+  auf Wunsch ohne GPS, Seriennummern, Besitzername und Herstellerdaten.
 - KI-Erweitern (Outpainting) mit FLUX.2 [klein] 4B und der Outpaint-LoRA von
   fal (beide Apache-2.0): In der Karte „Geometrie“ erweitert „Mit KI erweitern
   statt beschneiden“ das Bild auf das gewählte Seitenverhältnis, statt es
@@ -76,7 +80,7 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
   Farbstich am Original herausgenommen und das unveränderte Original mit
   weichem Saum eingesetzt. „Neu erzeugen“ rechnet mit neuem Zufall; über 25 %
   je Seite gibt es einen Hinweis. Die Erweiterung liegt vor allen Reglern und
-  lässt sich wieder abwählen. Ab 8 GB Grafikspeicher; das Modell (rund 4,3 GB,
+  lässt sich wieder abwählen. Ab 8 GB Grafikspeicher; das Modell (rund 4,1 GB,
   Release „modelle-8“, auf mehrere Dateien verteilt) wird erst auf Wunsch
   geladen.
 - `werkzeuge/outpaint_export.py`: rechnet die LoRA ein, exportiert Transformer

@@ -100,6 +100,52 @@ TRANSLATIONS = {
         "Gedrückt halten, um das unbearbeitete Bild zu sehen.":
             "Hold down to see the unedited image.",
         "Alles zurücksetzen": "Reset all",
+        # Anonymisieren
+        "Anonymisieren": "Anonymise",
+        "Gesichter finden": "Find faces",
+        "Legt um jedes erkannte Gesicht eine Fläche. Prüfen und nachbessern – sehr "
+        "kleine, verdeckte oder seitliche Gesichter können fehlen.":
+            "Places an area around every detected face. Check and correct – very small, "
+            "covered or side-on faces may be missed.",
+        "Flächen bearbeiten": "Edit areas",
+        "Auf freiem Grund ziehen legt eine Fläche an; Flächen verschieben, an den Ecken "
+        "die Größe ändern, Entf löscht die gewählte.":
+            "Drag on empty ground to add an area; move areas, resize them at the corners, "
+            "Del removes the selected one.",
+        "Auf freiem Grund ziehen legt eine Fläche an. Flächen verschieben, an den Ecken "
+        "die Größe ändern; Entf löscht, Esc beendet.":
+            "Drag on empty ground to add an area. Move areas, resize them at the corners; "
+            "Del removes, Esc finishes.",
+        "Form": "Shape",
+        "Ellipse": "Ellipse",
+        "Rechteck": "Rectangle",
+        "Wirkung": "Effect",
+        "Mosaik": "Mosaic",
+        "Weichzeichnen": "Blur",
+        "Schwarz füllen": "Fill black",
+        "Raster": "Grid",
+        "Blöcke über die Breite einer Fläche. Weniger ist sicherer: feine Mosaike "
+        "lassen sich teilweise zurückrechnen.":
+            "Blocks across the width of an area. Fewer is safer: fine mosaics can be "
+            "partly reversed.",
+        "Fläche löschen": "Remove area",
+        "Alle löschen": "Remove all",
+        "Ohne GPS und Seriennummern speichern": "Save without GPS and serial numbers",
+        "Nimmt beim Speichern GPS-Position, Seriennummern von Kamera und Objektiv, den "
+        "Besitzernamen und die Herstellerdaten aus den Metadaten.":
+            "Removes the GPS position, the camera and lens serial numbers, the owner name "
+            "and the maker notes from the metadata when saving.",
+        "Standort und Seriennummern werden nicht mitgespeichert.":
+            "Location and serial numbers will not be saved.",
+        "{n} Flächen. Das Mosaik wird beim Speichern fest ins Bild gerechnet.":
+            "{n} areas. The mosaic is burned into the image when saving.",
+        "Gesichter, Kennzeichen oder Hausnummern unkenntlich machen.":
+            "Make faces, number plates or house numbers unrecognisable.",
+        "Die Gesichtserkennung ist fehlgeschlagen.": "Face detection failed.",
+        "Keine Gesichter gefunden – Flächen von Hand aufziehen.":
+            "No faces found – drag areas by hand.",
+        "{n} Gesichter gefunden – bitte prüfen und nachbessern.":
+            "{n} faces found – please check and correct.",
         "Setzt alle Regler, Drehung und Zuschnitt zurück und verwirft eine KI-Erweiterung.":
             "Resets all sliders, rotation and crop and discards an AI extension.",
         "Doppelklick setzt den Regler zurück.": "Double-click resets the slider.",
