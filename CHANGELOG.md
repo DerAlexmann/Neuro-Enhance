@@ -3,7 +3,7 @@
 Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/).
 
-## [Unveröffentlicht]
+## [0.2.0] – 2026-10-10
 
 ### Neu
 
@@ -297,6 +297,6 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
   Rechengenauigkeit (FP16, FP8 ab Ada, FP4 ab Blackwell).
 - Programmsymbol, Marken- und Lizenzhinweise (NOTICE).
 
-[Unveröffentlicht]: https://github.com/DerAlexmann/Silberkorn/compare/v0.1.1...HEAD
+[0.2.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.2.0
 [0.1.1]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.1.1
 [0.1.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.1.0
