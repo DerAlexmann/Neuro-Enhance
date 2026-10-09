@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
+    QDialog,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -35,13 +36,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import anonym, bilddatei, einstellungen, filter, geometrie, ki, lut
+from . import anonym, bilddatei, einstellungen, filter, geometrie, ki, lut, veroeffentlichen
 from .bearbeitung import Sitzung
 from .cuda import cupy as cp
 from .geometrie import VOLLER_ZUSCHNITT
 from .kurveneditor import KurvenEditor
 from .leinwand import Leinwand, rahmen_mit_verhaeltnis
 from .uebersetzung import _
+from .veroeffentlichen_dialog import VeroeffentlichenDialog
 
 REGLERLEISTE_BREITE = 340
 
@@ -149,6 +151,11 @@ def speicherformate() -> list[tuple[str, str, int]]:
         (f"TIFF {_('16 Bit')} (*.tif *.tiff)", ".tif", 16),
         ("WebP (*.webp)", ".webp", 8),
     ]
+
+
+def veroeffentlichen_formate() -> list[tuple[str, str]]:
+    """Dateifilter fuer „Für Veröffentlichung“: (Beschriftung, Endung) - nur 8 Bit."""
+    return [("JPEG (*.jpg *.jpeg)", ".jpg"), ("PNG (*.png)", ".png"), ("WebP (*.webp)", ".webp")]
 
 
 def ziel_bestimmen(pfad: str, gewaehlt: str) -> tuple[str, int]:
@@ -364,6 +371,12 @@ class BearbeitenSeite(QWidget):
         leiste.addWidget(self._knopf(_("Öffnen …"), self.oeffnen_dialog, "hauptschalter"))
         self.speichern_knopf = self._knopf(_("Speichern unter …"), self.speichern_dialog)
         leiste.addWidget(self.speichern_knopf)
+        self.veroeffentlichen_knopf = self._knopf(_("Für Veröffentlichung …"),
+                                                  self.veroeffentlichen_dialog)
+        self.fenster.beschriften(self.veroeffentlichen_knopf.setToolTip, _(
+            "Verkleinert, mit Wasserzeichen und Rechteangaben speichern – etwa für Bilder "
+            "im Netz. Das Original bleibt unverändert."))
+        leiste.addWidget(self.veroeffentlichen_knopf)
         leiste.addStretch(1)
         self.einpassen_knopf = self._knopf(_("Einpassen"),
                                            lambda: self.leinwand.zoom_setzen(None))
@@ -374,6 +387,9 @@ class BearbeitenSeite(QWidget):
             "Ein Bildpixel je Bildschirmpixel (Strg+1). Mausrad zoomt, Ziehen verschiebt, "
             "Doppelklick wechselt."))
         self.zoom_anzeige = QLabel(objectName="nebentext")
+        # Platz fuer „400 %“ von Anfang an, sonst wird das Fenster beim Zoomen breiter
+        self.zoom_anzeige.setMinimumWidth(self.zoom_anzeige.fontMetrics().horizontalAdvance(
+            "400 %") + 4)
         leiste.addWidget(self.einpassen_knopf)
         leiste.addWidget(self.zoom100_knopf)
         leiste.addWidget(self.zoom_anzeige)
@@ -2077,7 +2093,8 @@ class BearbeitenSeite(QWidget):
 
     def _knoepfe_freischalten(self):
         offen = self.sitzung is not None
-        for widget in (self.speichern_knopf, self.vorher_knopf, self.zuruecksetzen_knopf):
+        for widget in (self.speichern_knopf, self.veroeffentlichen_knopf, self.vorher_knopf,
+                       self.zuruecksetzen_knopf):
             widget.setEnabled(offen)
         for zeile in [*self.zeilen.values(), *self.hsl_zeilen]:
             zeile.schieber.setEnabled(offen)
@@ -2333,6 +2350,61 @@ class BearbeitenSeite(QWidget):
             return
         self.fenster.melden(_("Gespeichert: {name} ({ms} ms)")
                             .format(name=os.path.basename(pfad), ms=f"{ms:.0f}"))
+
+    def veroeffentlichen_dialog(self):
+        if self.sitzung is None:
+            return
+        sitzung = self.sitzung
+        # Die Vorschau ohne eingeblendete Maske, Tiefe und Markierungen
+        zeigen = sitzung.maske_zeigen, sitzung.tiefe_zeigen
+        sitzung.maske_zeigen = sitzung.tiefe_zeigen = False
+        try:
+            vorschau, _ms, _histogramm = sitzung.vorschau()
+        finally:
+            sitzung.maske_zeigen, sitzung.tiefe_zeigen = zeigen
+        daten = einstellungen.load_config()
+        vorlage = veroeffentlichen.Vorlage.aus_dict(daten.get("veroeffentlichen"))
+        dialog = VeroeffentlichenDialog(self, vorschau, sitzung.ausgabe_form(), vorlage,
+                                        sitzung.ki_inhalt)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        vorlage = dialog.vorlage()
+        daten["veroeffentlichen"] = vorlage.als_dict()
+        einstellungen.save_config(daten)
+
+        formate = veroeffentlichen_formate()
+        stamm = os.path.splitext(sitzung.daten.pfad)[0]
+        pfad, gewaehlt = QFileDialog.getSaveFileName(
+            self, _("Für Veröffentlichung speichern"), f"{stamm}-web{vorlage.format}",
+            ";;".join(b for b, _e in formate),
+            next(b for b, e in formate if e == vorlage.format))
+        if not pfad:
+            return
+        endung = os.path.splitext(pfad)[1].lower()
+        if endung not in (".jpg", ".jpeg", ".png", ".webp"):
+            pfad += dict(formate).get(gewaehlt, ".jpg")
+            endung = os.path.splitext(pfad)[1].lower()
+        vorlage = dialog.mit_format(".jpg" if endung == ".jpeg" else endung)
+        daten = einstellungen.load_config()
+        daten["veroeffentlichen"] = vorlage.als_dict()
+        daten["letzter_ordner"] = os.path.dirname(pfad)
+        einstellungen.save_config(daten)
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            ms, (breite, hoehe) = sitzung.veroeffentlichen(pfad, vorlage)
+        except bilddatei.BildFehler as fehler:
+            self._fehler(_("Das Bild lässt sich nicht speichern."), str(fehler))
+            return
+        except cp.cuda.memory.OutOfMemoryError:
+            self._fehler(_("Für dieses Bild reicht der Grafikspeicher nicht."), "")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        self.fenster.melden(_("Für Veröffentlichung gespeichert: {name} – {breite} × {hoehe} "
+                              "Pixel ({ms} ms)").format(name=os.path.basename(pfad),
+                                                        breite=breite, hoehe=hoehe,
+                                                        ms=f"{ms:.0f}"))
 
     def _fehler(self, text: str, einzelheiten: str):
         box = QMessageBox(QMessageBox.Icon.Warning, self.fenster.windowTitle(), text,

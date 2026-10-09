@@ -58,7 +58,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import anonym, bilddatei, filter, geometrie, ki
+from . import anonym, bilddatei, filter, geometrie, ki, veroeffentlichen
 from .cuda import cupy as cp
 from .filter import Einstellungen
 
@@ -838,6 +838,22 @@ class Sitzung:
         self.gespeicherte_werte = dataclasses.replace(self.werte)
         self._flicken_gespeichert = self._flicken_stand
         return (time.perf_counter() - beginn) * 1000
+
+    @property
+    def ki_inhalt(self) -> bool:
+        """Enthaelt das Bild von der KI erfundene Teile (Erweitern, Objekte entfernen)?"""
+        return self._erweiterung is not None or bool(self._flicken)
+
+    def veroeffentlichen(self, pfad: str, vorlage) -> tuple[float, tuple[int, int]]:
+        """Fuers Netz speichern: verkleinert, mit Wasserzeichen und Rechteangaben.
+        Rueckgabe: Rechenzeit in ms und Breite, Hoehe. Gilt nicht als Speichern der
+        Arbeit - das Bild in voller Groesse ist ja nicht gesichert."""
+        beginn = time.perf_counter()
+        rgb = cp.asnumpy(self._rendern(self.werte, True, None, bits=16))
+        cp.get_default_memory_pool().free_all_blocks()
+        groesse = veroeffentlichen.speichern(pfad, rgb, self._alpha_gesamt(), self.daten.exif,
+                                             vorlage, self.ki_inhalt)
+        return (time.perf_counter() - beginn) * 1000, groesse
 
     def schliessen(self):
         """Grafikspeicher sofort freigeben, nicht erst beim Aufraeumen von Python."""
