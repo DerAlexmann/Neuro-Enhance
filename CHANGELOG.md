@@ -3,6 +3,14 @@
 Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/).
 
+## [0.1.1] – 2026-10-09
+
+### Behoben
+
+- Waren die KI-Modelle schon geladen, blieben nach dem Start die Knöpfe und
+  Hinweise der Karten KI-Entrauschen, KI-Schärfen, Motiv & Hintergrund,
+  Objekte entfernen und Tiefe & Bokeh leer, bis ein Bild geöffnet wurde.
+
 ## [0.1.0] – 2026-10-09
 
 ### Geändert
@@ -270,4 +278,5 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
   Rechengenauigkeit (FP16, FP8 ab Ada, FP4 ab Blackwell).
 - Programmsymbol, Marken- und Lizenzhinweise (NOTICE).
 
+[0.1.1]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.1.1
 [0.1.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.1.0

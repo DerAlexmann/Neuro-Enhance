@@ -2091,7 +2091,7 @@ class BearbeitenSeite(QWidget):
                        self.einpassen_knopf, self.zoom100_knopf):
             widget.setEnabled(offen)
         self._lut_anzeigen()
-        self._erweitern_anzeigen()
+        self._ki_bild_anzeigen()            # beschriftet auch Motiv, Entfernen, Tiefe, Erweitern
         self._anonym_anzeigen()
 
     # ------------------------------------------------------------------
