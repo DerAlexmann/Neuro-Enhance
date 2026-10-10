@@ -99,7 +99,7 @@ TRANSLATIONS = {
         "Vorher": "Before",
         "Gedrückt halten, um das unbearbeitete Bild zu sehen.":
             "Hold down to see the unedited image.",
-        "Alles zurücksetzen": "Reset all",
+        "Zurücksetzen": "Reset",
         # Anonymisieren
         "Anonymisieren": "Anonymise",
         "Gesichter finden": "Find faces",
@@ -159,7 +159,6 @@ TRANSLATIONS = {
         "R": "R",
         "G": "G",
         "B": "B",
-        "Zurücksetzen": "Reset",
         "Klicken setzt einen Punkt, Ziehen verschiebt ihn, Doppelklick entfernt ihn.":
             "Click to add a point, drag to move it, double-click to remove it.",
         "Klarheit": "Clarity",
@@ -433,12 +432,11 @@ TRANSLATIONS = {
         "Zuschnitt zurücksetzen": "Reset crop",
         "Frei": "Free",
         "Original": "Original",
-        "Einpassen": "Fit",
-        "Ganzes Bild zeigen (Strg+0)": "Show the whole image (Ctrl+0)",
-        "Ein Bildpixel je Bildschirmpixel (Strg+1). Mausrad zoomt, Ziehen verschiebt, "
-        "Doppelklick wechselt.":
-            "One image pixel per screen pixel (Ctrl+1). Mouse wheel zooms, dragging pans, "
-            "double-click toggles.",
+        "Einpassen: das ganze Bild zeigen (Strg+0)": "Fit: show the whole image (Ctrl+0)",
+        "100 %: ein Bildpixel je Bildschirmpixel (Strg+1). Mausrad zoomt, Ziehen "
+        "verschiebt, Doppelklick wechselt.":
+            "100 %: one image pixel per screen pixel (Ctrl+1). Mouse wheel zooms, dragging "
+            "pans, double-click toggles.",
         "Stärke": "Strength",
         "LUT laden …": "Load LUT …",
         "Entfernen": "Remove",
@@ -654,7 +652,7 @@ TRANSLATIONS = {
             "A newer lens database of {datum} is available (about 0.5 MB, from {quelle})."
             "\n\nLoad it now?",
         # Für Veröffentlichung speichern
-        "Für Veröffentlichung …": "For publishing …",
+        "Fürs Netz …": "For the web …",
         "Verkleinert, mit Wasserzeichen und Rechteangaben speichern – etwa für Bilder "
         "im Netz. Das Original bleibt unverändert.":
             "Save downsized, with watermark and rights information – for images on the "

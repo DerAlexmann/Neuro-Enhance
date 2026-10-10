@@ -389,21 +389,22 @@ class BearbeitenSeite(QWidget):
         leiste.addWidget(self._knopf(_("Öffnen …"), self.oeffnen_dialog, "hauptschalter"))
         self.speichern_knopf = self._knopf(_("Speichern unter …"), self.speichern_dialog)
         leiste.addWidget(self.speichern_knopf)
-        self.veroeffentlichen_knopf = self._knopf(_("Für Veröffentlichung …"),
-                                                  self.veroeffentlichen_dialog)
+        # Kurze Beschriftungen, damit das Fenster auch auf Bildschirmen um 1100 Pixel
+        # Breite passt - die Tooltips sagen, was genau geschieht
+        self.veroeffentlichen_knopf = self._knopf(_("Fürs Netz …"), self.veroeffentlichen_dialog)
         self.fenster.beschriften(self.veroeffentlichen_knopf.setToolTip, _(
             "Verkleinert, mit Wasserzeichen und Rechteangaben speichern – etwa für Bilder "
             "im Netz. Das Original bleibt unverändert."))
         leiste.addWidget(self.veroeffentlichen_knopf)
         leiste.addStretch(1)
-        self.einpassen_knopf = self._knopf(_("Einpassen"),
-                                           lambda: self.leinwand.zoom_setzen(None))
-        self.zoom100_knopf = self._knopf("100 %", lambda: self.leinwand.zoom_setzen(1.0))
+        self.einpassen_knopf = self._knopf("⤢", lambda: self.leinwand.zoom_setzen(None),
+                                           "zoomsymbol")
+        self.zoom100_knopf = self._knopf("1:1", lambda: self.leinwand.zoom_setzen(1.0), "zoom")
         self.fenster.beschriften(self.einpassen_knopf.setToolTip,
-                                 _("Ganzes Bild zeigen (Strg+0)"))
+                                 _("Einpassen: das ganze Bild zeigen (Strg+0)"))
         self.fenster.beschriften(self.zoom100_knopf.setToolTip, _(
-            "Ein Bildpixel je Bildschirmpixel (Strg+1). Mausrad zoomt, Ziehen verschiebt, "
-            "Doppelklick wechselt."))
+            "100 %: ein Bildpixel je Bildschirmpixel (Strg+1). Mausrad zoomt, Ziehen "
+            "verschiebt, Doppelklick wechselt."))
         self.zoom_anzeige = QLabel(objectName="nebentext")
         # Platz fuer „400 %“ von Anfang an, sonst wird das Fenster beim Zoomen breiter
         self.zoom_anzeige.setMinimumWidth(self.zoom_anzeige.fontMetrics().horizontalAdvance(
@@ -418,7 +419,7 @@ class BearbeitenSeite(QWidget):
         self.vorher_knopf.pressed.connect(lambda: self._vorher_zeigen(True))
         self.vorher_knopf.released.connect(lambda: self._vorher_zeigen(False))
         leiste.addWidget(self.vorher_knopf)
-        self.zuruecksetzen_knopf = self._knopf(_("Alles zurücksetzen"), self.alles_zuruecksetzen)
+        self.zuruecksetzen_knopf = self._knopf(_("Zurücksetzen"), self.alles_zuruecksetzen)
         self.fenster.beschriften(self.zuruecksetzen_knopf.setToolTip, _(
             "Setzt alle Regler, Drehung und Zuschnitt zurück und verwirft eine KI-Erweiterung."))
         leiste.addWidget(self.zuruecksetzen_knopf)

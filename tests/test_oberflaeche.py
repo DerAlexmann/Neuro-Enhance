@@ -42,6 +42,30 @@ def test_alle_sichtbaren_knoepfe_beschriftet(fenster):
 
 
 @pytest.mark.parametrize("sprache", ["de", "en"])
+def test_fenster_passt_auf_schmale_bildschirme(fenster, sprache):
+    """Mit dem Stylesheet der App wird das Fenster nicht breiter als 1100 Pixel - so passt
+    es auch auf 1366 x 768 bei 125 % Skalierung (knapp 1093 Pixel nutzbar)."""
+    from PySide6.QtWidgets import QApplication
+
+    from silberkorn import farben
+    from silberkorn.uebersetzung import _
+    app = QApplication.instance()
+    vorher = app.styleSheet()
+    app.setStyleSheet(farben.stylesheet())
+    _.language = sprache
+    fenster.texte_auffrischen()
+    try:
+        QApplication.processEvents()              # neues Stylesheet und Texte auswerten
+        fenster.resize(100, 700)
+        QApplication.processEvents()
+        assert fenster.width() <= 1090
+    finally:
+        _.language = "de"
+        fenster.texte_auffrischen()
+        app.setStyleSheet(vorher)
+
+
+@pytest.mark.parametrize("sprache", ["de", "en"])
 def test_knoepfe_auch_im_schmalsten_fenster_lesbar(fenster, sprache):
     """Die Mindestbreite des Fensters ergibt sich aus dem Inhalt - kein Knopf der
     Werkzeugleiste wird enger, als seine Beschriftung es verlangt."""
