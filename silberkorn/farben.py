@@ -252,6 +252,8 @@ def stylesheet() -> str:
     QPushButton:disabled {{ color: {t["BTN_DISABLED"]}; }}
     QPushButton#hauptschalter {{ background: {t["ACCENT"]}; color: {t["ON_ACCENT"]}; }}
     QPushButton#kanal {{ padding: 3px 9px; border-radius: 4px; font-size: 9pt; }}
+    QPushButton#zoom {{ padding: 7px 10px; }}
+    QPushButton#zoomsymbol {{ padding: 4px 10px 5px 10px; font-size: 13pt; }}
     QPushButton:checked, QPushButton#kanal:checked {{
         background: {t["ACCENT"]}; color: {t["ON_ACCENT"]};
     }}

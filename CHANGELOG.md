@@ -3,6 +3,17 @@
 Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/).
 
+## [Unveröffentlicht]
+
+### Geändert
+
+- Kompaktere Werkzeugleiste, damit das Fenster auch auf schmalen Bildschirmen
+  passt (etwa 1366 × 768 bei 125 % Skalierung): Die Zoom-Knöpfe heißen jetzt
+  „⤢“ (Einpassen) und „1:1“ (100 %), „Für Veröffentlichung …“ heißt „Fürs
+  Netz …“ und „Alles zurücksetzen“ heißt „Zurücksetzen“. Die Tooltips sagen
+  weiter genau, was die Knöpfe tun. Die Mindestbreite des Fensters sinkt von
+  rund 1240 auf rund 1065 Pixel.
+
 ## [0.4.0] – 2026-10-10
 
 ### Neu
@@ -340,6 +351,7 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
   Rechengenauigkeit (FP16, FP8 ab Ada, FP4 ab Blackwell).
 - Programmsymbol, Marken- und Lizenzhinweise (NOTICE).
 
+[Unveröffentlicht]: https://github.com/DerAlexmann/Silberkorn/compare/v0.4.0...HEAD
 [0.4.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.4.0
 [0.3.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.3.0
 [0.2.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.2.0
