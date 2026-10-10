@@ -112,6 +112,12 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   auf Wunsch ganz scharf. Gerechnet wird in linearem Licht, damit Lichter
   aufblühen, und Scharfes läuft nicht als Schein ins Unscharfe. Ab 4 GB
   Grafikspeicher.
+- **KI-Kolorieren** mit DDColor: Schwarzweiß- und Sepiabilder bekommen Farbe.
+  Die KI sieht nur die Helligkeit und schätzt daraus die Farben – glaubwürdig,
+  aber geraten, nicht historisch belegt. Die Helligkeit bleibt Pixel für Pixel
+  die des Originals, auch bei großen Scans; ein Regler mischt die Farbe
+  stufenlos ein, Weißabgleich, Sättigung und Farbbereiche wirken danach wie
+  gewohnt. Rund 0,1 s, ab 4 GB Grafikspeicher.
 - **KI-Erweitern** mit FLUX.2 [klein] 4B und der Outpaint-LoRA von fal: Statt
   auf ein Seitenverhältnis zuzuschneiden, erfindet die KI die fehlenden Ränder
   passend zum Bild dazu – etwa um ein 4:3-Foto auf 16:9 zu bringen. Das Original
@@ -268,10 +274,13 @@ hochgeladen und keine Nutzungsdaten gesendet. Auch die KI rechnet lokal auf der
 Grafikkarte, die Gesichtserkennung auf dem Prozessor. Die einzige Verbindung ins
 Netz ist das Laden eines KI-Modells – und
 das nur, wenn man in einer der Karten „KI-Hochskalieren“, „KI-Entrauschen“,
-„KI-Schärfen“, „Motiv & Hintergrund“, „Objekte entfernen“, „Tiefe & Bokeh“ oder
+„KI-Schärfen“, „KI-Kolorieren“, „Motiv & Hintergrund“, „Objekte entfernen“,
+„Tiefe & Bokeh“ oder
 bei „Mit KI erweitern“ in der Karte „Geometrie“ ausdrücklich auf das Laden klickt und die Rückfrage mit Quelle,
 Größe und Lizenz bestätigt. Die EXE lädt außerdem beim ersten Start – ebenfalls
-erst nach Zustimmung – die NVIDIA-Bibliotheken von pypi.org.
+erst nach Zustimmung – die NVIDIA-Bibliotheken von pypi.org. Die
+Objektivdatenbank von lensfun kommt nur auf Knopfdruck in der Karte „Objektiv“,
+ebenso die Frage nach einer neueren.
 
 ## KI-Modelle
 
@@ -295,7 +304,10 @@ Depth Anything V2 Small mit 98 MB und in der Karte „Geometrie“ für „Mit K
 erweitern“ aus
 [modelle-8](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-8)
 FLUX.2 [klein] 4B mit Outpaint-LoRA mit rund 4,1 GB – auf mehrere Dateien
-verteilt, denn GitHub nimmt je Datei höchstens 2 GB an. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft,
+verteilt, denn GitHub nimmt je Datei höchstens 2 GB an –, in der Karte
+„KI-Kolorieren“ aus
+[modelle-9](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-9)
+DDColor (kleine Fassung) mit 210 MB. Jede Datei wird gegen ihre SHA-256-Prüfsumme geprüft,
 bevor sie verwendet wird.
 Abgelegt werden sie im Ordner `modelle` neben dem Programm oder, wenn der
 schreibgeschützt ist, unter `%LOCALAPPDATA%\Silberkorn\modelle`.
@@ -309,7 +321,8 @@ Copyright 2022 Syed Waqas Zamir), [BiRefNet](https://github.com/ZhengPeng7/BiRef
 (Apache-2.0, Copyright Meta Platforms, Inc. and affiliates) und
 [LaMa](https://github.com/advimman/lama) (Apache-2.0, Copyright 2021 Samsung
 Research) und [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2)
-Small (Apache-2.0), nach ONNX gewandelt; dazu
+Small (Apache-2.0) und [DDColor](https://github.com/piddnad/DDColor) in der
+kleinen Fassung (Apache-2.0, Xiaoyang Kang u. a.), nach ONNX gewandelt; dazu
 [FLUX.2 [klein] 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
 (Apache-2.0, Black Forest Labs) mit der
 [Outpaint-LoRA von fal](https://huggingface.co/fal/flux-2-klein-4B-outpaint-lora)
@@ -332,6 +345,9 @@ Wer das selbst nachvollziehen will:
    [Hugging Face](https://huggingface.co/smartywu/big-lama)) sowie
    `depth_anything_v2_vits.pth` von
    [Depth-Anything-V2-Small](https://huggingface.co/depth-anything/Depth-Anything-V2-Small)
+   und `pytorch_model.bin` von
+   [ddcolor_paper_tiny](https://huggingface.co/piddnad/ddcolor_paper_tiny), umbenannt in
+   `ddcolor_paper_tiny.bin`,
    nach `modelle/quellen/` laden und `big-lama.zip` dort entpacken.
 2. `pip install torch` (nur für diesen Schritt nötig).
 3. `python werkzeuge/modelle_exportieren.py` – das legt die ONNX-Modelle in

@@ -140,6 +140,7 @@ class Sitzung:
         self._flicken_stand = 0               # zaehlt jede Aenderung an Flicken und Erweiterung
         self._flicken_gespeichert = 0
         self._ki_tiefe = None                 # Tiefe 0..1 (1 = nah), verkleinert, im Original
+        self._ki_farbe = None                 # (voll, Vorschau): Farbanteile a, b der KI
         self.tiefe_zeigen = False             # Vorschau zeigt die Tiefenkarte
         self._erweiterung: _Erweiterung | None = None
         self._anonym_stand = ((), "mosaik", 8.0)   # wofuer die Zwischenstufen gelten
@@ -188,6 +189,10 @@ class Sitzung:
     @property
     def ki_geschaerft(self) -> bool:
         return self._ki_schaerfe is not None
+
+    @property
+    def ki_koloriert(self) -> bool:
+        return self._ki_farbe is not None
 
     @property
     def ki_maske_da(self) -> bool:
@@ -757,10 +762,29 @@ class Sitzung:
         self._ki_schaerfe = (korrektur, self._vorschau_von(korrektur))
         return self._ki_fertig(beginn)
 
+    def ki_kolorieren(self, kolorierer, _kachel: int = 0, _fortschritt=None) -> float:
+        """Die Farbe einmal mit KI schaetzen; Rueckgabe: Rechenzeit in ms.
+
+        Das Netz sieht das Bild, wie es gerade entrauscht, geschaerft und
+        geflickt ist - nur seine Helligkeit. Die Farbanteile werden fuer Original
+        und Vorschau einmal auf deren Groesse gebracht; der Regler mischt sie dann
+        sofort ein (farbe_einsetzen).
+        """
+        beginn = time.perf_counter()
+        ausgang = self._ausgang(self.werte, True, leinwand=False, farbe=False)
+        ab = kolorierer.farben(ausgang)
+        del ausgang
+        self._ki_farbe = None                     # die alte Farbe zuerst freigeben
+        voll = filter.vergroessern(ab, *self.original.shape[:2]).astype(cp.float32)
+        vorschau = filter.vergroessern(ab, *self.vorschau_original.shape[:2]).astype(cp.float32)
+        self._ki_farbe = (cp.ascontiguousarray(voll), cp.ascontiguousarray(vorschau))
+        return self._ki_fertig(beginn)
+
     def _ausgang(self, werte: Einstellungen, voll: bool, schaerfen: bool = True,
-                 leinwand: bool = True):
+                 leinwand: bool = True, farbe: bool = True):
         """Original - je nach Staerke mit dem KI-entrauschten gemischt und KI-geschaerft,
-        mit den Flicken und, wenn erweitert und leinwand gesetzt, auf der Leinwand."""
+        mit den Flicken, KI-koloriert und, wenn erweitert und leinwand gesetzt, auf der
+        Leinwand."""
         stelle = 0 if voll else 1
         bild = self.original if voll else self.vorschau_original
         if self._ki_rauschfrei is not None and werte.ki_rauschen > 0:
@@ -771,6 +795,8 @@ class Sitzung:
             bild = _auflegen(bild, self._ki_schaerfe[stelle], cp.float32(werte.ki_schaerfe / 100))
         if self._flicken:
             bild = self._flicken_auflegen(bild, stelle)
+        if farbe and self._ki_farbe is not None and werte.ki_farbe > 0:
+            bild = ki.farbe_einsetzen(bild, self._ki_farbe[stelle], werte.ki_farbe / 100)
         if leinwand and self._erweiterung is not None:
             bild = self._auf_leinwand(bild, stelle)
         return bild
@@ -890,8 +916,10 @@ class Sitzung:
 
     @property
     def ki_inhalt(self) -> bool:
-        """Enthaelt das Bild von der KI erfundene Teile (Erweitern, Objekte entfernen)?"""
-        return self._erweiterung is not None or bool(self._flicken)
+        """Enthaelt das Bild von der KI erfundene Teile (Erweitern, Objekte entfernen,
+        Kolorieren)?"""
+        return (self._erweiterung is not None or bool(self._flicken)
+                or (self._ki_farbe is not None and self.werte.ki_farbe > 0))
 
     def veroeffentlichen(self, pfad: str, vorlage) -> tuple[float, tuple[int, int]]:
         """Fuers Netz speichern: verkleinert, mit Wasserzeichen und Rechteangaben.
@@ -917,6 +945,7 @@ class Sitzung:
         self._pinsel = None
         self._flicken = []
         self._ki_tiefe = None
+        self._ki_farbe = None
         self._erweiterung = None
         self._speicher.clear()
         cp.get_default_memory_pool().free_all_blocks()

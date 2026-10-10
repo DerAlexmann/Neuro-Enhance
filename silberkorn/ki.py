@@ -75,6 +75,7 @@ QUELLE_SAM2 = "https://github.com/facebookresearch/sam2"
 QUELLE_LAMA = "https://github.com/advimman/lama"
 QUELLE_TIEFE = "https://github.com/DepthAnything/Depth-Anything-V2"
 QUELLE_FLUX2 = "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B"
+QUELLE_DDCOLOR = "https://github.com/piddnad/DDColor"
 MODELL_RELEASE = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-1/"
 MODELL_RELEASE_2 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-2/"
 MODELL_RELEASE_3 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-3/"
@@ -83,6 +84,7 @@ MODELL_RELEASE_5 = "https://github.com/DerAlexmann/Silberkorn/releases/download/
 MODELL_RELEASE_6 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-6/"
 MODELL_RELEASE_7 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-7/"
 MODELL_RELEASE_8 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-8/"
+MODELL_RELEASE_9 = "https://github.com/DerAlexmann/Silberkorn/releases/download/modelle-9/"
 BLOCK = 1 << 20
 # Pruefsumme einer Datei, deren Release noch aussteht - werkzeuge/outpaint_export.py
 # gibt die echten Summen und Groessen aus. Bis dahin lehnt datei_pruefen() jede
@@ -158,6 +160,10 @@ DATEIEN = {
         ("c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4", 11357),
     OUTPAINT_NOTICE:
         ("dc4d5e17f058373b302df5cc7496972d2955779caaaf6e5b299cdf6fbdeb40ab", 1610),
+    "ddcolor-tiny.onnx":
+        ("f0b915eced94a8b15991172bd7dc38603f3dc8978cd0383d312be1313de17618", 220472850),
+    "LICENSE-DDColor.txt":
+        ("43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1", 11356),
 }
 LIZENZDATEI = "LICENSE-Real-ESRGAN.txt"
 RAND = 10                    # Ueberlappung je Kachelseite in Eingabepixeln, wie in Real-ESRGAN
@@ -330,8 +336,24 @@ ERWEITER_MODELLE = {
             OUTPAINT_NOTICE)),
         mindest_vram=7.0),          # 8-GB-Karten melden 7,6 bis 8 GiB
 }
+# Kolorieren: DDColor in der kleinen Fassung (ConvNeXt-T). Es sieht das Graubild auf
+# 512 x 512 und schaetzt die Farbanteile a und b (Lab); die Helligkeit bleibt die des
+# Bildes in voller Aufloesung. Rund 60 ms auf einer RTX 4060, in FP32.
+FARB_MODELLE = {
+    "ddcolor": Modell(
+        "ddcolor", "ddcolor-tiny.onnx",
+        "f0b915eced94a8b15991172bd7dc38603f3dc8978cd0383d312be1313de17618",
+        None,
+        "S", {"S": 512, "M": 512, "L": 512, "XL": 512},
+        lizenz="Apache-2.0", quelle=QUELLE_DDCOLOR,
+        herkunft="DDColor (Apache-2.0, Xiaoyang Kang u. a.)",
+        lizenzdatei="LICENSE-DDColor.txt", release=MODELL_RELEASE_9,
+        massstab=1, rand=0, vielfaches=32, nhwc=False, cuda_fp16=False,
+        feste_groesse=(512, 512), ausgabe_kanaele=2),
+}
 ALLE_MODELLE = {**MODELLE, **ENTRAUSCH_MODELLE, **SCHAERF_MODELLE, **MASKEN_MODELLE,
-                **AUSWAHL_MODELLE, **ENTFERN_MODELLE, **TIEFEN_MODELLE, **ERWEITER_MODELLE}
+                **AUSWAHL_MODELLE, **ENTFERN_MODELLE, **TIEFEN_MODELLE, **ERWEITER_MODELLE,
+                **FARB_MODELLE}
 STUFEN = ("S", "M", "L", "XL")
 
 
@@ -1197,6 +1219,83 @@ class Tiefenschaetzer(_Netz):
         radius = max(2, round(max(fh, fb) / max(mh, mb)))
         fein = filter.gefuehrter_filter(fuehrung, grob, radius, 1e-4)
         return cp.ascontiguousarray(cp.clip(fein, 0, 1))
+
+
+class Kolorierer(_Netz):
+    """DDColor - Farbe fuer ein Schwarzweiss- oder Sepiabild.
+
+    Das Netz sieht nur die Helligkeit: das Bild als Graubild in sRGB, auf
+    512 x 512 gebracht (wie in der Pipeline von DDColor, ohne Drehen). Zurueck
+    kommen die Farbanteile a und b im Lab-Raum; eingesetzt werden sie spaeter mit
+    der Helligkeit des Bildes in voller Aufloesung (farbe_einsetzen).
+    """
+
+    def __init__(self, modell: Modell | None = None, kachel: int | None = None, **_art):
+        modell = modell or FARB_MODELLE["ddcolor"]
+        super().__init__(modell, fp16=False, kachel=None, tensorrt=False)
+
+    def farben(self, linear):
+        """Lineares Bild (H, W, 3) auf der GPU -> Farbanteile a, b (512, 512, 2)."""
+        mh, mb = self.modell.feste_groesse
+        hoehe, breite = linear.shape[:2]
+        faktor = max(1, min(hoehe // mh, breite // mb))
+        hell = filter.luminanz(cp.clip(filter.verkleinern_box(linear, faktor), 0, None))
+        grau = filter.linear_zu_srgb(cp.clip(hell, 0, 1)).astype(cp.float32)
+        grau = filter.vergroessern(cp.ascontiguousarray(grau), mh, mb)
+        eingabe = cp.ascontiguousarray(cp.broadcast_to(grau, (1, 3, mh, mb)))
+        ausgabe = cp.empty((1, 2, mh, mb), dtype=cp.float32)
+        try:
+            _binden(self.sitzung, {"eingabe": eingabe}, {"ausgabe": ausgabe})
+        except Exception as fehler:              # ORT wirft eigene Fehlerklassen
+            raise KiFehler(str(fehler)) from fehler
+        return cp.ascontiguousarray(cp.moveaxis(ausgabe[0], 0, -1))
+
+
+# Lineares sRGB -> XYZ (D65) und zurueck; Lab mit dem Weisspunkt D65 - wie OpenCV, mit
+# dem DDColor trainiert ist
+_LAB_PRAEAMBEL = r"""
+__device__ __forceinline__ float lab_f(float t) {
+    return t > 0.008856f ? cbrtf(t) : 7.787f * t + 16.0f / 116.0f;
+}
+__device__ __forceinline__ float lab_finv(float f) {
+    return f > 0.206893f ? f * f * f : (f - 16.0f / 116.0f) / 7.787f;
+}
+"""
+
+_FARBE_EINSETZEN = None
+
+
+def farbe_einsetzen(linear, ab, staerke: float):
+    """Farbanteile a, b (H, W, 2) mit der Helligkeit des linearen Bildes (H, W, 3) zu
+    einem farbigen Bild verbinden und mit staerke (0..1) ueber das Bild legen.
+
+    Die Helligkeit Y bleibt genau erhalten - wie bei DDColor, das L des Originals
+    behaelt; ein Sepiaton faellt bei voller Staerke weg."""
+    global _FARBE_EINSETZEN
+    if _FARBE_EINSETZEN is None:
+        _FARBE_EINSETZEN = cp.ElementwiseKernel(
+            "raw float32 bild, raw float32 ab, float32 staerke",
+            "raw float32 ziel",
+            r"""
+            float r = bild[3 * i], g = bild[3 * i + 1], b = bild[3 * i + 2];
+            float y = fmaxf(0.212671f * r + 0.715160f * g + 0.072169f * b, 0.0f);
+            float fy = lab_f(y);
+            float x = 0.950456f * lab_finv(fy + ab[2 * i] / 500.0f);
+            float z = 1.088754f * lab_finv(fy - ab[2 * i + 1] / 200.0f);
+            float fr = 3.240479f * x - 1.537150f * y - 0.498535f * z;
+            float fg = -0.969256f * x + 1.875992f * y + 0.041556f * z;
+            float fb = 0.055648f * x - 0.204043f * y + 1.057311f * z;
+            ziel[3 * i] = r + staerke * (fmaxf(fr, 0.0f) - r);
+            ziel[3 * i + 1] = g + staerke * (fmaxf(fg, 0.0f) - g);
+            ziel[3 * i + 2] = b + staerke * (fmaxf(fb, 0.0f) - b);
+            """,
+            "silberkorn_farbe_einsetzen", preamble=_LAB_PRAEAMBEL)
+    hoehe, breite = linear.shape[:2]
+    ziel = cp.empty((hoehe, breite, 3), dtype=cp.float32)
+    _FARBE_EINSETZEN(cp.ascontiguousarray(linear, dtype=cp.float32),
+                     cp.ascontiguousarray(ab, dtype=cp.float32), cp.float32(staerke), ziel,
+                     size=hoehe * breite)
+    return ziel
 
 
 # --------------------------------------------------------------------------

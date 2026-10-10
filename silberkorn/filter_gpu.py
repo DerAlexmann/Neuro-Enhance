@@ -442,7 +442,7 @@ def _entrauscht(bild, werte: f.Einstellungen, speicher: dict | None):
     """
     schluessel = ("rauschen", bild.shape, werte.temperatur, werte.toenung, werte.belichtung,
                   werte.rauschen_luminanz, werte.rauschen_farbe, werte.ki_rauschen,
-                  werte.ki_schaerfe)
+                  werte.ki_schaerfe, werte.ki_farbe)
     if speicher is not None and schluessel in speicher:
         return speicher[schluessel].copy()
     hoehe, breite = bild.shape[:2]
@@ -484,7 +484,7 @@ def _dunst_schaetzung(bild, werte: f.Einstellungen, speicher: dict | None):
     """
     schluessel = ("dunst", bild.shape, werte.temperatur, werte.toenung, werte.belichtung,
                   werte.rauschen_luminanz, werte.rauschen_farbe, werte.ki_rauschen,
-                  werte.ki_schaerfe)
+                  werte.ki_schaerfe, werte.ki_farbe)
     if speicher is not None and schluessel in speicher:
         return speicher[schluessel]
     ergebnis = f.dunst_schaetzen(bild)

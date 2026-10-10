@@ -3,6 +3,23 @@
 Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/).
 
+## [Unveröffentlicht]
+
+### Neu
+
+- **KI-Kolorieren** mit DDColor (kleine Fassung, Apache-2.0): Schwarzweiß- und
+  Sepiabilder bekommen Farbe. Das Netz sieht das Bild als Graubild auf
+  512 × 512 und schätzt die Farbanteile a und b; die Helligkeit bleibt in
+  voller Auflösung die des Originals. Ein Regler mischt die Farbe stufenlos
+  ein. Rund 0,1 s auf einer RTX 4060. Das Modell (210 MB) kommt aus dem Release
+  `modelle-9`. Kolorierte Bilder gelten beim Speichern für Veröffentlichung als
+  KI-Inhalt.
+
+### Geändert
+
+- README: Der Abschnitt Datenschutz nennt jetzt auch das Laden der
+  Objektivdatenbank.
+
 ## [0.3.0] – 2026-10-10
 
 ### Neu
@@ -323,6 +340,7 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
   Rechengenauigkeit (FP16, FP8 ab Ada, FP4 ab Blackwell).
 - Programmsymbol, Marken- und Lizenzhinweise (NOTICE).
 
+[Unveröffentlicht]: https://github.com/DerAlexmann/Silberkorn/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.3.0
 [0.2.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.2.0
 [0.1.1]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.1.1

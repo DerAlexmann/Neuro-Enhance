@@ -24,6 +24,8 @@ Erzeugt in modelle/:
   birefnet-lite-2k.onnx            Motiv freistellen (BiRefNet, MIT) - feste
                                    Eingabe 2560 x 1440 wie im Training; das Netz
                                    ist in werkzeuge/netz_birefnet.py nachgebaut
+  ddcolor-tiny.onnx                Kolorieren (DDColor tiny, Apache-2.0) - feste
+                                   Eingabe 512 x 512, Graubild -> Farbanteile a, b
 und gibt Groesse und SHA-256 jeder Datei aus.
 
 Aufruf (braucht PyTorch, nur zum Entwickeln):
@@ -290,8 +292,31 @@ def tiefe() -> list[str]:
     return [pfad]
 
 
+def ddcolor() -> list[str]:
+    from netz_ddcolor import GROESSE, DDColor
+    netz = DDColor()
+    netz.load_state_dict(DDColor.gewichte_einrechnen(gewichte("ddcolor_paper_tiny.bin")),
+                         strict=True)
+    netz.eval()
+    pfad = os.path.join(ZIEL, "ddcolor-tiny.onnx")
+    # Feste Groesse wie in der Pipeline von DDColor: die Positionskodierung wird Konstante
+    torch.onnx.export(netz, (torch.rand(1, 3, GROESSE, GROESSE),), pfad, input_names=["eingabe"],
+                      output_names=["ausgabe"], opset_version=17, dynamo=False,
+                      do_constant_folding=True)
+
+    import onnxruntime as ort
+    probe = torch.rand(1, 3, GROESSE, GROESSE)
+    with torch.no_grad():
+        soll = netz(probe).numpy()
+    sitzung = ort.InferenceSession(pfad, providers=["CPUExecutionProvider"])
+    ist = sitzung.run(None, {"eingabe": probe.numpy()})[0]
+    print(f"{os.path.basename(pfad)}: ONNX gegen PyTorch, groesste Abweichung "
+          f"{np.abs(ist - soll).max():.2e} (Werte bis {np.abs(soll).max():.1f})")
+    return [pfad]
+
+
 EXPORTE = {"realesrgan": realesrgan, "scunet": scunet, "restormer": restormer,
-           "birefnet": birefnet, "sam2": sam2, "lama": lama, "tiefe": tiefe}
+           "birefnet": birefnet, "sam2": sam2, "lama": lama, "tiefe": tiefe, "ddcolor": ddcolor}
 
 
 def main():
