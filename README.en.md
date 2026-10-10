@@ -132,8 +132,14 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 - **Geometry**: rotate by 90°, flip, straighten, vertical and horizontal perspective, crop
   with a frame and fixed aspect ratios. Empty corners after straightening are cropped
   away automatically.
-- **Lens**: correct distortion, vignetting and colour fringes (chromatic aberration). All
-  geometry and lens corrections are resampled in a single bicubic step.
+- **Lens**: correct distortion, vignetting and colour fringes (chromatic aberration) – by
+  hand or automatically with **lens profiles** from the [lensfun](https://lensfun.github.io)
+  database (CC BY-SA 3.0). Camera, lens, focal length and aperture are read from the
+  file, adapted lenses included. For RAW a matching profile is applied right away, for
+  JPEG only on request (the camera has often corrected it already). Silberkorn downloads
+  the database (about 0.5 MB) at the push of a button and checks for a newer one the same
+  way – never on its own. All geometry and lens corrections are resampled in a single
+  bicubic step.
 - **AI upscaling** by 2 × or 4 × when saving, with Real-ESRGAN via ONNX Runtime on the
   GPU: a fast model with a denoise strength slider (from 4 GB of video memory) and a
   large model with more sharpness (from feature tier M). Processing runs in half
@@ -157,10 +163,12 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   developed in linear light without automatic brightening – the full range of the sensor
   is kept, and exposure controls the brightness. For Bayer sensors, i.e. almost every
   camera, demosaicing runs on the GPU – after Malvar, He and Cutler. A 24-megapixel RAW
-  opens in about 0.2 s instead of over a second. For even fewer colour fringes in fine
-  patterns, choose "RAW: Best quality" at the top – then LibRaw develops with the DHT
-  method on the processor (about 1.5 s). Fujifilm X-Trans and other sensors are always
-  developed by LibRaw.
+  opens in about 0.2 s instead of over a second. Fujifilm X-Trans sensors are developed
+  on the GPU as well, with a dedicated edge-aware method for the 6×6 pattern – hardly
+  distinguishable from LibRaw, but in milliseconds instead of seconds. For even fewer
+  colour fringes in fine patterns, choose "RAW: Best quality" at the top – then LibRaw
+  develops on the processor, with DHT or, for X-Trans, Markesteijn (about 1.5 to 3 s).
+  Other sensors (Foveon …) are always developed by LibRaw.
 - **Formats**: opens JPEG, PNG, TIFF, WebP, BMP and RAW (HEIC with the optional
   `pillow-heif` package); saves JPEG and WebP with 8 bits, PNG and TIFF with 8 or 16 bits.
   For images with more than 8 bits the save dialog suggests a 16-bit TIFF.
@@ -172,13 +180,6 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
 | `Ctrl`+`0` / `Ctrl`+`1` | fit / 100 % |
 | mouse wheel, drag, double-click | zoom, pan, toggle between fit and 100 % |
 | `Enter` / `Esc` | apply / cancel crop |
-
-## Planned
-
-- **Lens profiles**: distortion, vignetting and colour fringes corrected automatically
-  from a lens database (lensfun).
-- **X-Trans on the GPU**: demosaicing for Fujifilm sensors on the graphics card as
-  well.
 
 ## Running it
 

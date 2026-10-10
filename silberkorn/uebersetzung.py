@@ -595,6 +595,48 @@ TRANSLATIONS = {
             "The NVIDIA libraries could not be set up. Silberkorn will try again at "
             "the next start.",
 
+        # Objektivprofile (lensfun)
+        "%d.%m.%Y": "%Y-%m-%d",
+        "Objektivprofil anwenden": "Apply lens profile",
+        "Gleicht Verzeichnung, Farbsäume und Vignette nach der Objektivdatenbank "
+        "lensfun aus. Die Regler darunter wirken zusätzlich.":
+            "Corrects distortion, colour fringes and vignetting from the lensfun lens "
+            "database. The sliders below act on top of it.",
+        "Objektivdatenbank laden": "Load lens database",
+        "Nach neuer Datenbank suchen": "Check for a newer database",
+        "Fragt bei lensfun nach, ob es eine neuere Objektivdatenbank gibt. Silberkorn "
+        "fragt nie von selbst.":
+            "Asks lensfun whether a newer lens database exists. Silberkorn never asks on "
+            "its own.",
+        "Die Objektivdatenbank ist noch nicht geladen (etwa 0,5 MB).":
+            "The lens database has not been loaded yet (about 0.5 MB).",
+        "Objektivdatenbank vom {datum}.": "Lens database of {datum}.",
+        "Die Datei nennt kein Objektiv.": "The file does not name a lens.",
+        "Kein Profil für „{objektiv}“ gefunden.": "No profile found for “{objektiv}”.",
+        "Farbsäume": "Colour fringes",
+        "Profil für: {arten}": "Profile for: {arten}",
+        "Kamera-JPEGs sind oft schon in der Kamera korrigiert – deshalb hier nicht "
+        "automatisch.":
+            "Camera JPEGs are often already corrected in the camera – so not applied "
+            "automatically here.",
+        "Silberkorn lädt die Objektivdatenbank (etwa 0,5 MB) von:\n{quelle}\n\n"
+        "Sie stammt vom Projekt {herkunft}.\n\n"
+        "Ablage: {ordner}\n\nJetzt herunterladen?":
+            "Silberkorn downloads the lens database (about 0.5 MB) from:\n{quelle}\n\n"
+            "It comes from the {herkunft} project.\n\n"
+            "Location: {ordner}\n\nDownload now?",
+        "Objektivdatenbank wird geladen …": "Loading the lens database …",
+        "Die Objektivdatenbank ließ sich nicht laden.": "The lens database could not be loaded.",
+        "Objektivdatenbank geladen: {ordner}": "Lens database loaded: {ordner}",
+        "Ob es eine neuere Objektivdatenbank gibt, ließ sich nicht feststellen.":
+            "Could not determine whether a newer lens database exists.",
+        "Objektivdatenbank": "Lens database",
+        "Die Objektivdatenbank ist aktuell (Stand {datum}).":
+            "The lens database is up to date (as of {datum}).",
+        "Es gibt eine neuere Objektivdatenbank vom {datum} (etwa 0,5 MB, von {quelle})."
+        "\n\nJetzt laden?":
+            "A newer lens database of {datum} is available (about 0.5 MB, from {quelle})."
+            "\n\nLoad it now?",
         # Für Veröffentlichung speichern
         "Für Veröffentlichung …": "For publishing …",
         "Verkleinert, mit Wasserzeichen und Rechteangaben speichern – etwa für Bilder "

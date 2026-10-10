@@ -15,8 +15,15 @@ Der Weg eines Ergebnispixels zurueck ins Original:
   Spiegeln, Drehen um 90 Grad -> Lage im Original
   Verzeichnung -> radial um die Bildmitte; je Farbkanal etwas anders skaliert,
                   das gleicht Farbsaeume (chromatische Aberration) aus
+  Objektivprofil -> Verzeichnung und Farbsaeume aus der lensfun-Datenbank
+                  (objektivprofile.py), als Polynome im Radius
 
-Die Vignette wird beim Lesen ausgeglichen: ein Faktor, der zum Rand hin waechst.
+Die Vignette wird beim Lesen ausgeglichen: ein Faktor, der zum Rand hin waechst -
+von Hand und aus dem Profil.
+
+Das Profil bezieht sich auf die Mitte und die halbe Diagonale des Originals. Ist
+das Bild mit KI erweitert, sieht die Geometrie die groessere Leinwand; die drei
+letzten Zahlen des Profils sagen dann, wo das Original darin liegt.
 
 Alle Groessen sind auf das Bild bezogen, nicht auf Pixel - Vorschau und Export
 zeigen deshalb denselben Ausschnitt.
@@ -40,6 +47,10 @@ PERSPEKTIVE = 0.3            # Regler 100 kippt die Ebene um 30 % der halben Kan
 VERZEICHNUNG = 0.2           # Regler 100: Radius am Bildrand um 20 % verschoben
 VIGNETTE = 0.8               # Regler 100: Ecken 80 % heller
 FARBSAEUME = 0.003           # Regler 100: Kanal um 0,3 % radial skaliert
+# Objektivprofil: 13 Terme (objektivprofile.py), dann Mitte x, y des Originals auf
+# 0..1 der Quelle und das Verhaeltnis seiner halben Diagonale zu der der Quelle
+PROFIL_NEUTRAL = (0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+BEZUG_NEUTRAL = (0.5, 0.5, 1.0)
 
 
 @dataclass(frozen=True)
@@ -54,6 +65,7 @@ class Geometrie:
     vignette: float = 0.0
     ca_rot: float = 0.0
     ca_blau: float = 0.0
+    profil: tuple[float, ...] = ()       # leer oder 13 Terme + 3 Zahlen Bezug
 
     def ist_neutral(self) -> bool:
         return self == Geometrie(zuschnitt=VOLLER_ZUSCHNITT)
@@ -66,7 +78,8 @@ class Geometrie:
 def aus(werte) -> Geometrie:
     return Geometrie(werte.drehung90 % 4, bool(werte.spiegeln), werte.begradigen,
                      tuple(werte.zuschnitt), werte.perspektive_v, werte.perspektive_h,
-                     werte.verzeichnung, werte.vignette, werte.ca_rot, werte.ca_blau)
+                     werte.verzeichnung, werte.vignette, werte.ca_rot, werte.ca_blau,
+                     tuple(werte.objektivprofil))
 
 
 def rahmen(form_quelle, g: Geometrie) -> tuple[int, int]:
@@ -105,6 +118,10 @@ class _Parameter:
     halbdiagonale2: float
     vignette: float
     skala: tuple[float, float, float]   # je Kanal, fuer die Farbsaeume
+    terme: tuple[float, ...]             # Objektivprofil, 13 Terme
+    ox: float                            # Mitte des Originals, Pixel ab Mitte der Quelle
+    oy: float
+    einheit: float                       # halbe Diagonale des Originals in Pixeln
 
 
 def _parameter(form_quelle, g: Geometrie, zoom: float, form_aus=None) -> _Parameter:
@@ -113,13 +130,17 @@ def _parameter(form_quelle, g: Geometrie, zoom: float, form_aus=None) -> _Parame
     hout, wout = form_aus or ausgabe_form(form_quelle, g)
     x0, y0, x1, y1 = g.zuschnitt
     winkel = math.radians(g.begradigen)
+    halbdiagonale2 = (hs * hs + ws * ws) / 4.0
+    terme = tuple(g.profil[:13]) if g.profil else PROFIL_NEUTRAL
+    mx, my, verhaeltnis = tuple(g.profil[13:16]) if len(g.profil) >= 16 else BEZUG_NEUTRAL
     return _Parameter(
         hs, ws, float(hf), float(wf), hout, wout, x0, y0, x1 - x0, y1 - y0, zoom,
         math.cos(winkel), math.sin(winkel), g.perspektive_v / 100 * PERSPEKTIVE,
         g.perspektive_h / 100 * PERSPEKTIVE, g.drehung90 % 4, int(g.spiegeln),
-        -g.verzeichnung / 100 * VERZEICHNUNG, (hs * hs + ws * ws) / 4.0,
+        -g.verzeichnung / 100 * VERZEICHNUNG, halbdiagonale2,
         g.vignette / 100 * VIGNETTE,
-        (1 + g.ca_rot / 100 * FARBSAEUME, 1.0, 1 + g.ca_blau / 100 * FARBSAEUME))
+        (1 + g.ca_rot / 100 * FARBSAEUME, 1.0, 1 + g.ca_blau / 100 * FARBSAEUME),
+        terme, (mx - 0.5) * ws, (my - 0.5) * hs, math.sqrt(halbdiagonale2) * verhaeltnis)
 
 
 def _rueckwaerts(xp, p: _Parameter, u, v):
@@ -144,8 +165,38 @@ def _rueckwaerts(xp, p: _Parameter, u, v):
 
 
 def _verzeichnet(p: _Parameter, cx, cy):
+    """Verzeichnung von Hand (um die Mitte der Quelle), dann die des Profils."""
     faktor = 1 + p.k * (cx * cx + cy * cy) / p.halbdiagonale2
-    return cx * faktor, cy * faktor
+    cx, cy = cx * faktor, cy * faktor
+    t = p.terme
+    if t[:4] == PROFIL_NEUTRAL[:4]:
+        return cx, cy
+    dx, dy = cx - p.ox, cy - p.oy
+    r = (dx * dx + dy * dy) ** 0.5 / p.einheit
+    faktor = 1 + r * (t[0] + r * (t[1] + r * (t[2] + r * t[3])))
+    return p.ox + dx * faktor, p.oy + dy * faktor
+
+
+def _kanaele(p: _Parameter, cx, cy):
+    """Orte der drei Kanaele im Original (ab Mitte) und der Faktor gegen die Vignette."""
+    r2 = cx * cx + cy * cy
+    vignette = 1 + p.vignette * r2 / p.halbdiagonale2
+    t = p.terme
+    dx, dy = cx - p.ox, cy - p.oy
+    r = (dx * dx + dy * dy) ** 0.5 / p.einheit
+    if t[10:13] != PROFIL_NEUTRAL[10:13]:
+        q = r * r
+        vignette = vignette / (1 + q * (t[10] + q * (t[11] + q * t[12])))
+    orte = []
+    for nummer, skala in enumerate(p.skala):
+        sx, sy = cx * skala, cy * skala
+        if nummer != 1:
+            v, c, b = t[4:7] if nummer == 0 else t[7:10]
+            if (v, c, b) != (1.0, 0.0, 0.0):
+                faktor = v + r * (c + r * b)
+                sx, sy = p.ox + (sx - p.ox) * faktor, p.oy + (sy - p.oy) * faktor
+        orte.append((sx, sy))
+    return orte, vignette
 
 
 def automatischer_zoom(form_quelle, g: Geometrie) -> float:
@@ -156,7 +207,7 @@ def automatischer_zoom(form_quelle, g: Geometrie) -> float:
     """
     voll = g.ohne_zuschnitt()
     if g.begradigen == 0 and g.perspektive_v == 0 and g.perspektive_h == 0 \
-            and g.verzeichnung == 0:
+            and g.verzeichnung == 0 and not g.profil:
         return 1.0
     t = np.linspace(0.0, 1.0, 65)
     u = np.concatenate([t, t, np.zeros_like(t), np.ones_like(t)])
@@ -164,10 +215,9 @@ def automatischer_zoom(form_quelle, g: Geometrie) -> float:
 
     def passt(zoom):
         p = _parameter(form_quelle, voll, zoom, (2, 2))
-        cx, cy = _verzeichnet(p, *_rueckwaerts(np, p, u, v))
-        skala = max(p.skala)
-        return bool((np.abs(cx * skala) <= p.ws / 2 - 0.5).all()
-                    and (np.abs(cy * skala) <= p.hs / 2 - 0.5).all())
+        orte, _vignette = _kanaele(p, *_verzeichnet(p, *_rueckwaerts(np, p, u, v)))
+        return all(bool((np.abs(sx) <= p.ws / 2 - 0.5).all()
+                        and (np.abs(sy) <= p.hs / 2 - 0.5).all()) for sx, sy in orte)
 
     unten, oben = 1.0, 1.0
     while not passt(oben) and oben < 16:
@@ -254,13 +304,11 @@ def anwenden(rgb, g: Geometrie, form_aus=None):
         return _anwenden_gpu(rgb, p)
     v, u = np.meshgrid((np.arange(p.hout) + 0.5) / p.hout, (np.arange(p.wout) + 0.5) / p.wout,
                        indexing="ij")
-    cx, cy = _verzeichnet(p, *_rueckwaerts(np, p, u, v))
-    vignette = 1 + p.vignette * (cx * cx + cy * cy) / p.halbdiagonale2
+    orte, vignette = _kanaele(p, *_verzeichnet(p, *_rueckwaerts(np, p, u, v)))
     kanaele = []
-    for nummer in range(3):
-        sx = cx * p.skala[nummer] + p.ws / 2 - 0.5
-        sy = cy * p.skala[nummer] + p.hs / 2 - 0.5
-        kanaele.append(_bikubisch(np, rgb[..., nummer], sx, sy) * vignette)
+    for nummer, (sx, sy) in enumerate(orte):
+        kanaele.append(_bikubisch(np, rgb[..., nummer], sx + p.ws / 2 - 0.5,
+                                  sy + p.hs / 2 - 0.5) * vignette)
     return np.stack(kanaele, axis=-1).astype(np.float32)
 
 
@@ -280,7 +328,8 @@ def _kernel():
             "int32 drehung90, int32 spiegeln",
             "raw float32 ziel",
             r"""
-            // p: hf wf x0 y0 sx sy zoom cos sin a b k halbdiag2 vignette skala_r skala_g skala_b
+            // p: hf wf x0 y0 sx sy zoom cos sin a b k halbdiag2 vignette skala_r skala_g skala_b,
+            //    ab 17 das Objektivprofil: p1..p4, vr cr br, vb cb bb, k1..k3, ox oy einheit
             float hf = p[0], wf = p[1];
             int i_y = i / wout, i_x = i % wout;
             float u = ((float)i_x + 0.5f) / (float)wout, v = ((float)i_y + 0.5f) / (float)hout;
@@ -297,10 +346,25 @@ def _kernel():
             else { cx = tx; cy = ty; }
             float faktor = 1.0f + p[11] * (cx * cx + cy * cy) / p[12];
             cx *= faktor; cy *= faktor;
-            float vignette = 1.0f + p[13] * (cx * cx + cy * cy) / p[12];
+            float ox = p[30], oy = p[31];
+            float dx = cx - ox, dy = cy - oy;
+            float r = sqrtf(dx * dx + dy * dy) / p[32];
+            faktor = 1.0f + r * (p[17] + r * (p[18] + r * (p[19] + r * p[20])));
+            cx = ox + dx * faktor; cy = oy + dy * faktor;
+            dx = cx - ox; dy = cy - oy;
+            r = sqrtf(dx * dx + dy * dy) / p[32];
+            float q = r * r;
+            float vignette = (1.0f + p[13] * (cx * cx + cy * cy) / p[12])
+                             / (1.0f + q * (p[27] + q * (p[28] + q * p[29])));
             for (int k = 0; k < 3; k++) {
-                float sx = cx * p[14 + k] + (float)ws / 2.0f - 0.5f;
-                float sy = cy * p[14 + k] + (float)hs / 2.0f - 0.5f;
+                float kx = cx * p[14 + k], ky = cy * p[14 + k];
+                if (k != 1) {
+                    int t = k == 0 ? 21 : 24;
+                    float saum = p[t] + r * (p[t + 1] + r * p[t + 2]);
+                    kx = ox + (kx - ox) * saum; ky = oy + (ky - oy) * saum;
+                }
+                float sx = kx + (float)ws / 2.0f - 0.5f;
+                float sy = ky + (float)hs / 2.0f - 0.5f;
                 float x0 = floorf(sx), y0 = floorf(sy);
                 float gx[4], gy[4];
                 gewichte(sx - x0, gx);
@@ -334,7 +398,8 @@ def _kernel():
 def _anwenden_gpu(rgb, p: _Parameter):
     from .cuda import cupy as cp
     werte = np.array([p.hf, p.wf, p.x0, p.y0, p.sx, p.sy, p.zoom, p.cos_t, p.sin_t, p.a, p.b,
-                      p.k, p.halbdiagonale2, p.vignette, *p.skala], dtype=np.float32)
+                      p.k, p.halbdiagonale2, p.vignette, *p.skala, *p.terme, p.ox, p.oy,
+                      p.einheit], dtype=np.float32)
     ziel = cp.empty((p.hout, p.wout, 3), dtype=cp.float32)
     _kernel()(cp.ascontiguousarray(rgb, dtype=cp.float32), cp.asarray(werte), cp.int32(p.hs),
               cp.int32(p.ws), cp.int32(p.hout), cp.int32(p.wout), cp.int32(p.drehung90),

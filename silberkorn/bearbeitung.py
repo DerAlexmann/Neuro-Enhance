@@ -53,12 +53,13 @@ Created with assistance of Claude AI
 from __future__ import annotations
 
 import dataclasses
+import math
 import time
 from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import anonym, bilddatei, filter, geometrie, ki, veroeffentlichen
+from . import anonym, bilddatei, filter, geometrie, ki, objektivprofile, veroeffentlichen
 from .cuda import cupy as cp
 from .filter import Einstellungen
 
@@ -148,6 +149,11 @@ class Sitzung:
         cp.get_default_memory_pool().free_all_blocks()
         self.vorschau_original, self.vorschau_massstab = filter.verkleinern_auf(
             self.original, vorschau_kante)
+        self.objektiv = objektivprofile.Suche(False, daten.aufnahme, None)
+        try:
+            self.objektiv_suchen()
+        except (OSError, ValueError):
+            pass                                  # ohne Profil weiter
 
     @property
     def geaendert(self) -> bool:
@@ -442,6 +448,7 @@ class Sitzung:
             filter.verkleinern_box(teil, faktor).astype(cp.float32) for teil in voll)
         self._erweiterung = None                  # die alte Leinwand zuerst freigeben
         self._erweiterung = _Erweiterung(x, y, voll, vorschau, seed, verhaeltnis)
+        self._profil_nachfuehren()
         self._flicken_stand += 1
         return self._ki_fertig(beginn)
 
@@ -449,9 +456,51 @@ class Sitzung:
         if self._erweiterung is None:
             return False
         self._erweiterung = None
+        self._profil_nachfuehren()
         self._flicken_stand += 1
         self._ki_fertig(time.perf_counter())
         return True
+
+    # ------------------------------------------------------------------
+    # Objektivprofil
+    # ------------------------------------------------------------------
+
+    def objektiv_suchen(self) -> objektivprofile.Suche:
+        """Profil fuer das Bild suchen - beim Oeffnen und nach dem Laden der Datenbank.
+        Bei RAW wird ein gefundenes Profil gleich angewendet: Kamera-JPEGs sind oft
+        schon in der Kamera korrigiert, dort entscheidet der Anwender."""
+        self.objektiv = objektivprofile.suchen(self.daten.aufnahme)
+        if self.objektiv.profil is not None and self.daten.raw and not self.werte.objektivprofil:
+            ungeaendert = not self.geaendert
+            self.werte.objektivprofil = self.objektiv_terme()
+            if ungeaendert:
+                self.gespeicherte_werte = dataclasses.replace(self.werte)
+        return self.objektiv
+
+    def grundwerte(self) -> Einstellungen:
+        """Was „Alles zurücksetzen“ herstellt: alle Vorgaben, bei RAW mit dem Profil."""
+        werte = Einstellungen()
+        if self.objektiv.profil is not None and self.daten.raw:
+            werte.objektivprofil = self.objektiv_terme()
+        return werte
+
+    def objektiv_terme(self) -> tuple[float, ...]:
+        """Die Terme des Profils samt Lage des Originals in dem, was die Geometrie sieht."""
+        if self.objektiv.profil is None:
+            return ()
+        hoehe, breite = self.original.shape[:2]
+        if self._erweiterung is None:
+            bezug = geometrie.BEZUG_NEUTRAL
+        else:
+            gross_h, gross_b = self.quellform()
+            bezug = ((self._erweiterung.x + breite / 2) / gross_b,
+                     (self._erweiterung.y + hoehe / 2) / gross_h,
+                     math.hypot(breite, hoehe) / math.hypot(gross_b, gross_h))
+        return tuple(self.objektiv.profil.terme) + tuple(float(z) for z in bezug)
+
+    def _profil_nachfuehren(self):
+        if self.werte.objektivprofil:
+            self.werte.objektivprofil = self.objektiv_terme()
 
     def quellform(self) -> tuple[int, int]:
         """Hoehe und Breite dessen, was die Geometrie sieht: Original oder Leinwand."""

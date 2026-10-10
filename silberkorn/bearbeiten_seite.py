@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 import os
 import random
+import time
 from concurrent.futures import wait
 
 import numpy as np
@@ -36,7 +37,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import anonym, bilddatei, einstellungen, filter, geometrie, ki, lut, veroeffentlichen
+from . import (
+    anonym,
+    bilddatei,
+    einstellungen,
+    filter,
+    geometrie,
+    ki,
+    lut,
+    objektivprofile,
+    veroeffentlichen,
+)
 from .bearbeitung import Sitzung
 from .cuda import cupy as cp
 from .geometrie import VOLLER_ZUSCHNITT
@@ -70,6 +81,10 @@ class Reglerleiste(QScrollArea):
     def setWidget(self, inhalt):
         super().setWidget(inhalt)
         self._breite_anpassen()
+
+
+def _datum(zeitstempel: int) -> str:
+    return time.strftime(_("%d.%m.%Y"), time.localtime(zeitstempel))
 
 
 def gruppen_titel(gruppe: str) -> str:
@@ -428,6 +443,8 @@ class BearbeitenSeite(QWidget):
                     self._lut_bedienung(innen)
                 if regler.gruppe == "geometrie":
                     self._geometrie_bedienung(innen)
+                if regler.gruppe == "objektiv":
+                    self._objektiv_bedienung(innen)
                 if regler.gruppe in ("ki_rauschen", "ki_schaerfe"):
                     self._ki_bild_bedienung(regler.gruppe, innen)
                 if regler.gruppe == "maske":
@@ -513,6 +530,150 @@ class BearbeitenSeite(QWidget):
         innen.addWidget(self.erweitern_hinweis)
         self.erweitern_knopf = self._knopf("", self.erweitern, "kanal")
         innen.addWidget(self.erweitern_knopf)
+
+    # ------------------------------------------------------------------
+    # Objektivprofil (lensfun)
+    # ------------------------------------------------------------------
+
+    def _objektiv_bedienung(self, innen: QVBoxLayout):
+        """Profil an/aus, was erkannt wurde, Datenbank laden und aktualisieren."""
+        self.profil_box = QCheckBox()
+        self.fenster.beschriften(self.profil_box.setText, _("Objektivprofil anwenden"))
+        self.fenster.beschriften(self.profil_box.setToolTip, _(
+            "Gleicht Verzeichnung, Farbsäume und Vignette nach der Objektivdatenbank "
+            "lensfun aus. Die Regler darunter wirken zusätzlich."))
+        self.profil_box.toggled.connect(self._profil_umgeschaltet)
+        innen.addWidget(self.profil_box)
+        self.profil_hinweis = QLabel(objectName="nebentext")
+        self.profil_hinweis.setWordWrap(True)
+        innen.addWidget(self.profil_hinweis)
+        leiste = QHBoxLayout()
+        leiste.setSpacing(4)
+        self.profil_laden_knopf = self._knopf("", self.objektiv_datenbank_laden, "kanal")
+        self.fenster.beschriften(self.profil_laden_knopf.setText,
+                                 _("Objektivdatenbank laden"))
+        self.profil_pruefen_knopf = self._knopf("", self.objektiv_datenbank_pruefen, "kanal")
+        self.fenster.beschriften(self.profil_pruefen_knopf.setText,
+                                 _("Nach neuer Datenbank suchen"))
+        self.fenster.beschriften(self.profil_pruefen_knopf.setToolTip, _(
+            "Fragt bei lensfun nach, ob es eine neuere Objektivdatenbank gibt. Silberkorn "
+            "fragt nie von selbst."))
+        leiste.addWidget(self.profil_laden_knopf)
+        leiste.addWidget(self.profil_pruefen_knopf)
+        leiste.addStretch(1)
+        innen.addLayout(leiste)
+
+    def _objektiv_anzeigen(self):
+        offen = self.sitzung is not None
+        suche = self.sitzung.objektiv if offen else None
+        db_stand = objektivprofile.stand()
+        profil = suche.profil if suche is not None else None
+        self.profil_box.blockSignals(True)
+        self.profil_box.setChecked(offen and bool(self.sitzung.werte.objektivprofil))
+        self.profil_box.blockSignals(False)
+        self.profil_box.setEnabled(profil is not None)
+        self.profil_laden_knopf.setVisible(db_stand is None)
+        self.profil_pruefen_knopf.setVisible(db_stand is not None)
+        if db_stand is None:
+            text = _("Die Objektivdatenbank ist noch nicht geladen (etwa 0,5 MB).")
+        elif not offen:
+            text = _("Objektivdatenbank vom {datum}.").format(
+                datum=_datum(db_stand["zeitstempel"]))
+        elif suche.aufnahme is None or not suche.aufnahme.objektiv:
+            text = _("Die Datei nennt kein Objektiv.")
+        elif profil is None:
+            text = _("Kein Profil für „{objektiv}“ gefunden.").format(
+                objektiv=suche.aufnahme.objektiv)
+        else:
+            aufnahme = suche.aufnahme
+            teile = [profil.objektiv]
+            if aufnahme.brennweite > 0:
+                teile.append(f"{aufnahme.brennweite:g} mm")
+            if aufnahme.blende > 0:
+                teile.append(f"f/{round(aufnahme.blende, 1):g}")
+            namen = {"verzeichnung": _("Verzeichnung"), "farbsaum": _("Farbsäume"),
+                     "vignette": _("Vignette")}
+            text = " · ".join(teile) + "\n" + _("Profil für: {arten}").format(
+                arten=", ".join(namen[art] for art in profil.arten))
+            if not self.sitzung.daten.raw:
+                text += "\n" + _("Kamera-JPEGs sind oft schon in der Kamera korrigiert – "
+                                 "deshalb hier nicht automatisch.")
+        self.profil_hinweis.setText(text)
+
+    def _profil_umgeschaltet(self, an: bool):
+        if self.sitzung is None:
+            return
+        self.sitzung.werte.objektivprofil = self.sitzung.objektiv_terme() if an else ()
+        self.zeichnen_anfordern()
+
+    def objektiv_datenbank_laden(self, nachfragen: bool = True) -> bool:
+        """Die lensfun-Datenbank laden - erst nach Rueckfrage mit Quelle, Lizenz und Ablage."""
+        if nachfragen:
+            frage = _(
+                "Silberkorn lädt die Objektivdatenbank (etwa 0,5 MB) von:\n{quelle}\n\n"
+                "Sie stammt vom Projekt {herkunft}.\n\n"
+                "Ablage: {ordner}\n\nJetzt herunterladen?").format(
+                    quelle=objektivprofile.QUELLE + objektivprofile.ARCHIV,
+                    herkunft=objektivprofile.HERKUNFT,
+                    ordner=objektivprofile.ziel_ordner())
+            antwort = QMessageBox.question(self, _("Objektivdatenbank laden"), frage,
+                                           QMessageBox.StandardButton.Yes
+                                           | QMessageBox.StandardButton.No,
+                                           QMessageBox.StandardButton.No)
+            if antwort != QMessageBox.StandardButton.Yes:
+                return False
+        anzeige = QProgressDialog(_("Objektivdatenbank wird geladen …"), _("Abbrechen"),
+                                  0, 100, self)
+        anzeige.setWindowTitle(self.fenster.windowTitle())
+        anzeige.setWindowModality(Qt.WindowModality.WindowModal)
+        anzeige.setMinimumDuration(0)
+
+        def fortschritt(geladen, gesamt):
+            anzeige.setValue(round(100 * geladen / gesamt) if gesamt else 0)
+            QApplication.processEvents()
+            return not anzeige.wasCanceled()
+
+        try:
+            ordner = objektivprofile.herunterladen(fortschritt)
+        except objektivprofile.Abbruch:
+            self.fenster.melden(_("Herunterladen abgebrochen."))
+            return False
+        except objektivprofile.DatenbankFehler as fehler:
+            self._fehler(_("Die Objektivdatenbank ließ sich nicht laden."), str(fehler))
+            return False
+        finally:
+            anzeige.close()
+        if self.sitzung is not None:
+            self.sitzung.objektiv_suchen()
+            self.zeichnen_anfordern()
+        self._objektiv_anzeigen()
+        self.fenster.melden(_("Objektivdatenbank geladen: {ordner}").format(ordner=ordner))
+        return True
+
+    def objektiv_datenbank_pruefen(self):
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            neu = objektivprofile.aktualisierung()
+        except objektivprofile.DatenbankFehler as fehler:
+            self._fehler(_("Ob es eine neuere Objektivdatenbank gibt, ließ sich nicht "
+                           "feststellen."), str(fehler))
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        if neu is None:
+            stand = objektivprofile.stand()
+            QMessageBox.information(self, _("Objektivdatenbank"), _(
+                "Die Objektivdatenbank ist aktuell (Stand {datum}).").format(
+                    datum=_datum(stand["zeitstempel"]) if stand else "?"))
+            return
+        antwort = QMessageBox.question(
+            self, _("Objektivdatenbank"),
+            _("Es gibt eine neuere Objektivdatenbank vom {datum} (etwa 0,5 MB, von {quelle})."
+              "\n\nJetzt laden?").format(datum=_datum(neu), quelle=objektivprofile.QUELLE),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes)
+        if antwort == QMessageBox.StandardButton.Yes:
+            self.objektiv_datenbank_laden(nachfragen=False)
 
     # ------------------------------------------------------------------
     # Geometrie: Drehen, Spiegeln, Zuschneiden
@@ -2110,6 +2271,7 @@ class BearbeitenSeite(QWidget):
         self._lut_anzeigen()
         self._ki_bild_anzeigen()            # beschriftet auch Motiv, Entfernen, Tiefe, Erweitern
         self._anonym_anzeigen()
+        self._objektiv_anzeigen()
 
     # ------------------------------------------------------------------
     # Regler und Vorschau
@@ -2184,7 +2346,7 @@ class BearbeitenSeite(QWidget):
             # Auch die KI-Erweiterung gehoert zu „alles“: Abwaehlen verwirft sie
             self.erweitern_box.setChecked(False)
         if self.sitzung is not None:
-            self.sitzung.werte = filter.Einstellungen()
+            self.sitzung.werte = self.sitzung.grundwerte()
         self._alles_anzeigen()
         self.zeichnen_anfordern()
 
@@ -2198,6 +2360,7 @@ class BearbeitenSeite(QWidget):
         self._lut_anzeigen()
         self._ki_bild_anzeigen()
         self._anonym_anzeigen()
+        self._objektiv_anzeigen()
         self._umrisse_setzen()
 
     # ------------------------------------------------------------------

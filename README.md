@@ -149,8 +149,14 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   und waagrecht, Zuschneiden mit Rahmen und festen Seitenverhältnissen. Leere
   Ecken nach dem Begradigen werden automatisch weggeschnitten.
 - **Objektiv**: Verzeichnung, Vignette und Farbsäume (chromatische Aberration)
-  ausgleichen. Alle Geometrie- und Objektivkorrekturen werden in einem einzigen
-  bikubischen Schritt abgetastet.
+  ausgleichen – von Hand oder automatisch mit **Objektivprofilen** aus der
+  Datenbank von [lensfun](https://lensfun.github.io) (CC BY-SA 3.0). Kamera,
+  Objektiv, Brennweite und Blende kommen aus der Datei, auch für adaptierte
+  Objektive. Bei RAW wird ein gefundenes Profil gleich angewendet, bei JPEG nur
+  auf Wunsch (die Kamera hat dort oft schon korrigiert). Die Datenbank (etwa
+  0,5 MB) lädt Silberkorn auf Knopfdruck und sucht ebenso auf Knopfdruck nach
+  einer neueren – nie von selbst. Alle Geometrie- und Objektivkorrekturen
+  werden in einem einzigen bikubischen Schritt abgetastet.
 - **KI-Hochskalieren** um 2 × oder 4 × beim Speichern, mit Real-ESRGAN über ONNX
   Runtime auf der GPU: ein schnelles Modell mit Regler für die Entrauschstärke
   (ab 4 GB Grafikspeicher) und ein großes Modell mit mehr Schärfe (ab
@@ -179,10 +185,13 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
   volle Umfang des Sensors bleibt erhalten, die Helligkeit regelt die
   Belichtung. Bei Sensoren mit Bayer-Mosaik, also bei fast allen Kameras,
   läuft das Demosaicing auf der GPU – nach Malvar, He und Cutler. Eine
-  24-Megapixel-RAW ist in rund 0,2 s offen statt in gut einer Sekunde. Wer an
-  feinen Mustern noch weniger Farbsäume will, wählt oben „RAW: Beste Qualität“ –
-  dann entwickelt LibRaw mit dem Verfahren DHT auf dem Prozessor (etwa 1,5 s).
-  Fujis X-Trans und andere Sensoren entwickelt immer LibRaw.
+  24-Megapixel-RAW ist in rund 0,2 s offen statt in gut einer Sekunde. Auch
+  Fujis X-Trans-Sensoren entwickelt die GPU, mit einem eigenen kantenbewussten
+  Verfahren für das 6×6-Muster – im Ergebnis kaum von LibRaw zu unterscheiden,
+  aber in Millisekunden statt Sekunden. Wer an feinen Mustern noch weniger
+  Farbsäume will, wählt oben „RAW: Beste Qualität“ – dann entwickelt LibRaw auf
+  dem Prozessor, mit dem Verfahren DHT bzw. bei X-Trans mit Markesteijn (etwa
+  1,5 bis 3 s). Andere Sensoren (Foveon …) entwickelt immer LibRaw.
 - **Formate**: Öffnen von JPEG, PNG, TIFF, WebP, BMP und RAW (HEIC mit dem
   optionalen Paket `pillow-heif`), Speichern als JPEG und WebP mit 8 Bit, PNG
   und TIFF wahlweise mit 8 oder 16 Bit. Bilder mit mehr als 8 Bit schlägt der
@@ -195,13 +204,6 @@ RTX 5000 (Blackwell) auch FP4. Die Werte stehen auf dem Reiter „Info & Copyrig
 | `Strg`+`0` / `Strg`+`1` | eingepasst / 100 % |
 | Mausrad, Ziehen, Doppelklick | zoomen, verschieben, zwischen eingepasst und 100 % wechseln |
 | `Eingabe` / `Esc` | Zuschnitt übernehmen / abbrechen |
-
-## Geplant
-
-- **Objektivprofile**: Verzeichnung, Vignette und Farbsäume automatisch aus
-  einer Objektivdatenbank (lensfun).
-- **X-Trans auf der GPU**: Demosaicing auch für Fujis Sensoren auf der
-  Grafikkarte.
 
 ## Starten
 
