@@ -316,6 +316,22 @@ Only models whose licence permits use and redistribution in an
 open-source project are offered by default.
 
 ===========================================================================
+Lens database
+===========================================================================
+
+lensfun lens database (for "Lens profile")
+  Copyright the lensfun contributors
+  Licence: Creative Commons Attribution-ShareAlike 3.0 (CC BY-SA 3.0)
+  https://lensfun.github.io
+  https://creativecommons.org/licenses/by-sa/3.0/
+  The database is not part of this repository or of the released program.
+  On request Silberkorn downloads it unchanged from the update server of the
+  lensfun project (https://lensfun.github.io/db/version_2.tar.bz2) and stores
+  it next to the AI models; it stays under CC BY-SA 3.0. Silberkorn reads the
+  calibration data but contains no code of the lensfun library (LGPL-3.0);
+  the correction formulas follow its documentation.
+
+===========================================================================
 Trademarks
 ===========================================================================
 

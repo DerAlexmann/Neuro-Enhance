@@ -33,7 +33,8 @@ Meldung – siehe [SECURITY.md](SECURITY.md).
 | `silberkorn/kurven.py` | Gradationskurven: Punkte bearbeiten, Tabellen bilden |
 | `silberkorn/kurveneditor.py` | Kurvenfeld mit Histogramm |
 | `silberkorn/bilddatei.py` | Laden und Speichern: 8 Bit, 16 Bit, RAW, EXIF |
-| `silberkorn/demosaik.py` | RAW-Entwicklung auf der GPU (Bayer-Mosaik), Malvar-He-Cutler |
+| `silberkorn/demosaik.py` | RAW-Entwicklung auf der GPU: Bayer (Malvar-He-Cutler) und X-Trans |
+| `silberkorn/objektivprofile.py` | lensfun-Datenbank laden, Kamera/Objektiv finden, Profil rechnen |
 | `silberkorn/icc.py` | ICC-Matrixprofile lesen und nach linearem sRGB umrechnen |
 | `silberkorn/ki.py` | KI-Hochskalieren: Modellkatalog, ONNX Runtime, Kacheln |
 | `werkzeuge/modelle_exportieren.py` | Real-ESRGAN-Gewichte nach ONNX wandeln (braucht PyTorch) |

@@ -2,7 +2,8 @@
 Bilder laden und speichern - 8 Bit, 16 Bit und RAW
 
 Woher die Pixel kommen:
-  RAW (Bayer)    LibRaw liest das Mosaik, entwickelt wird auf der GPU (demosaik.py)
+  RAW (Bayer)    LibRaw liest das Mosaik, entwickelt wird auf der GPU (demosaik.py),
+                 ebenso bei Fujis X-Trans
   RAW (sonst)    LibRaw entwickelt linear in 16 Bit, sRGB-Primaerfarben - so auch
                  jede RAW, wenn die beste Qualitaet gewaehlt ist (Verfahren DHT)
   TIFF           tifffile - 8 und 16 Bit, auch komprimiert
@@ -26,6 +27,7 @@ Created with assistance of Claude AI
 from __future__ import annotations
 
 import io
+import math
 import os
 import struct
 import zlib
@@ -35,6 +37,7 @@ import numpy as np
 from PIL import Image, ImageCms, ImageOps, PngImagePlugin
 
 from . import demosaik, icc
+from .objektivprofile import Aufnahme
 
 try:                                          # HEIC/HEIF, falls installiert
     from pillow_heif import register_heif_opener
@@ -78,7 +81,8 @@ class Bilddaten:
     exif: bytes                      # Ausrichtung bereits auf 1 gesetzt
     pfad: str
     raw: bool = False
-    mosaik: demosaik.RawMosaik | None = None   # statt pixel: Bayer-RAW fuer die GPU
+    mosaik: demosaik.RawMosaik | None = None   # statt pixel: Mosaik fuer die GPU
+    aufnahme: Aufnahme | None = None           # Kamera und Objektiv, fuer Objektivprofile
 
     @property
     def form(self) -> tuple[int, int]:
@@ -170,6 +174,68 @@ def _metadaten(pfad: str) -> tuple[bytes | None, Image.Exif]:
         return None, Image.Exif()
 
 
+EXIF_IFD = 0x8769
+EXIF_HERSTELLER, EXIF_MODELL = 0x010F, 0x0110
+EXIF_BLENDE, EXIF_BRENNWEITE = 0x829D, 0x920A
+EXIF_OBJEKTIV_DATEN, EXIF_OBJEKTIV_HERSTELLER, EXIF_OBJEKTIV = 0xA432, 0xA433, 0xA434
+
+
+def _text(wert) -> str:
+    if isinstance(wert, bytes):
+        wert = wert.decode("utf-8", "replace")
+    return " ".join(str(wert).replace("\x00", " ").split()) if wert is not None else ""
+
+
+def _kommazahl(wert) -> float:
+    try:
+        zahl = float(wert)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return 0.0
+    return zahl if math.isfinite(zahl) and zahl > 0 else 0.0
+
+
+def aufnahme_aus_exif(exif: Image.Exif) -> Aufnahme | None:
+    """Kamera, Objektiv, Brennweite und Blende aus EXIF - oder None ohne Objektivangabe."""
+    try:
+        details = exif.get_ifd(EXIF_IFD)
+    except (KeyError, ValueError, TypeError, OSError):
+        details = {}
+    objektiv = _text(details.get(EXIF_OBJEKTIV))
+    if not objektiv:
+        return None
+    brennweiten = (0.0, 0.0)
+    daten = details.get(EXIF_OBJEKTIV_DATEN)
+    if isinstance(daten, (tuple, list)) and len(daten) >= 2:
+        brennweiten = (_kommazahl(daten[0]), _kommazahl(daten[1]))
+    return Aufnahme(_text(exif.get(EXIF_HERSTELLER)), _text(exif.get(EXIF_MODELL)), objektiv,
+                    _text(details.get(EXIF_OBJEKTIV_HERSTELLER)),
+                    _kommazahl(details.get(EXIF_BRENNWEITE)), _kommazahl(details.get(EXIF_BLENDE)),
+                    brennweiten)
+
+
+def _raw_aufnahme(pfad: str, roh) -> Aufnahme | None:
+    """Objektiv, Brennweite und Blende von LibRaw; Hersteller und Modell der Kamera aus
+    dem EXIF der Datei (TIFF-artige RAWs) oder dem eingebetteten Vorschaubild."""
+    objektiv = getattr(roh, "lens", None)
+    andere = getattr(roh, "other", None)
+    if objektiv is None or andere is None or not _text(objektiv.model):
+        return None
+    _icc, exif = _metadaten(pfad)
+    if not exif.get(EXIF_MODELL):
+        import rawpy
+        try:
+            vorschau = roh.extract_thumb()
+            if vorschau.format == rawpy.ThumbFormat.JPEG:
+                with Image.open(io.BytesIO(vorschau.data)) as bild:
+                    exif = bild.getexif()
+        except (rawpy.LibRawError, OSError, ValueError):
+            pass
+    hersteller, kamera = _text(exif.get(EXIF_HERSTELLER)), _text(exif.get(EXIF_MODELL))
+    return Aufnahme(hersteller, kamera, _text(objektiv.model), _text(objektiv.make),
+                    _kommazahl(andere.focal_length), _kommazahl(andere.aperture),
+                    (_kommazahl(objektiv.min_focal), _kommazahl(objektiv.max_focal)))
+
+
 def _exif_ohne_ausrichtung(exif: Image.Exif) -> bytes:
     if EXIF_AUSRICHTUNG in exif:
         exif[EXIF_AUSRICHTUNG] = 1            # bereits gedreht
@@ -196,22 +262,28 @@ def _raw_laden(pfad: str, gpu: bool = True, qualitaet: str = "schnell") -> Bildd
     beste = qualitaet == "beste"
     try:
         with rawpy.imread(pfad) as roh:
+            aufnahme = _raw_aufnahme(pfad, roh)
             mosaik = demosaik.aus_rawpy(roh) if gpu and not beste else None
             if mosaik is not None:
-                return Bilddaten(None, icc.LINEAR_SRGB, None, b"", pfad, raw=True, mosaik=mosaik)
+                return Bilddaten(None, icc.LINEAR_SRGB, None, b"", pfad, raw=True, mosaik=mosaik,
+                                 aufnahme=aufnahme)
             # Linear (Gamma 1), 16 Bit, sRGB-Primaerfarben, Weissabgleich der
             # Kamera - und ohne die automatische Aufhellung von LibRaw. Die
             # liesse 1 % der Pixel ausbrennen; so bleibt der volle Umfang des
             # Sensors erhalten, und die Helligkeit regelt die Belichtung.
+            # Ebenso ohne adjust_maximum: Das setzt den Weisspunkt auf den hellsten
+            # Wert im Bild, sobald der ueber 75 % liegt - die Helligkeit hinge dann
+            # vom Motiv ab und wiche von der Entwicklung auf der GPU ab.
             # Beste Qualitaet: DHT (in LibRaw enthalten) - weniger Farbsaeume und
             # ruhigere Flaechen als das Standardverfahren AHD, auf dem Prozessor
             verfahren = {"demosaic_algorithm": rawpy.DemosaicAlgorithm.DHT} if beste else {}
             pixel = roh.postprocess(gamma=(1, 1), output_bps=16, use_camera_wb=True,
                                     output_color=rawpy.ColorSpace.sRGB, no_auto_bright=True,
-                                    **verfahren)
+                                    adjust_maximum_thr=0.0, **verfahren)
     except (rawpy.LibRawError, OSError, ValueError) as fehler:
         raise BildFehler(str(fehler)) from fehler
-    return Bilddaten(np.ascontiguousarray(pixel), icc.LINEAR_SRGB, None, b"", pfad, raw=True)
+    return Bilddaten(np.ascontiguousarray(pixel), icc.LINEAR_SRGB, None, b"", pfad, raw=True,
+                     aufnahme=aufnahme)
 
 
 def _tiff_laden(pfad: str) -> Bilddaten | None:
@@ -239,9 +311,10 @@ def _tiff_laden(pfad: str) -> Bilddaten | None:
     rgb, alpha = ausrichten(rgb, ausrichtung), (ausrichten(alpha, ausrichtung)
                                                 if alpha is not None else None)
     _icc, exif = _metadaten(pfad)
+    aufnahme = aufnahme_aus_exif(exif)
     return Bilddaten(np.ascontiguousarray(rgb), _profil_oder_fehler(icc_daten),
                      None if alpha is None else np.ascontiguousarray(alpha),
-                     _exif_ohne_ausrichtung(exif), pfad)
+                     _exif_ohne_ausrichtung(exif), pfad, aufnahme=aufnahme)
 
 
 def _png_bittiefe(pfad: str) -> int:
@@ -267,8 +340,9 @@ def _png16_laden(pfad: str) -> Bilddaten:
         alpha = np.ascontiguousarray(ausrichten(alpha, ausrichtung))
     if icc_daten and icc.lesen(icc_daten) is None:
         raise BildFehler("16-Bit-PNG mit einem Farbprofil, das kein RGB-Matrixprofil ist")
+    aufnahme = aufnahme_aus_exif(exif)
     return Bilddaten(np.ascontiguousarray(rgb), _profil_oder_fehler(icc_daten), alpha,
-                     _exif_ohne_ausrichtung(exif), pfad)
+                     _exif_ohne_ausrichtung(exif), pfad, aufnahme=aufnahme)
 
 
 def _pillow_laden(pfad: str) -> Bilddaten:
@@ -301,8 +375,9 @@ def _pillow_laden(pfad: str) -> Bilddaten:
             except (ImageCms.PyCMSError, OSError, ValueError):
                 pass                          # unlesbares Profil: wie sRGB behandeln
         pixel = np.asarray(bild.convert("RGB"))
+    aufnahme = aufnahme_aus_exif(exif)
     return Bilddaten(np.ascontiguousarray(pixel), profil, alpha,
-                     _exif_ohne_ausrichtung(exif), pfad)
+                     _exif_ohne_ausrichtung(exif), pfad, aufnahme=aufnahme)
 
 
 def laden(pfad: str, raw_auf_gpu: bool = True, raw_qualitaet: str = "schnell") -> Bilddaten:

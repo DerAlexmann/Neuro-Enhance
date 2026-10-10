@@ -3,6 +3,32 @@
 Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/).
 
+## [Unveröffentlicht]
+
+### Neu
+
+- **Objektivprofile**: Verzeichnung, Farbsäume und Vignette automatisch nach der
+  Objektivdatenbank von lensfun (CC BY-SA 3.0). Kamera, Objektiv, Brennweite und
+  Blende stammen aus der Datei (auch adaptierte Objektive, etwa F an Z);
+  zwischen kalibrierten Brennweiten und Blenden wird interpoliert. Bei RAW wird
+  das Profil gleich angewendet, bei JPEG auf Wunsch; „Alles zurücksetzen“
+  behält es. Die Korrektur gehört zur einzigen Abtastung der Geometrie und
+  stimmt mit lensfun auf Bruchteile eines Pixels überein. Die Datenbank lädt
+  Silberkorn auf Knopfdruck (etwa 0,5 MB) und sucht auf Knopfdruck nach einer
+  neueren.
+- **X-Trans auf der GPU**: Fujis RAW-Dateien werden jetzt ebenfalls auf der
+  Grafikkarte entwickelt – mit einem kantenbewussten Verfahren für das
+  6×6-Muster (Grün richtungsgewichtet, Rot und Blau über Farbdifferenzen). Eine
+  26-Megapixel-RAF ist in rund 20 ms entwickelt statt in gut 2 s; das Ergebnis
+  weicht von LibRaws Markesteijn-Verfahren kaum ab (PSNR 52 dB).
+
+### Behoben
+
+- RAW über LibRaw („Beste Qualität“ und Sensoren ohne GPU-Weg): Die Helligkeit
+  hängt nicht mehr vom Motiv ab. LibRaw setzte den Weißpunkt auf den hellsten
+  Bildwert, sobald dieser über 75 % lag (`adjust_maximum`) – das Bild wurde
+  dann bis zu ⅓ Blende heller als auf der GPU.
+
 ## [0.2.0] – 2026-10-10
 
 ### Neu
@@ -297,6 +323,7 @@ die Versionsnummern der [semantischen Versionierung](https://semver.org/lang/de/
   Rechengenauigkeit (FP16, FP8 ab Ada, FP4 ab Blackwell).
 - Programmsymbol, Marken- und Lizenzhinweise (NOTICE).
 
+[Unveröffentlicht]: https://github.com/DerAlexmann/Silberkorn/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.2.0
 [0.1.1]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.1.1
 [0.1.0]: https://github.com/DerAlexmann/Silberkorn/releases/tag/v0.1.0

@@ -100,6 +100,12 @@ def test_ganze_kette_mit_zuschnitt(bild):
     Geometrie(drehung90=1, spiegeln=True, zuschnitt=(0.1, 0.05, 0.9, 0.8)),
     Geometrie(begradigen=7.5, perspektive_v=30, perspektive_h=-20),
     Geometrie(verzeichnung=40, vignette=60, ca_rot=50, ca_blau=-30),
+    # Objektivprofil: Verzeichnung, Farbsaeume, Vignette - und mit Bezug wie nach KI-Erweitern
+    Geometrie(profil=(0.05, -0.12, 0.04, 0.01, 1.002, 0.001, -0.0005, 0.998, -0.001, 0.0004,
+                      -0.4, 0.2, -0.1)),
+    Geometrie(drehung90=3, vignette=-20, ca_rot=30,
+              profil=(0.05, -0.12, 0.04, 0.0, 1.002, 0.0, 0.0, 0.998, 0.0, 0.0, -0.4, 0.2, -0.1,
+                      0.4, 0.55, 0.8)),
 ])
 def test_cuda_wie_referenz(bild, geo):
     cp = pytest.importorskip("cupy")

@@ -110,7 +110,8 @@ REGLER = (
 )
 
 # Geometriefelder ohne Schieberegler, mit ihren Vorgaben
-GEOMETRIE_FELDER = {"drehung90": 0, "spiegeln": False, "zuschnitt": (0.0, 0.0, 1.0, 1.0)}
+GEOMETRIE_FELDER = {"drehung90": 0, "spiegeln": False, "zuschnitt": (0.0, 0.0, 1.0, 1.0),
+                    "objektivprofil": ()}
 # Schalter der Maske: Wirkung umkehren (Regler wirken aufs Motiv), Hintergrund
 # beim Speichern durchsichtig, Motiv beim Bokeh scharf halten
 MASKEN_SCHALTER = {"maske_umkehren": False, "freistellen": False, "bokeh_motiv": True}
@@ -185,6 +186,8 @@ class Einstellungen:
     vignette: float = 0.0
     ca_rot: float = 0.0
     ca_blau: float = 0.0
+    # Objektivprofil aus lensfun fuer dieses Bild (geometrie.py); leer heisst aus
+    objektivprofil: tuple[float, ...] = ()
     # Anonymisieren: (form, x0, y0, x1, y1) auf 0..1 des Originals, siehe anonym.py
     anonym_flaechen: tuple[tuple, ...] = ()
     anonym_art: str = "mosaik"

@@ -47,8 +47,9 @@ def schiefe_dng(pfad: str, ausrichtung: int = 1, muster=(0, 1, 1, 2)):
     for flaeche, farbe in FLAECHEN:
         szene[flaeche] = farbe
     kamera = (szene @ KAMERA.T) * STICH / STICH.max()
-    kanal = np.array(muster).reshape(2, 2)[np.arange(hoehe)[:, None] % 2,
-                                           np.arange(breite)[None, :] % 2]
+    periode = 6 if len(muster) == 36 else 2
+    kanal = np.array(muster).reshape(periode, periode)[np.arange(hoehe)[:, None] % periode,
+                                                       np.arange(breite)[None, :] % periode]
     schwarz, weiss = 512, 16383
     werte = np.take_along_axis(kamera, kanal[..., None], axis=2)[..., 0]
     mosaik = np.round(schwarz + werte * (weiss - schwarz)).astype(np.uint16)
@@ -59,8 +60,8 @@ def schiefe_dng(pfad: str, ausrichtung: int = 1, muster=(0, 1, 1, 2)):
     tags = [
         (50706, "B", 4, (1, 4, 0, 0), True),
         (50708, "s", 0, "Testkamera", True),
-        (33421, "H", 2, (2, 2), True),
-        (33422, "B", 4, tuple(muster), True),
+        (33421, "H", 2, (periode, periode), True),
+        (33422, "B", len(muster), tuple(muster), True),
         (50714, "H", 1, schwarz, True),
         (50717, "H", 1, weiss, True),
         (50721, 10, 9, rational(KAMERA @ np.linalg.inv(SRGB_NACH_XYZ)), True),
@@ -153,10 +154,80 @@ class _FalscheRawDatei:
         self.num_colors = farben
 
 
-def test_x_trans_und_fremde_sensoren_bleiben_bei_libraw():
+def test_fremde_sensoren_bleiben_bei_libraw():
     pytest.importorskip("rawpy")
-    assert d.aus_rawpy(_FalscheRawDatei(np.zeros((6, 6), int))) is None     # X-Trans
+    assert d.aus_rawpy(_FalscheRawDatei(np.zeros((4, 4), int))) is None
     assert d.aus_rawpy(_FalscheRawDatei([[0, 1], [3, 2]], b"CMYG", 4)) is None
+
+
+# ----------------------------------------------------------------------
+# X-Trans
+# ----------------------------------------------------------------------
+
+# Das Muster der X-T3, wie LibRaw es fuer den sichtbaren Bereich meldet
+X_TRANS = np.array([[1, 1, 0, 1, 1, 2],
+                    [1, 1, 2, 1, 1, 0],
+                    [2, 0, 1, 0, 2, 1],
+                    [1, 1, 2, 1, 1, 0],
+                    [1, 1, 0, 1, 1, 2],
+                    [0, 2, 1, 2, 0, 1]])
+
+
+def test_x_trans_muster_ist_tauglich():
+    assert d._xtrans_tauglich(X_TRANS)
+    assert d._xtrans_tauglich(np.roll(X_TRANS, (2, 3), axis=(0, 1)))
+    # Bayer, auf 6x6 gekachelt: diagonal liegt neben Rot nie Gruen
+    assert not d._xtrans_tauglich(np.tile([[0, 1], [1, 2]], (3, 3)))
+
+
+@pytest.mark.parametrize("ausrichtung", [1, 6])
+def test_x_trans_szene_wird_farbrichtig_entwickelt(tmp_path, ausrichtung):
+    pytest.importorskip("rawpy")
+    pfad = str(tmp_path / "xtrans.dng")
+    schiefe_dng(pfad, ausrichtung, muster=tuple(X_TRANS.ravel()))
+    daten = b.laden(pfad)
+    assert daten.mosaik is not None and daten.mosaik.periode == 6
+    linear = daten.linear()
+    assert linear.shape[:2] == daten.form
+    flaechen_pruefen(linear, ausrichtung)
+
+
+def test_x_trans_grauer_verlauf_bleibt_erhalten():
+    """Glatter Grauverlauf: alle drei Kanaele folgen ihm, auch am Rand."""
+    hoehe, breite = 30, 42
+    verlauf = (np.linspace(0.1, 0.9, breite)[None, :]
+               + np.linspace(0, 0.05, hoehe)[:, None]).astype(np.float32)
+    rgb = d.xtrans(verlauf, X_TRANS)
+    for kanal in range(3):
+        assert np.abs(rgb[..., kanal] - verlauf).max() < 0.03
+        assert np.abs(rgb[3:-3, 3:-3, kanal] - verlauf[3:-3, 3:-3]).max() < 0.005
+
+
+def test_x_trans_kante_ohne_farbsaum():
+    """Eine scharfe graue Kante darf keine bunten Pixel erzeugen."""
+    szene = np.full((36, 48), 0.1, np.float32)
+    szene[:, 23:] = 0.7
+    rgb = d.xtrans(szene, X_TRANS)
+    bunt = rgb.max(axis=2) - rgb.min(axis=2)
+    assert bunt.max() < 0.02
+
+
+@pytest.mark.parametrize("drehung", [0, 6])
+@pytest.mark.parametrize("verschiebung", [(0, 0), (1, 4)])
+def test_x_trans_kernel_wie_referenz(drehung, verschiebung):
+    cp = gpu_vorhanden()
+    zufall = np.random.default_rng(9)
+    muster = np.roll(X_TRANS, verschiebung, axis=(0, 1))
+    mosaik = d.RawMosaik(
+        daten=zufall.integers(300, 16383, (41, 55)).astype(np.uint16),
+        muster=muster, schwarz=np.where(muster == 1, 512.0, 505.0),
+        weiss=16383.0, weissabgleich=np.array([2.1, 1.0, 1.4]),
+        matrix=np.array([[1.3, -0.2, -0.1], [-0.15, 1.3, -0.15], [0.0, -0.4, 1.4]]),
+        drehung=drehung)
+    referenz = d.entwickeln(mosaik.daten, mosaik)
+    gpu = cp.asnumpy(d.entwickeln(cp.asarray(mosaik.daten), mosaik))
+    assert gpu.shape == referenz.shape
+    assert np.abs(gpu - referenz).max() < 1e-4
 
 
 @pytest.mark.parametrize("muster", [[[0, 1], [1, 2]], [[2, 1], [1, 0]], [[1, 0], [2, 1]],
