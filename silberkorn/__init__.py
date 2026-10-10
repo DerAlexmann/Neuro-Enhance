@@ -10,4 +10,4 @@ Projekt ist unabhaengig und steht in keiner Verbindung zu NVIDIA.
 """
 
 PROGRAMM = "Silberkorn"
-VERSION = "0.3.0"
+VERSION = "0.4.0"
