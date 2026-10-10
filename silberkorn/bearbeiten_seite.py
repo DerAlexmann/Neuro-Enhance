@@ -100,6 +100,7 @@ def gruppen_titel(gruppe: str) -> str:
         "lut": _("LUT"),
         "ki_rauschen": _("KI-Entrauschen"),
         "ki_schaerfe": _("KI-Schärfen"),
+        "ki_farbe": _("KI-Kolorieren"),
         "maske": _("Motiv & Hintergrund"),
         "tiefe": _("Tiefe & Bokeh"),
     }[gruppe]
@@ -143,6 +144,7 @@ def regler_titel(name: str) -> str:
         "ki_entrauschen": _("Entrauschen"),
         "ki_rauschen": _("Stärke"),
         "ki_schaerfe": _("Stärke"),
+        "ki_farbe": _("Stärke"),
         "hg_belichtung": _("Belichtung"),
         "hg_kontrast": _("Kontrast"),
         "hg_saettigung": _("Sättigung"),
@@ -237,7 +239,8 @@ def wert_anzeige(regler: filter.Regler, wert: float) -> str:
         text += " EV"
     elif regler.name == "schaerfe_radius":
         text += " px"
-    elif regler.name in ("lut_staerke", "ki_entrauschen", "ki_rauschen", "ki_schaerfe"):
+    elif regler.name in ("lut_staerke", "ki_entrauschen", "ki_rauschen", "ki_schaerfe",
+                         "ki_farbe"):
         text += " %"
     elif regler.name == "begradigen":
         text += "°"
@@ -445,7 +448,7 @@ class BearbeitenSeite(QWidget):
                     self._geometrie_bedienung(innen)
                 if regler.gruppe == "objektiv":
                     self._objektiv_bedienung(innen)
-                if regler.gruppe in ("ki_rauschen", "ki_schaerfe"):
+                if regler.gruppe in ("ki_rauschen", "ki_schaerfe", "ki_farbe"):
                     self._ki_bild_bedienung(regler.gruppe, innen)
                 if regler.gruppe == "maske":
                     self._masken_bedienung(innen)
@@ -1090,8 +1093,26 @@ class BearbeitenSeite(QWidget):
     # ------------------------------------------------------------------
 
     def _ki_bild_art(self, gruppe: str) -> dict:
-        """Alles, worin sich die Karten KI-Entrauschen und KI-Schaerfen unterscheiden."""
+        """Alles, worin sich die Karten KI-Entrauschen, KI-Schaerfen und KI-Kolorieren
+        unterscheiden."""
         offen = self.sitzung is not None
+        if gruppe == "ki_farbe":
+            return {
+                "modell": ki.FARB_MODELLE["ddcolor"], "netz": ki.Kolorierer, "tensorrt": False,
+                "rechnen": self.sitzung.ki_kolorieren if offen else None,
+                "fertig": offen and self.sitzung.ki_koloriert,
+                "fertig_text": _("Für dieses Bild berechnet. Der Regler mischt zwischen "
+                                 "Original und kolorierter Fassung; Weißabgleich, Sättigung "
+                                 "und Farbbereiche wirken danach wie gewohnt."),
+                "offen_text": _("Für Schwarzweiß- und Sepiabilder: Die KI schätzt die Farben "
+                                "aus der Helligkeit – glaubwürdig, aber geraten. Rechnet in "
+                                "unter einer Sekunde."),
+                "knopf": _("Kolorieren berechnen"),
+                "laeuft": _("KI koloriert das Bild …"),
+                "abgebrochen": _("KI-Kolorieren abgebrochen."),
+                "fehlgeschlagen": _("Das KI-Kolorieren ist fehlgeschlagen."),
+                "geschafft": _("KI-Kolorieren fertig ({s} s, über {weg})"),
+            }
         if gruppe == "ki_rauschen":
             return {
                 "modell": ki.ENTRAUSCH_MODELLE["scunet"], "netz": ki.Entrauscher,
@@ -1188,8 +1209,11 @@ class BearbeitenSeite(QWidget):
         anzeige = None
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            netz = self._ki_laden(
-                modell, kachel, lambda **weg: art["netz"](modell, kachel=kachel, **weg))
+            if art.get("tensorrt", True):
+                netz = self._ki_laden(
+                    modell, kachel, lambda **weg: art["netz"](modell, kachel=kachel, **weg))
+            else:
+                netz = art["netz"](modell)
             anzeige = QProgressDialog(art["laeuft"], _("Abbrechen"), 0, 100, self)
             anzeige.setWindowTitle(self.fenster.windowTitle())
             anzeige.setWindowModality(Qt.WindowModality.WindowModal)

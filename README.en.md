@@ -102,6 +102,11 @@ RTX 5000 (Blackwell) also in FP4. The values are shown on the "About & copyright
   stays sharp, and a detected subject can be kept fully sharp. The blur is computed in
   linear light so that highlights bloom, and sharp areas do not bleed into blurred ones.
   From 4 GB of graphics memory.
+- **AI colourise** with DDColor: black-and-white and sepia images get colour. The AI only
+  sees the brightness and estimates the colours from it – plausible, but guessed, not
+  historically reliable. The brightness stays that of the original pixel for pixel, even
+  for large scans; a slider blends the colour in smoothly, and white balance, saturation
+  and colour ranges work as usual afterwards. About 0.1 s, from 4 GB of graphics memory.
 - **AI extend** with FLUX.2 [klein] 4B and the outpaint LoRA by fal: instead of cropping
   to an aspect ratio, the AI invents the missing borders to match the image – for
   example to turn a 4:3 photo into 16:9. The original is kept pixel for pixel and set in
@@ -242,10 +247,12 @@ it is not part of any ready-made executable and is always installed separately.
 Silberkorn works entirely on your own computer. No images are uploaded and no usage
 data is sent. The AI also runs locally on the graphics card, face detection on the processor. The only network access is
 downloading an AI model – and only when you explicitly ask for it in the "AI upscaling",
-"AI denoise", "AI sharpen", "Subject & background", "Remove objects" or "Depth & bokeh"
+"AI denoise", "AI sharpen", "AI colourise", "Subject & background", "Remove objects" or
+"Depth & bokeh"
 card or at "Extend with AI" in the "Geometry" card and confirm the prompt that names source, size and
 licence. The executable also downloads the NVIDIA libraries from pypi.org at first
-start – likewise only after you agree.
+start – likewise only after you agree. The lensfun lens database is only downloaded at
+the push of a button in the "Lens" card, and the same goes for checking for a newer one.
 
 ## AI models
 
@@ -267,7 +274,9 @@ with 196 MB, in the "Depth & bokeh" card from
 Anything V2 Small with 98 MB, and for "Extend with AI" in the "Geometry" card from
 [modelle-8](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-8) FLUX.2
 [klein] 4B with the outpaint LoRA with about 4.1 GB – split into several files, as GitHub
-accepts at most 2 GB per file. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
+accepts at most 2 GB per file –, and in the "AI colourise" card from
+[modelle-9](https://github.com/DerAlexmann/Silberkorn/releases/tag/modelle-9) DDColor
+(small version) with 210 MB. Every file is checked against its SHA-256 checksum before it is used. They are stored in the `modelle`
 folder next to the program or, if that is read-only, in
 `%LOCALAPPDATA%\Silberkorn\modelle`.
 
@@ -279,7 +288,8 @@ The models are the official weights of [Real-ESRGAN](https://github.com/xinntao/
 (Apache-2.0, Copyright Meta Platforms, Inc. and affiliates) and
 [LaMa](https://github.com/advimman/lama) (Apache-2.0, Copyright 2021 Samsung Research)
 and [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2) Small
-(Apache-2.0), converted to ONNX; in addition
+(Apache-2.0) and [DDColor](https://github.com/piddnad/DDColor) in its small version
+(Apache-2.0, Xiaoyang Kang et al.), converted to ONNX; in addition
 [FLUX.2 [klein] 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
 (Apache-2.0, Black Forest Labs) with the
 [outpaint LoRA by fal](https://huggingface.co/fal/flux-2-klein-4B-outpaint-lora)
@@ -301,6 +311,9 @@ all changes). To reproduce this yourself:
    [Hugging Face](https://huggingface.co/smartywu/big-lama)) and
    `depth_anything_v2_vits.pth` from
    [Depth-Anything-V2-Small](https://huggingface.co/depth-anything/Depth-Anything-V2-Small)
+   and `pytorch_model.bin` from
+   [ddcolor_paper_tiny](https://huggingface.co/piddnad/ddcolor_paper_tiny), renamed to
+   `ddcolor_paper_tiny.bin`,
    into `modelle/quellen/`, and unpack `big-lama.zip` there.
 2. `pip install torch` (only needed for this step).
 3. `python werkzeuge/modelle_exportieren.py` – this writes the ONNX models to `modelle/`

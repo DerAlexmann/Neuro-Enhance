@@ -17,6 +17,8 @@ each is under the licence of its original as stated in its header:
   werkzeuge/netz_lama.py         Apache License 2.0 (LaMa, FFC)
   werkzeuge/netz_tiefe.py        Apache License 2.0 (Depth Anything V2,
                                  DINOv2), DPT head also MIT (MiDaS, Intel)
+  werkzeuge/netz_ddcolor.py      Apache License 2.0 (DDColor, DETR), parts
+                                 also MIT (ConvNeXt, Mask2Former, DeOldify)
 
 The model file silberkorn/daten/face_detection_yunet_2026may.onnx is a
 third-party work under its own MIT License (YuNet, Shiqi Yu; see below).
@@ -270,6 +272,33 @@ Depth Anything V2 (model Depth-Anything-V2-Small)
   release "modelle-7" of this project, together with the Apache License 2.0
   text (LICENSE-DepthAnythingV2.txt), which Silberkorn also downloads and
   stores next to the model.
+
+DDColor (model ddcolor_paper_tiny, for "AI colourise")
+  Xiaoyang Kang et al., 2023 (ICCV 2023)
+  Licence: Apache License 2.0 (code and weights)
+  https://github.com/piddnad/DDColor
+  https://huggingface.co/piddnad/ddcolor_paper_tiny
+  Contains ConvNeXt (Copyright (c) Meta Platforms, Inc. and affiliates, MIT
+  License), attention layers from Mask2Former (Copyright (c) 2022 Meta, Inc.,
+  MIT License), the positional encoding from DETR (Copyright (c) Facebook,
+  Inc. and its affiliates, Apache License 2.0) and U-Net building blocks
+  from DeOldify (Copyright (c) 2018 Jason Antic, MIT License) after fastai
+  (Apache License 2.0). The model was trained on ImageNet.
+  The official weights pytorch_model.bin are converted to ONNX with
+  werkzeuge/modelle_exportieren.py. werkzeuge/netz_ddcolor.py is derived
+  from the DDColor source code and is therefore under the Apache License 2.0
+  (full text in LICENSES/Apache-2.0.txt), its ConvNeXt, Mask2Former and
+  DeOldify parts additionally under their MIT Licenses (LICENSES/MIT-ConvNeXt.txt,
+  LICENSES/MIT-Mask2Former.txt, LICENSES/MIT-DeOldify.txt). Changes to the
+  original, all computing the same result: the input size is fixed to
+  512 x 512, the encoder features are passed on directly instead of through
+  forward hooks, and the spectral normalisation is folded into the weights
+  when loading (weight / sigma, as PyTorch computes it in evaluation mode).
+  The converted model file is published as an asset of the release
+  "modelle-9" of this project, together with the Apache License 2.0 text
+  (LICENSE-DDColor.txt), which Silberkorn also downloads and stores next to
+  the model. The colours are estimated by the AI and are not historically
+  reliable.
 
 FLUX.2 [klein] 4B with the outpaint LoRA by fal (for "Extend with AI")
   FLUX.2 [klein] 4B: Copyright Black Forest Labs

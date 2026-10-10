@@ -81,6 +81,8 @@ REGLER = (
     # (bearbeitung.Sitzung) - die Filterkette selbst kennt es nicht.
     Regler("ki_rauschen", "ki_rauschen", 0, 100),
     Regler("ki_schaerfe", "ki_schaerfe", 0, 100),
+    # KI-Kolorieren: mischt die von der KI geschaetzte Farbe ein (bearbeitung.Sitzung)
+    Regler("ki_farbe", "ki_farbe", 0, 100),
     # Motiv & Hintergrund: Regler fuer den Hintergrund, die auf die Werte des ganzen
     # Bildes aufgeschlagen werden, und die Kante der Maske; wirken erst, wenn die
     # Maske fuer das Bild berechnet ist (bearbeitung.Sitzung)
@@ -159,6 +161,7 @@ class Einstellungen:
     rauschen_farbe: float = 0.0
     ki_rauschen: float = 0.0
     ki_schaerfe: float = 0.0
+    ki_farbe: float = 0.0
     lut_staerke: float = 100.0
     # Motiv & Hintergrund
     hg_belichtung: float = 0.0

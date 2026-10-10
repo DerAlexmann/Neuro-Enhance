@@ -595,6 +595,22 @@ TRANSLATIONS = {
             "The NVIDIA libraries could not be set up. Silberkorn will try again at "
             "the next start.",
 
+        # KI-Kolorieren
+        "KI-Kolorieren": "AI colourise",
+        "Kolorieren berechnen": "Compute colours",
+        "Für Schwarzweiß- und Sepiabilder: Die KI schätzt die Farben aus der Helligkeit – "
+        "glaubwürdig, aber geraten. Rechnet in unter einer Sekunde.":
+            "For black-and-white and sepia images: the AI estimates the colours from the "
+            "brightness – plausible, but guessed. Takes less than a second.",
+        "Für dieses Bild berechnet. Der Regler mischt zwischen Original und kolorierter "
+        "Fassung; Weißabgleich, Sättigung und Farbbereiche wirken danach wie gewohnt.":
+            "Computed for this image. The slider blends between the original and the "
+            "colourised version; white balance, saturation and colour ranges work as usual "
+            "afterwards.",
+        "KI koloriert das Bild …": "AI is colourising the image …",
+        "KI-Kolorieren abgebrochen.": "AI colourising cancelled.",
+        "Das KI-Kolorieren ist fehlgeschlagen.": "AI colourising failed.",
+        "KI-Kolorieren fertig ({s} s, über {weg})": "AI colourising done ({s} s, via {weg})",
         # Objektivprofile (lensfun)
         "%d.%m.%Y": "%Y-%m-%d",
         "Objektivprofil anwenden": "Apply lens profile",
